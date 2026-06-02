@@ -13129,19 +13129,20 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                   children: n.jsx("tr", {
                     style: { borderBottom: "1px solid var(--border)" },
                     children: [
-                      "Client",
-                      "Ville",
-                      "Score",
-                      "Progression",
-                      "Audit",
-                      "Google",
-                      "",
+                      { k: "_drag", l: "", w: "28px" },
+                      { k: "client", l: "Client", w: "auto" },
+                      { k: "ville", l: "Ville", w: "90px" },
+                      { k: "score", l: "Score", w: "110px" },
+                      { k: "prog", l: "Progression", w: "130px" },
+                      { k: "audit", l: "Audit", w: "100px" },
+                      { k: "google", l: "Google", w: "110px" },
+                      { k: "del", l: "", w: "60px" },
                     ].map((E) =>
                       n.jsx(
                         "th",
                         {
                           style: {
-                            padding: "12px 18px",
+                            padding: "10px 12px",
                             textAlign: "left",
                             fontSize: 10,
                             fontWeight: 600,
@@ -13149,10 +13150,12 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                             textTransform: "uppercase",
                             letterSpacing: ".5px",
                             background: "#F4F5FA",
+                            width: E.w,
+                            whiteSpace: "nowrap",
                           },
-                          children: E,
+                          children: E.l,
                         },
-                        E,
+                        E.k,
                       ),
                     ),
                   }),
@@ -16211,20 +16214,14 @@ function ClientDetail({
                       }),
                     ],
                   }),
-                  // Bouton Google dans l'en-tête client
-                  e.googleTokens?.access_token
-                    ? n.jsxs("span", {
-                        style: { display:"flex", alignItems:"center", gap:5, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, color:"#065F46" },
-                        children: [
-                          n.jsx("span",{style:{width:7,height:7,borderRadius:"50%",background:"#22C55E",display:"inline-block"}}),
-                          "Google connecté",
-                        ]
-                      })
-                    : n.jsx("a", {
-                        href: `/api/auth/google?clientId=${e.id}`,
-                        style: { display:"flex", alignItems:"center", gap:6, background:"#4285F4", color:"white", borderRadius:9, padding:"6px 14px", fontSize:12, fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" },
-                        children: "🔗 Connecter Google",
-                      }),
+                  // Badge Google dans l'en-tête client (affiché seulement si connecté)
+                  e.googleTokens?.access_token && n.jsxs("span", {
+                    style: { display:"flex", alignItems:"center", gap:5, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, color:"#065F46" },
+                    children: [
+                      n.jsx("span",{style:{width:7,height:7,borderRadius:"50%",background:"#22C55E",display:"inline-block"}}),
+                      "Google connecté",
+                    ]
+                  }),
                   n.jsx("button", {
                     className: "btn-ghost",
                     onClick: () => B(!0),
@@ -17755,7 +17752,7 @@ function PostsTab({
     [z, g] = D.useState({ note: 5, texte: "" }),
     [h, f] = D.useState(!1),
     [c, u] = D.useState(null),
-    [m, C] = D.useState("suivi"),
+    [m, C] = D.useState("google_live"),
     [B, k] = D.useState(!1),
     [R, N] = D.useState(
       () => localStorage.getItem(`avis_sig_${e.id}`) || `${e.name || ""}`,
@@ -17999,6 +17996,8 @@ Rédige la réponse.`,
     } catch(err) { setLiveReviewError(err.message); }
     setLoadingLiveReviews(false);
   };
+  // Auto-chargement des avis si Google connecté
+  D.useEffect(() => { if (e.gmbLocationName && e.googleTokens?.access_token && !liveGoogleReviews) { fetchLiveReviews(); } }, [e.id]);
 
   const generateLiveReply = async (rv) => {
     const apiKeyLocal = o || localStorage.getItem("bto_apikey") || "";
@@ -18173,8 +18172,7 @@ Rédige la réponse.`,
           border: "1px solid #E5E7EB",
         },
         children: [
-          { id: "google_live", l: e.googleTokens?.access_token && e.gmbLocationName ? "🔴 Live Google" : "🔗 Live Google" },
-          { id: "suivi", l: "💬 Répondre aux avis" },
+          { id: "google_live", l: e.gmbLocationName ? "🔴 Avis Google" : "⭐ Avis Google" },
           { id: "collecter", l: "🔗 Collecter" },
           { id: "analyse", l: "📊 Analyse" },
         ].map((v) =>
@@ -18223,17 +18221,31 @@ Rédige la réponse.`,
         liveReviewError && n.jsx("div", { style:{ background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13, color:"#DC2626", fontWeight:600 }, children: "⚠️ " + liveReviewError }),
         liveReplySuccess && n.jsx("div", { style:{ background:"#D1FAE5", border:"1px solid #6EE7B7", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13, color:"#065F46", fontWeight:700 }, children:"✅ Réponse publiée sur Google avec succès !" }),
         liveGoogleReviews && n.jsxs("div", { children:[
-          // Stats
-          n.jsxs("div", { style:{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }, children:[
-            { label:"Note moyenne", value: liveGoogleReviews.averageRating ? parseFloat(liveGoogleReviews.averageRating).toFixed(1)+"⭐" : "—", col:"#d97706", bg:"#FFFBEB" },
-            { label:"Total avis", value: liveGoogleReviews.totalReviewCount || liveGoogleReviews.reviews?.length || 0, col:"#6B40D8", bg:"#F5F3FF" },
-            { label:"Sans réponse", value: (liveGoogleReviews.reviews||[]).filter(r=>!r.reply).length, col:"#DC2626", bg:"#FEF2F2" },
-          ].map(s => n.jsxs("div", { key:s.label, style:{ background:s.bg, border:`1px solid ${s.col}30`, borderRadius:10, padding:"10px 18px", display:"flex", gap:10, alignItems:"center" }, children:[
-            n.jsx("div", { style:{ fontSize:20, fontWeight:900, color:s.col }, children:s.value }),
-            n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:s.label }),
-          ]})),
-          }),
-          // Liste avis
+          // Stats + filtre mois
+          (() => {
+            const allRvs = liveGoogleReviews.reviews || [];
+            const nowYM = new Date().toISOString().slice(0,7);
+            const thisMonthRvs = allRvs.filter(r => (r.date||"").slice(0,7) === nowYM);
+            const noReply = allRvs.filter(r=>!r.reply).length;
+            return n.jsxs("div", { children:[
+              n.jsxs("div", { style:{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap" }, children:[
+                { label:"Note moyenne", value: liveGoogleReviews.averageRating ? parseFloat(liveGoogleReviews.averageRating).toFixed(1)+"⭐" : "—", col:"#d97706", bg:"#FFFBEB" },
+                { label:"Total avis", value: liveGoogleReviews.totalReviewCount || allRvs.length, col:"#6B40D8", bg:"#F5F3FF" },
+                { label:"Ce mois", value: thisMonthRvs.length, col:"#059669", bg:"#F0FDF4" },
+                { label:"Sans réponse", value: noReply, col:"#DC2626", bg:"#FEF2F2" },
+              ].map(s => n.jsxs("div", { key:s.label, style:{ background:s.bg, border:`1px solid ${s.col}30`, borderRadius:10, padding:"10px 18px", display:"flex", gap:10, alignItems:"center" }, children:[
+                n.jsx("div", { style:{ fontSize:20, fontWeight:900, color:s.col }, children:s.value }),
+                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:s.label }),
+              ]})),
+              }),
+              // Nouveaux avis du mois en haut
+              thisMonthRvs.length > 0 && n.jsxs("div", { style:{ background:"#F0FDF4", border:"1.5px solid #BBF7D0", borderRadius:12, padding:"12px 16px", marginBottom:14 }, children:[
+                n.jsx("div", { style:{ fontSize:12, fontWeight:700, color:"#065F46", marginBottom:10 }, children:`✨ ${thisMonthRvs.length} nouvel${thisMonthRvs.length>1?"s":""} avis ce mois` }),
+                n.jsx("div", { style:{ fontSize:11, color:"#6B7280" }, children:"Ces avis sont également visibles dans la liste complète ci-dessous." }),
+              ]}),
+            ]});
+          })(),
+          // Liste avis complète (les plus récents en premier)
           n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:12 }, children:
             (liveGoogleReviews.reviews||[]).map((rv,ri) => {
               const stars = "⭐".repeat(rv.rating||0);
@@ -18302,858 +18314,6 @@ Rédige la réponse.`,
         ]}),
       ]}),
 
-      m === "suivi" &&
-        n.jsxs("div", {
-          children: [
-            n.jsxs("div", {
-              style: {
-                background: "white",
-                borderRadius: 12,
-                padding: "16px 18px",
-                marginBottom: 14,
-                border: "1px solid #E5E7EB",
-                borderTop: "3px solid #6B40D8",
-              },
-              children: [
-                n.jsx("div", {
-                  style: {
-                    fontWeight: 700,
-                    fontSize: 13,
-                    color: "#1E1B30",
-                    marginBottom: 12,
-                  },
-                  children: "⚙️ Paramètres de génération IA",
-                }),
-                n.jsxs("div", {
-                  style: {
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 12,
-                    marginBottom: 12,
-                  },
-                  children: [
-                    n.jsxs("div", {
-                      children: [
-                        n.jsx("div", {
-                          style: {
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: "#374151",
-                            marginBottom: 8,
-                          },
-                          children: "Mode d'adresse",
-                        }),
-                        n.jsx("div", {
-                          style: { display: "flex", gap: 6 },
-                          children: [
-                            { v: !1, l: "Vouvoiement" },
-                            { v: !0, l: "Tutoiement" },
-                          ].map((v) =>
-                            n.jsx(
-                              "button",
-                              {
-                                onClick: () => k(v.v),
-                                style: {
-                                  flex: 1,
-                                  padding: "8px",
-                                  borderRadius: 8,
-                                  border:
-                                    B === v.v ? "none" : "1.5px solid #E5E7EB",
-                                  background: B === v.v ? "#6B40D8" : "white",
-                                  color: B === v.v ? "white" : "#374151",
-                                  cursor: "pointer",
-                                  fontSize: 12.5,
-                                  fontWeight: 600,
-                                  fontFamily: "inherit",
-                                  transition: "all .15s",
-                                },
-                                children: v.l,
-                              },
-                              String(v.v),
-                            ),
-                          ),
-                        }),
-                      ],
-                    }),
-                    n.jsxs("div", {
-                      children: [
-                        n.jsx("div", {
-                          style: {
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: "#374151",
-                            marginBottom: 6,
-                          },
-                          children: "Signature",
-                        }),
-                        n.jsx("input", {
-                          className: "inp",
-                          value: R,
-                          onChange: (v) => {
-                            (N(v.target.value),
-                              localStorage.setItem(
-                                `avis_sig_${e.id}`,
-                                v.target.value,
-                              ));
-                          },
-                          placeholder: `${e.name || "Nom établissement"}`,
-                          style: { margin: 0, fontSize: 13 },
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-                n.jsxs("div", {
-                  children: [
-                    n.jsxs("div", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "#374151",
-                        marginBottom: 6,
-                      },
-                      children: [
-                        "Consignes spécifiques ",
-                        n.jsx("span", {
-                          style: { fontWeight: 400, color: "#9CA3AF" },
-                          children:
-                            '(optionnel — ex : "ne pas mentionner les prix", "utiliser le tutoiement avec les jeunes")',
-                        }),
-                      ],
-                    }),
-                    n.jsx("textarea", {
-                      className: "ta",
-                      rows: 2,
-                      value: E,
-                      onChange: (v) => {
-                        (M(v.target.value),
-                          localStorage.setItem(
-                            `avis_consignes_${e.id}`,
-                            v.target.value,
-                          ));
-                      },
-                      placeholder:
-                        "Ajoutez ici vos consignes personnalisées pour ce client…",
-                      style: { margin: 0, fontSize: 12.5 },
-                    }),
-                  ],
-                }),
-              ],
-            }),
-            n.jsxs("div", {
-              style: {
-                background: "white",
-                borderRadius: 14,
-                padding: "20px",
-                marginBottom: 16,
-                border: "1px solid #E5E7EB",
-                borderTop: "3px solid #E85A30",
-              },
-              children: [
-                n.jsx("div", {
-                  style: {
-                    fontWeight: 700,
-                    fontSize: 14,
-                    color: "#1E1B30",
-                    marginBottom: 4,
-                  },
-                  children: "✍️ Générer une réponse",
-                }),
-                n.jsx("div", {
-                  style: { fontSize: 12, color: "#6B7280", marginBottom: 14 },
-                  children:
-                    "Collez l'avis Google → sélectionnez les mots-clés → générez",
-                }),
-                n.jsxs("div", {
-                  style: { marginBottom: 10 },
-                  children: [
-                    n.jsxs("div", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "#374151",
-                        marginBottom: 5,
-                      },
-                      children: [
-                        "Prénom du client ",
-                        n.jsx("span", {
-                          style: { fontWeight: 400, color: "#9CA3AF" },
-                          children: "(optionnel)",
-                        }),
-                      ],
-                    }),
-                    n.jsx("input", {
-                      className: "inp",
-                      value: z.auteur || "",
-                      onChange: (v) => g({ ...z, auteur: v.target.value }),
-                      placeholder: "Marie, Pierre…",
-                      style: { margin: 0, fontSize: 13, maxWidth: 200 },
-                    }),
-                  ],
-                }),
-                n.jsxs("div", {
-                  style: {
-                    display: "flex",
-                    gap: 6,
-                    alignItems: "center",
-                    marginBottom: 12,
-                  },
-                  children: [
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "#374151",
-                        marginRight: 4,
-                      },
-                      children: "Note :",
-                    }),
-                    [5, 4, 3, 2, 1].map((v) =>
-                      n.jsxs(
-                        "button",
-                        {
-                          onClick: () => g({ ...z, note: v }),
-                          style: {
-                            padding: "5px 14px",
-                            borderRadius: 20,
-                            border:
-                              z.note === v ? "none" : "1.5px solid #E5E7EB",
-                            background:
-                              z.note === v
-                                ? v >= 4
-                                  ? "#059669"
-                                  : v === 3
-                                    ? "#E85A30"
-                                    : "#dc2626"
-                                : "white",
-                            color: z.note === v ? "white" : "#374151",
-                            cursor: "pointer",
-                            fontSize: 13,
-                            fontWeight: 600,
-                            fontFamily: "inherit",
-                            transition: "all .15s",
-                          },
-                          children: [v, "★"],
-                        },
-                        v,
-                      ),
-                    ),
-                  ],
-                }),
-                n.jsxs("div", {
-                  style: { marginBottom: 14 },
-                  children: [
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "#374151",
-                        marginBottom: 5,
-                      },
-                      children: "Texte de l'avis",
-                    }),
-                    n.jsx("textarea", {
-                      className: "ta",
-                      rows: 3,
-                      value: z.texte || "",
-                      onChange: (v) => g({ ...z, texte: v.target.value }),
-                      placeholder: `Collez ici le texte de l'avis Google…
-(Si l'avis n'a pas de commentaire, laissez vide)`,
-                      style: { margin: 0 },
-                    }),
-                  ],
-                }),
-                (() => {
-                  var A, q;
-                  const auditKws = [
-                    ...(((A = l.keywords) == null ? void 0 : A.primary) || [])
-                      .filter((K) => K.kw && !K.kw.includes("métier"))
-                      .map((K) => K.kw),
-                    ...(((q = l.keywords) == null ? void 0 : q.secondary) || [])
-                      .filter((K) => K.kw && !K.kw.includes("secondaire"))
-                      .map((K) => K.kw),
-                    ...(e.city ? [e.city] : []),
-                  ].slice(0, 10);
-                  const v = [...auditKws, ...customSeoKws.filter(k => !auditKws.includes(k))];
-                  const saveCustomKws = (newList) => {
-                    setCustomSeoKws(newList);
-                    const newAvisData = { ...b, customSeoKeywords: newList };
-                    x(newAvisData);
-                    const updated = t.map((cl) => cl.id === e.id ? { ...cl, avisData: newAvisData } : cl);
-                    i(updated);
-                    e.avisData = newAvisData;
-                  };
-                  return n.jsxs("div", {
-                    style: { marginBottom: 14 },
-                    children: [
-                      n.jsxs("div", {
-                        style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 },
-                        children: [
-                          n.jsxs("div", {
-                            style: { fontSize: 11, fontWeight: 700, color: "#374151" },
-                            children: [
-                              "Mots-clés SEO à intégrer ",
-                              n.jsx("span", { style: { fontWeight: 400, color: "#9CA3AF" }, children: "(cliquez pour sélectionner)" }),
-                            ],
-                          }),
-                          n.jsx("button", {
-                            onClick: () => setShowAddSeoKw(!showAddSeoKw),
-                            style: { background: "none", border: "1.5px solid #6B40D8", color: "#6B40D8", borderRadius: 8, padding: "2px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
-                            children: showAddSeoKw ? "✕ Fermer" : "＋ Ajouter",
-                          }),
-                        ],
-                      }),
-                      showAddSeoKw && n.jsxs("div", {
-                        style: { display: "flex", gap: 6, marginBottom: 8 },
-                        children: [
-                          n.jsx("input", {
-                            value: newSeoKwInput,
-                            onChange: (ev) => setNewSeoKwInput(ev.target.value),
-                            onKeyDown: (ev) => {
-                              if (ev.key === "Enter" && newSeoKwInput.trim()) {
-                                const kw = newSeoKwInput.trim();
-                                if (!customSeoKws.includes(kw)) saveCustomKws([...customSeoKws, kw]);
-                                setNewSeoKwInput("");
-                                setShowAddSeoKw(false);
-                              }
-                            },
-                            placeholder: "Ex: plombier urgence Paris...",
-                            style: { flex: 1, padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", fontSize: 12, fontFamily: "inherit", outline: "none" },
-                          }),
-                          n.jsx("button", {
-                            onClick: () => {
-                              const kw = newSeoKwInput.trim();
-                              if (kw && !customSeoKws.includes(kw)) saveCustomKws([...customSeoKws, kw]);
-                              setNewSeoKwInput("");
-                              setShowAddSeoKw(false);
-                            },
-                            style: { padding: "6px 14px", borderRadius: 8, border: "none", background: "#6B40D8", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
-                            children: "Ajouter",
-                          }),
-                        ],
-                      }),
-                      v.length > 0 ? n.jsx("div", {
-                        style: { display: "flex", gap: 6, flexWrap: "wrap" },
-                        children: v.map((K) => {
-                          const ie = (z.selKw || []).includes(K);
-                          const isCustom = customSeoKws.includes(K) && !auditKws.includes(K);
-                          return n.jsxs("div", {
-                            style: { display: "flex", alignItems: "center", gap: 2 },
-                            children: [
-                              n.jsxs("button", {
-                                onClick: () => {
-                                  const re = z.selKw || [];
-                                  g({ ...z, selKw: ie ? re.filter((oe) => oe !== K) : [...re, K] });
-                                },
-                                style: { padding: "5px 12px", borderRadius: 20, border: ie ? "none" : `1.5px solid ${isCustom ? "#8B5CF6" : "#E5E7EB"}`, background: ie ? "#6B40D8" : isCustom ? "#F5F3FF" : "white", color: ie ? "white" : "#374151", cursor: "pointer", fontSize: 12, fontWeight: ie ? 700 : 500, fontFamily: "inherit", transition: "all .15s" },
-                                children: [ie ? "✓ " : "", K],
-                              }, K),
-                              isCustom && n.jsx("button", {
-                                onClick: () => saveCustomKws(customSeoKws.filter(k => k !== K)),
-                                style: { background: "none", border: "none", color: "#9CA3AF", cursor: "pointer", fontSize: 13, padding: "0 2px", lineHeight: 1 },
-                                title: "Supprimer",
-                                children: "×",
-                              }),
-                            ],
-                          }, K);
-                        }),
-                      }) : n.jsx("div", {
-                        style: { fontSize: 12, color: "#9CA3AF", fontStyle: "italic" },
-                        children: "Aucun mot-clé — cliquez « ＋ Ajouter » pour en créer.",
-                      }),
-                    ],
-                  });
-                })(),
-                n.jsxs("div", {
-                  style: { display: "flex", gap: 10, alignItems: "center" },
-                  children: [
-                    n.jsx("button", {
-                      onClick: O,
-                      disabled: h === "new",
-                      style: {
-                        padding: "10px 24px",
-                        borderRadius: 10,
-                        border: "none",
-                        background:
-                          "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                        color: "white",
-                        fontSize: 13.5,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        transition: "all .18s",
-                      },
-                      children:
-                        h === "new"
-                          ? n.jsxs(n.Fragment, {
-                              children: [
-                                n.jsx("div", {
-                                  style: {
-                                    width: 14,
-                                    height: 14,
-                                    borderRadius: "50%",
-                                    border: "2px solid rgba(255,255,255,.3)",
-                                    borderTopColor: "white",
-                                    animation: "spin 1s linear infinite",
-                                  },
-                                }),
-                                "Génération…",
-                              ],
-                            })
-                          : "✨ Générer la réponse",
-                    }),
-                    (z.selKw || []).length > 0 &&
-                      n.jsxs("span", {
-                        style: {
-                          fontSize: 12,
-                          color: "#6B40D8",
-                          fontWeight: 600,
-                        },
-                        children: [(z.selKw || []).length, " mot(s)-clé(s)"],
-                      }),
-                  ],
-                }),
-                z.reponseGeneree &&
-                  n.jsxs("div", {
-                    style: {
-                      marginTop: 16,
-                      background: "#F0FDF4",
-                      borderRadius: 10,
-                      padding: "14px 16px",
-                      border: "1px solid #BBF7D0",
-                    },
-                    children: [
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          color: "#059669",
-                          marginBottom: 8,
-                          textTransform: "uppercase",
-                          letterSpacing: ".5px",
-                        },
-                        children: "✓ Réponse générée",
-                      }),
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 14,
-                          color: "#1E1B30",
-                          lineHeight: 1.8,
-                          marginBottom: 12,
-                          whiteSpace: "pre-line",
-                        },
-                        children: z.reponseGeneree,
-                      }),
-                      n.jsxs("div", {
-                        style: { display: "flex", gap: 8, flexWrap: "wrap" },
-                        children: [
-                          n.jsx("button", {
-                            onClick: () => {
-                              (navigator.clipboard.writeText(z.reponseGeneree),
-                                u("gen"),
-                                setTimeout(() => u(null), 2e3));
-                            },
-                            style: {
-                              fontSize: 12.5,
-                              padding: "6px 16px",
-                              borderRadius: 8,
-                              border: "none",
-                              background: c === "gen" ? "#059669" : "#1E1B30",
-                              color: "white",
-                              cursor: "pointer",
-                              fontFamily: "inherit",
-                              fontWeight: 600,
-                              transition: "all .18s",
-                            },
-                            children: c === "gen" ? "✓ Copié !" : "📋 Copier",
-                          }),
-                          U &&
-                            n.jsx("a", {
-                              href: U,
-                              target: "_blank",
-                              rel: "noreferrer",
-                              style: {
-                                fontSize: 12.5,
-                                padding: "6px 16px",
-                                borderRadius: 8,
-                                border: "1px solid #E5E7EB",
-                                background: "white",
-                                color: "#6B40D8",
-                                textDecoration: "none",
-                                fontWeight: 600,
-                              },
-                              children: "Répondre sur Google →",
-                            }),
-                          n.jsx("button", {
-                            onClick: F,
-                            style: {
-                              fontSize: 12.5,
-                              padding: "6px 16px",
-                              borderRadius: 8,
-                              border: "1px solid #E5E7EB",
-                              background: "white",
-                              color: "#374151",
-                              cursor: "pointer",
-                              fontFamily: "inherit",
-                              fontWeight: 600,
-                            },
-                            children: "Sauvegarder",
-                          }),
-                          n.jsx("button", {
-                            onClick: O,
-                            disabled: h === "new",
-                            style: {
-                              fontSize: 12.5,
-                              padding: "6px 16px",
-                              borderRadius: 8,
-                              border: "1px solid #E5E7EB",
-                              background: "white",
-                              color: "#374151",
-                              cursor: "pointer",
-                              fontFamily: "inherit",
-                              fontWeight: 600,
-                            },
-                            children: "🔄 Regénérer",
-                          }),
-                        ],
-                      }),
-                    ],
-                  }),
-              ],
-            }),
-            (b.recentAvis || []).length > 0 &&
-              n.jsxs("div", {
-                children: [
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "#374151",
-                      marginBottom: 10,
-                    },
-                    children: "Historique des réponses",
-                  }),
-                  n.jsx("div", {
-                    style: {
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                    },
-                    children: (b.recentAvis || [])
-                      .slice()
-                      .reverse()
-                      .map((v, A) => {
-                        const q = (b.recentAvis || []).length - 1 - A,
-                          K =
-                            v.note >= 4
-                              ? "#059669"
-                              : v.note >= 3
-                                ? "#d97706"
-                                : "#dc2626";
-                        return n.jsxs(
-                          "div",
-                          {
-                            style: {
-                              background: "white",
-                              borderRadius: 12,
-                              padding: "16px",
-                              border: "1px solid #E5E7EB",
-                              borderLeft: `3px solid ${K}`,
-                            },
-                            children: [
-                              n.jsxs("div", {
-                                style: {
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  marginBottom: 8,
-                                },
-                                children: [
-                                  n.jsxs("div", {
-                                    style: {
-                                      display: "flex",
-                                      gap: 8,
-                                      alignItems: "center",
-                                    },
-                                    children: [
-                                      n.jsxs("span", {
-                                        style: {
-                                          color: K,
-                                          fontSize: 13,
-                                          fontWeight: 700,
-                                        },
-                                        children: [
-                                          "★".repeat(v.note),
-                                          "☆".repeat(5 - v.note),
-                                        ],
-                                      }),
-                                      v.auteur &&
-                                        n.jsx("span", {
-                                          style: {
-                                            fontWeight: 600,
-                                            fontSize: 13,
-                                            color: "#1E1B30",
-                                          },
-                                          children: v.auteur,
-                                        }),
-                                      v.reponse &&
-                                        n.jsx("span", {
-                                          style: {
-                                            fontSize: 10.5,
-                                            fontWeight: 700,
-                                            color: "#059669",
-                                            background: "#D1FAE5",
-                                            padding: "2px 8px",
-                                            borderRadius: 20,
-                                          },
-                                          children: "✓ Répondu",
-                                        }),
-                                    ],
-                                  }),
-                                  n.jsxs("div", {
-                                    style: { display: "flex", gap: 6 },
-                                    children: [
-                                      !v.reponse &&
-                                        n.jsx("button", {
-                                          onClick: () => y(v, q),
-                                          disabled: h === q,
-                                          style: {
-                                            fontSize: 11.5,
-                                            padding: "4px 12px",
-                                            borderRadius: 7,
-                                            border: "none",
-                                            background:
-                                              "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                                            color: "white",
-                                            cursor: "pointer",
-                                            fontFamily: "inherit",
-                                            fontWeight: 600,
-                                          },
-                                          children:
-                                            h === q ? "…" : "✨ Générer",
-                                        }),
-                                      n.jsx("button", {
-                                        onClick: () => {
-                                          const ie = {
-                                            ...b,
-                                            recentAvis: (
-                                              b.recentAvis || []
-                                            ).filter((re, oe) => oe !== q),
-                                          };
-                                          (x(ie),
-                                            i(
-                                              t.map((re) =>
-                                                re.id === e.id
-                                                  ? { ...re, avisData: ie }
-                                                  : re,
-                                              ),
-                                            ));
-                                        },
-                                        style: {
-                                          fontSize: 11,
-                                          color: "#dc2626",
-                                          background: "none",
-                                          border: "none",
-                                          cursor: "pointer",
-                                          padding: "4px 6px",
-                                        },
-                                        children: "✕",
-                                      }),
-                                    ],
-                                  }),
-                                ],
-                              }),
-                              v.texte &&
-                                n.jsxs("div", {
-                                  style: {
-                                    fontSize: 13,
-                                    color: "#374151",
-                                    fontStyle: "italic",
-                                    marginBottom: v.reponse ? 10 : 0,
-                                    lineHeight: 1.6,
-                                    background: "#F4F5FA",
-                                    padding: "10px 12px",
-                                    borderRadius: 8,
-                                  },
-                                  children: ['"', v.texte, '"'],
-                                }),
-                              v.reponse &&
-                                n.jsxs("div", {
-                                  style: {
-                                    marginTop: 8,
-                                    fontSize: 13,
-                                    color: "#374151",
-                                    background: "#F0FDF4",
-                                    borderRadius: 8,
-                                    padding: "12px",
-                                    borderLeft: "3px solid #059669",
-                                    lineHeight: 1.8,
-                                    whiteSpace: "pre-line",
-                                  },
-                                  children: [
-                                    v.reponse,
-                                    n.jsxs("div", {
-                                      style: {
-                                        marginTop: 8,
-                                        display: "flex",
-                                        gap: 8,
-                                      },
-                                      children: [
-                                        n.jsx("button", {
-                                          onClick: () => {
-                                            (navigator.clipboard.writeText(
-                                              v.reponse,
-                                            ),
-                                              u(q),
-                                              setTimeout(() => u(null), 2e3));
-                                          },
-                                          style: {
-                                            fontSize: 11.5,
-                                            color:
-                                              c === q ? "#059669" : "#6B7280",
-                                            background: "none",
-                                            border: "none",
-                                            cursor: "pointer",
-                                            fontFamily: "inherit",
-                                            fontWeight: 600,
-                                          },
-                                          children:
-                                            c === q ? "✓ Copié !" : "📋 Copier",
-                                        }),
-                                        U &&
-                                          n.jsx("a", {
-                                            href: U,
-                                            target: "_blank",
-                                            rel: "noreferrer",
-                                            style: {
-                                              fontSize: 11.5,
-                                              color: "#6B40D8",
-                                              textDecoration: "none",
-                                              fontWeight: 600,
-                                            },
-                                            children: "Répondre sur Google →",
-                                          }),
-                                      ],
-                                    }),
-                                  ],
-                                }),
-                            ],
-                          },
-                          v.id,
-                        );
-                      }),
-                  }),
-                ],
-              }),
-            j &&
-              n.jsxs("div", {
-                style: {
-                  background: "#F4F5FA",
-                  borderRadius: 12,
-                  padding: "16px",
-                  marginTop: 16,
-                  border: "1px solid #E5E7EB",
-                },
-                children: [
-                  n.jsx("div", {
-                    style: { fontWeight: 700, fontSize: 13, marginBottom: 12 },
-                    children: "Configuration",
-                  }),
-                  n.jsx("div", {
-                    style: {
-                      display: "grid",
-                      gridTemplateColumns: "repeat(2,1fr)",
-                      gap: 10,
-                      marginBottom: 12,
-                    },
-                    children: [
-                      {
-                        k: "lienGoogle",
-                        l: "Lien Google direct",
-                        placeholder: "https://g.page/r/…",
-                      },
-                      {
-                        k: "note",
-                        l: "Note actuelle",
-                        placeholder: "4.7",
-                        type: "number",
-                      },
-                      {
-                        k: "totalAvis",
-                        l: "Nb total d'avis",
-                        placeholder: "418",
-                        type: "number",
-                      },
-                      {
-                        k: "responseRate",
-                        l: "Taux de réponse %",
-                        placeholder: "80",
-                        type: "number",
-                      },
-                      {
-                        k: "objectif",
-                        l: "Objectif avis/mois",
-                        placeholder: "10",
-                        type: "number",
-                      },
-                    ].map((v) =>
-                      n.jsxs(
-                        "div",
-                        {
-                          children: [
-                            n.jsx("div", {
-                              style: {
-                                fontSize: 11,
-                                fontWeight: 600,
-                                color: "#6B7280",
-                                marginBottom: 5,
-                              },
-                              children: v.l,
-                            }),
-                            n.jsx("input", {
-                              className: "inp",
-                              type: v.type || "text",
-                              value: b[v.k] || "",
-                              onChange: (A) =>
-                                x({ ...b, [v.k]: A.target.value }),
-                              placeholder: v.placeholder,
-                              style: { margin: 0 },
-                            }),
-                          ],
-                        },
-                        v.k,
-                      ),
-                    ),
-                  }),
-                  n.jsxs("div", {
-                    style: { display: "flex", gap: 8 },
-                    children: [
-                      n.jsx("button", {
-                        className: "btn",
-                        onClick: V,
-                        children: "Enregistrer",
-                      }),
-                      n.jsx("button", {
-                        className: "btn-ghost",
-                        onClick: () => I(!1),
-                        children: "Annuler",
-                      }),
-                    ],
-                  }),
-                ],
-              }),
-            !j &&
-              n.jsx("button", {
-                className: "btn-ghost",
-                onClick: () => I(!0),
-                style: { fontSize: 12, marginTop: 12 },
-                children: "⚙️ Configurer les KPIs",
-              }),
-          ],
-        }),
       m === "collecter" &&
         n.jsxs("div", {
           children: [
