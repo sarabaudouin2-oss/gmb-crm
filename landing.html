@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="fr" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agence SEO Local & Google My Business | Be the One</title>
+    <meta name="description" content="Propulsez votre entreprise en tête du Pack Local Google Maps en 30 jours. Experts GMB, gestion des avis clients et stratégie SEO local. Audit gratuit sous 48h.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.betheone-agence.fr/">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Agence SEO Local & Google My Business | Be the One">
+    <meta property="og:description" content="Top 3 Google Maps garanti sous 60 jours. Stratégie d'acquisition locale sur-mesure.">
+    <meta property="og:url" content="https://www.betheone-agence.fr/">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"ProfessionalService","name":"Be the One Agence","url":"https://www.betheone-agence.fr/","telephone":"+33643876252","email":"contact@betheone-agence.fr","description":"Agence spécialisée en référencement local et optimisation Google My Business.","areaServed":{"@type":"Country","name":"France"},"aggregateRating":{"@type":"AggregateRating","ratingValue":"5.0","reviewCount":"47"}}</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..1000;1,9..40,300..1000&family=MuseoModerno:wght@900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <style>
+        :root {
+            --blue:#3B5BDB; --violet:#6B40D8; --rose:#C03080; --orange:#E85A30;
+            --bg:#F4F5FA; --dark:#1E1B30; --muted:#6B7280;
+            --grad:linear-gradient(135deg,#3B5BDB 0%,#6B40D8 35%,#C03080 70%,#E85A30 100%);
+            --shadow:0 4px 24px rgba(30,27,48,.05);
+            --shadow-lg:0 12px 48px rgba(30,27,48,.10);
+        }
+        *,*::before,*::after{box-sizing:border-box}
+        body{font-family:'DM Sans',sans-serif;background:#F4F5FA;color:#1E1B30;line-height:1.6;-webkit-font-smoothing:antialiased}
+        h1{font-family:'MuseoModerno',sans-serif;font-weight:900;line-height:1.1}
+        h2,h3,h4{font-family:'DM Sans',sans-serif;font-weight:900;line-height:1.2}
+        .custom-grad{background:var(--grad)}
+        .text-grad{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .custom-shadow{box-shadow:var(--shadow)}
+        .custom-shadow-lg{box-shadow:var(--shadow-lg)}
+        #progress-bar{position:fixed;top:0;left:0;height:3px;background:var(--grad);z-index:9999;width:0;transition:width .08s linear}
+        #mobile-menu{max-height:0;overflow:hidden;transition:max-height .4s ease}
+        #mobile-menu.open{max-height:400px}
+        #scroll-top{opacity:0;pointer-events:none;transition:opacity .3s,transform .3s}
+        #scroll-top.visible{opacity:1;pointer-events:all}
+        details summary::-webkit-details-marker{display:none}
+        details[open] .faq-icon{transform:rotate(180deg);color:var(--violet)}
+        .faq-icon{transition:transform .3s ease}
+        .trust-track{display:flex;gap:3rem;animation:trustScroll 24s linear infinite;width:max-content}
+        @keyframes trustScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+        @keyframes pulse-soft{0%,100%{opacity:1}50%{opacity:.5}}
+        .pulse-soft{animation:pulse-soft 2s ease-in-out infinite}
+        .method-card{position:relative;overflow:hidden}
+        .method-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--bar-color,var(--blue));transform:scaleX(0);transform-origin:left;transition:transform .35s ease}
+        .method-card:hover::after{transform:scaleX(1)}
+        .nav-active{color:#3B5BDB !important;border-bottom:2px solid #3B5BDB;padding-bottom:2px}
+        /* ── Micro-interactions ── */
+        .micro{position:relative;overflow:hidden;transition:transform .2s ease,box-shadow .2s ease !important}
+        .micro:hover{transform:translateY(-2px) scale(1.015) !important;box-shadow:0 14px 40px rgba(59,91,219,.28) !important}
+        .micro:active{transform:scale(.96) !important;box-shadow:0 4px 16px rgba(59,91,219,.15) !important}
+        .micro-sec{transition:transform .2s ease,box-shadow .2s ease !important}
+        .micro-sec:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(30,27,48,.09) !important}
+        .micro-sec:active{transform:scale(.98) !important}
+        .ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.32);transform:scale(0);animation:rippleAnim .55s linear;pointer-events:none}
+        @keyframes rippleAnim{to{transform:scale(4);opacity:0}}
+        .arrow-nudge{display:inline-block;transition:transform .2s ease}
+        a:hover .arrow-nudge,button:hover .arrow-nudge{transform:translateX(5px)}
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+<div id="progress-bar"></div>
+
+<button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})"
+    class="fixed bottom-24 md:bottom-8 right-6 z-50 w-11 h-11 custom-grad text-white rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-transform">
+    <i data-lucide="chevron-up" class="w-5 h-5"></i>
+</button>
+
+<div class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3">
+    <a href="contact.html" class="custom-grad text-white text-xs font-bold uppercase tracking-wider w-full block text-center py-3.5 rounded-[14px]">
+        Audit GMB Gratuit →
+    </a>
+</div>
+
+<!-- HEADER -->
+<header class="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6 h-20 flex justify-between items-center">
+        <a href="landing.html" class="flex flex-col">
+            <span class="text-2xl font-black tracking-tight text-grad" style="font-family:'MuseoModerno',sans-serif">BE THE ONE</span>
+            <span class="text-[10px] text-[#6B7280] tracking-widest font-bold uppercase -mt-0.5">Performance SEO Local</span>
+        </a>
+        <nav class="hidden md:flex space-x-7 text-sm font-semibold">
+            <a href="landing.html" class="nav-active transition">Accueil</a>
+            <a href="formules.html" class="text-[#6B7280] hover:text-[#3B5BDB] transition">Formules</a>
+            <a href="blog.html"     class="text-[#6B7280] hover:text-[#3B5BDB] transition">Blog SEO</a>
+            <a href="contact.html"  class="text-[#6B7280] hover:text-[#3B5BDB] transition">Contact</a>
+        </nav>
+        <div class="flex items-center gap-3">
+            <a href="contact.html" class="hidden md:block custom-grad text-white text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-[14px] custom-shadow hover:opacity-95 transition-all">Audit Gratuit</a>
+            <button id="menu-toggle" class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition" aria-label="Menu">
+                <i data-lucide="menu"  class="w-5 h-5" id="ico-open"></i>
+                <i data-lucide="x"     class="w-5 h-5 hidden" id="ico-close"></i>
+            </button>
+        </div>
+    </div>
+    <div id="mobile-menu" class="md:hidden bg-white border-t border-gray-100">
+        <div class="px-6 py-5 space-y-4 text-sm font-semibold">
+            <a href="landing.html"  class="block text-[#3B5BDB] font-bold py-1" onclick="closeMobileMenu()">Accueil</a>
+            <a href="formules.html" class="block text-[#1E1B30] hover:text-[#3B5BDB] py-1 transition" onclick="closeMobileMenu()">Formules</a>
+            <a href="blog.html"     class="block text-[#1E1B30] hover:text-[#3B5BDB] py-1 transition" onclick="closeMobileMenu()">Blog SEO</a>
+            <a href="contact.html"  class="block text-[#1E1B30] hover:text-[#3B5BDB] py-1 transition" onclick="closeMobileMenu()">Contact</a>
+            <a href="contact.html" class="custom-grad text-white text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-[14px] block text-center" onclick="closeMobileMenu()">Audit GMB Gratuit</a>
+        </div>
+    </div>
+</header>
+
+<!-- HERO -->
+<section class="py-16 lg:py-28 max-w-[1160px] mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
+    <div data-aos="fade-right" data-aos-duration="700">
+        <div class="inline-flex items-center gap-2 bg-[#3B5BDB]/10 text-[#3B5BDB] text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-md mb-6">
+            <span class="w-2 h-2 bg-[#3B5BDB] rounded-full pulse-soft"></span>
+            +200 établissements propulsés en Top 3
+        </div>
+        <h1 class="text-4xl sm:text-5xl lg:text-[3.6rem] text-[#1E1B30] tracking-tight">
+            Soyez visible là où vos clients <span class="text-grad">vous cherchent.</span>
+        </h1>
+        <p class="mt-6 text-[#6B7280] text-base sm:text-lg max-w-md font-medium">
+            Chaque jour, des centaines de recherches locales ciblent votre expertise. Sans <strong class="text-[#1E1B30]">Top 3 Google Maps</strong>, ces prospects vont directement chez vos concurrents.
+        </p>
+        <div class="mt-8 grid grid-cols-3 gap-4 border-t border-gray-200 pt-6">
+            <div>
+                <span class="block text-2xl sm:text-3xl font-black text-grad stat-num" data-target="110" data-prefix="+" data-suffix="%">+0%</span>
+                <span class="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">D'appels directs</span>
+            </div>
+            <div>
+                <span class="block text-2xl sm:text-3xl font-black text-[#6B40D8] stat-num" data-target="44" data-suffix="%">0%</span>
+                <span class="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Des clics Top 1</span>
+            </div>
+            <div>
+                <span class="block text-2xl sm:text-3xl font-black text-[#E85A30]">×3</span>
+                <span class="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">Visibilité locale</span>
+            </div>
+        </div>
+        <div class="mt-8 flex flex-wrap gap-4">
+            <a href="contact.html" class="custom-grad text-white font-bold text-sm px-7 py-4 rounded-[14px] custom-shadow hover:scale-[1.02] transition-all shadow-[0_8px_32px_rgba(59,91,219,.25)]">
+                Analyser ma visibilité →
+            </a>
+            <a href="formules.html" class="bg-white border border-gray-200 text-[#1E1B30] font-bold text-sm px-7 py-4 rounded-[14px] hover:bg-gray-50 transition-all">
+                Voir les formules
+            </a>
+        </div>
+        <div class="mt-8 flex flex-wrap gap-5 text-xs text-[#6B7280] font-semibold">
+            <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>Sans engagement</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4 text-[#3B5BDB]"></i>Réponse sous 48h</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="star" class="w-4 h-4 text-[#E85A30] fill-current"></i>5.0 · 47 avis</span>
+        </div>
+    </div>
+
+    <!-- Mock SERP -->
+    <div data-aos="fade-left" data-aos-duration="700" class="bg-white p-6 sm:p-8 rounded-[24px] custom-shadow-lg border border-gray-100 relative">
+        <div class="absolute -top-3 -right-3 bg-[#E85A30] text-white text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest flex items-center gap-1.5 shadow-lg">
+            <span class="w-2 h-2 bg-white rounded-full pulse-soft"></span>Live
+        </div>
+        <div class="flex items-center gap-2 border-b border-gray-100 pb-3 mb-5">
+            <i data-lucide="map-pin" class="text-[#3B5BDB] w-4 h-4 flex-shrink-0"></i>
+            <span class="text-xs bg-[#F4F5FA] text-[#6B7280] font-bold px-3 py-1 rounded-md flex-1">professionnel à proximité</span>
+            <span class="text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md">+2 340/j</span>
+        </div>
+        <div class="space-y-3">
+            <div class="p-4 bg-gradient-to-r from-[#3B5BDB]/8 to-transparent border-2 border-[#3B5BDB]/40 rounded-[14px] flex justify-between items-start gap-3 scale-[1.02] shadow-sm">
+                <div>
+                    <p class="font-bold text-[#1E1B30] text-sm">1. <span class="text-grad">Votre Établissement</span> ✨</p>
+                    <div class="flex items-center text-[#E85A30] text-[11px] mt-1 gap-0.5">
+                        <i data-lucide="star" class="w-3 h-3 fill-current"></i><i data-lucide="star" class="w-3 h-3 fill-current"></i><i data-lucide="star" class="w-3 h-3 fill-current"></i><i data-lucide="star" class="w-3 h-3 fill-current"></i><i data-lucide="star" class="w-3 h-3 fill-current"></i>
+                        <span class="text-[#6B7280] ml-1 font-semibold">5.0 · 0.2 km · Ouvert</span>
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                        <span class="text-[9px] bg-[#3B5BDB]/10 text-[#3B5BDB] font-bold px-2 py-0.5 rounded">📞 Appeler</span>
+                        <span class="text-[9px] bg-gray-100 text-[#6B7280] font-bold px-2 py-0.5 rounded">🗺️ Itinéraire</span>
+                    </div>
+                </div>
+                <span class="custom-grad text-white text-[10px] font-black px-2.5 py-1.5 rounded-md uppercase whitespace-nowrap">Top 1 · 44%</span>
+            </div>
+            <div class="p-4 bg-gray-50 border border-gray-100 rounded-[14px] flex justify-between items-center opacity-55">
+                <div>
+                    <p class="font-bold text-gray-600 text-sm">2. Concurrent direct</p>
+                    <div class="flex items-center text-gray-400 text-[11px] mt-0.5 gap-0.5">
+                        <i data-lucide="star" class="w-3 h-3 fill-current"></i>
+                        <span class="ml-1">4.1 · 1.5 km</span>
+                    </div>
+                </div>
+                <span class="text-[10px] text-gray-400 font-bold">17%</span>
+            </div>
+            <div class="p-4 bg-gray-50 border border-gray-100 rounded-[14px] flex justify-between items-center opacity-25">
+                <div>
+                    <p class="font-bold text-gray-600 text-sm">3. Concurrent secondaire</p>
+                    <div class="flex items-center text-gray-400 text-[11px] mt-0.5 gap-0.5">
+                        <i data-lucide="star" class="w-3 h-3 fill-current"></i>
+                        <span class="ml-1">3.9 · 2.1 km</span>
+                    </div>
+                </div>
+                <span class="text-[10px] text-gray-400 font-bold">9%</span>
+            </div>
+        </div>
+        <p class="mt-4 text-center text-[10px] text-[#6B7280] font-medium">← Ce pourrait être vous. Diagnostic gratuit.</p>
+    </div>
+</section>
+
+<!-- SCROLLING SECTOR BAR -->
+<section class="py-10 bg-white border-y border-gray-200/60 overflow-hidden">
+    <p class="text-center text-xs font-bold uppercase tracking-widest text-[#6B7280] mb-6">Secteurs accompagnés</p>
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none"></div>
+        <div class="absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none"></div>
+        <div class="trust-track">
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="wrench" class="w-4 h-4 text-[#3B5BDB]"></i>Plomberie</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="scale" class="w-4 h-4 text-[#6B40D8]"></i>Avocats</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="stethoscope" class="w-4 h-4 text-[#C03080]"></i>Médecins</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="car" class="w-4 h-4 text-[#E85A30]"></i>Garages</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="building" class="w-4 h-4 text-[#3B5BDB]"></i>Immobilier</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="utensils" class="w-4 h-4 text-[#6B40D8]"></i>Restauration</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="scissors" class="w-4 h-4 text-[#C03080]"></i>Coiffure & Beauté</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="graduation-cap" class="w-4 h-4 text-[#3B5BDB]"></i>Auto-écoles</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="calculator" class="w-4 h-4 text-[#6B40D8]"></i>Comptabilité</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="heart" class="w-4 h-4 text-[#C03080]"></i>Bien-être</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="wrench" class="w-4 h-4 text-[#3B5BDB]"></i>Plomberie</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="scale" class="w-4 h-4 text-[#6B40D8]"></i>Avocats</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="stethoscope" class="w-4 h-4 text-[#C03080]"></i>Médecins</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="car" class="w-4 h-4 text-[#E85A30]"></i>Garages</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="building" class="w-4 h-4 text-[#3B5BDB]"></i>Immobilier</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="utensils" class="w-4 h-4 text-[#6B40D8]"></i>Restauration</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="scissors" class="w-4 h-4 text-[#C03080]"></i>Coiffure & Beauté</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="graduation-cap" class="w-4 h-4 text-[#3B5BDB]"></i>Auto-écoles</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="calculator" class="w-4 h-4 text-[#6B40D8]"></i>Comptabilité</span>
+            <span class="text-sm font-bold text-[#6B7280] whitespace-nowrap flex items-center gap-2"><i data-lucide="heart" class="w-4 h-4 text-[#C03080]"></i>Bien-être</span>
+        </div>
+    </div>
+</section>
+
+<!-- STATS LIGHT -->
+<section class="py-20 bg-white border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6">
+        <div class="text-center mb-12" data-aos="fade-up">
+            <p class="text-xs font-bold uppercase tracking-widest text-[#3B5BDB] mb-2">Performances mesurées</p>
+            <h2 class="text-3xl sm:text-4xl text-[#1E1B30]">Des résultats <span class="text-grad">concrets et mesurables</span></h2>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div data-aos="fade-up" data-aos-delay="100" class="bg-[#F4F5FA] rounded-[20px] p-8 text-center border border-gray-100 custom-shadow">
+                <div class="text-4xl sm:text-5xl font-black text-grad stat-num mb-2" data-target="200" data-suffix="+">0+</div>
+                <p class="text-[#6B7280] text-sm font-medium">Établissements optimisés</p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="200" class="bg-[#F4F5FA] rounded-[20px] p-8 text-center border border-gray-100 custom-shadow">
+                <div class="text-4xl sm:text-5xl font-black text-[#6B40D8] stat-num mb-2" data-target="47" data-suffix="j">0j</div>
+                <p class="text-[#6B7280] text-sm font-medium">Délai moyen d'impact</p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="300" class="bg-[#F4F5FA] rounded-[20px] p-8 text-center border border-gray-100 custom-shadow">
+                <div class="text-4xl sm:text-5xl font-black text-[#C03080] stat-num mb-2" data-target="98" data-suffix="%">0%</div>
+                <p class="text-[#6B7280] text-sm font-medium">Taux de satisfaction</p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="400" class="bg-[#F4F5FA] rounded-[20px] p-8 text-center border border-gray-100 custom-shadow">
+                <div class="text-4xl sm:text-5xl font-black text-[#E85A30] stat-num mb-2" data-target="2.4" data-suffix="×" data-float="true">0×</div>
+                <p class="text-[#6B7280] text-sm font-medium">Appels multipliés</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- BEFORE / AFTER -->
+<section class="py-20 bg-[#F4F5FA] border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6 grid md:grid-cols-2 gap-10 items-center">
+        <div data-aos="fade-right">
+            <p class="text-xs font-bold uppercase tracking-widest text-[#3B5BDB] mb-3">Avant / Après</p>
+            <h2 class="text-3xl sm:text-4xl text-[#1E1B30] mb-4">Ce qui <span class="text-grad">change concrètement</span> pour votre business</h2>
+            <p class="text-[#6B7280] font-medium leading-relaxed mb-6">
+                Le référencement local n'est pas une affaire d'intuition. C'est une science algorithmique. Nos données montrent une mutation radicale de l'acquisition client dès le premier mois d'optimisation.
+            </p>
+            <div class="p-5 bg-white rounded-[14px] border border-gray-100 custom-shadow">
+                <p class="text-sm font-bold text-[#1E1B30] mb-2">💡 Le saviez-vous ?</p>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed">
+                    82% des requêtes Google Maps avec une intention locale précise déclenchent un appel ou une demande d'itinéraire dans les 24 heures.
+                </p>
+            </div>
+        </div>
+        <div data-aos="fade-left" class="bg-white rounded-[14px] custom-shadow-lg border border-gray-100 overflow-hidden">
+            <table class="w-full text-left text-sm">
+                <thead>
+                    <tr class="bg-[#F4F5FA] border-b border-gray-200">
+                        <th class="p-4 text-xs font-bold uppercase tracking-wider text-[#6B7280]">Indicateur</th>
+                        <th class="p-4 text-xs font-bold uppercase tracking-wider text-red-400">Avant</th>
+                        <th class="p-4 text-xs font-bold uppercase tracking-wider text-emerald-600">Après</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 font-medium">
+                    <tr class="hover:bg-gray-50/50 transition"><td class="p-4 font-bold text-[#1E1B30] text-xs sm:text-sm">Positionnement</td><td class="p-4 text-gray-400 text-xs sm:text-sm">Page 2 ou 3</td><td class="p-4 text-emerald-600 font-bold text-xs sm:text-sm">Top 3 Garanti</td></tr>
+                    <tr class="hover:bg-gray-50/50 transition"><td class="p-4 font-bold text-[#1E1B30] text-xs sm:text-sm">Taux de clic</td><td class="p-4 text-gray-400 text-xs sm:text-sm">Moins de 2%</td><td class="p-4 text-emerald-600 font-bold text-xs sm:text-sm">24% à 44%</td></tr>
+                    <tr class="hover:bg-gray-50/50 transition"><td class="p-4 font-bold text-[#1E1B30] text-xs sm:text-sm">Avis / mois</td><td class="p-4 text-gray-400 text-xs sm:text-sm">~1 avis</td><td class="p-4 text-emerald-600 font-bold text-xs sm:text-sm">+12 avis</td></tr>
+                    <tr class="hover:bg-gray-50/50 transition"><td class="p-4 font-bold text-[#1E1B30] text-xs sm:text-sm">Conversion</td><td class="p-4 text-gray-400 text-xs sm:text-sm">Résiduelle</td><td class="p-4 text-emerald-600 font-bold text-xs sm:text-sm">×2.4</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- METHOD -->
+<section id="methode" class="py-20 bg-white border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6">
+        <div class="text-center max-w-xl mx-auto mb-14" data-aos="fade-up">
+            <p class="text-xs font-bold uppercase tracking-widest text-[#6B40D8] mb-3">Ingénierie SEO</p>
+            <h2 class="text-3xl sm:text-4xl text-[#1E1B30]">Notre méthode en <span class="text-grad">4 étapes</span> pour atteindre le sommet</h2>
+        </div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div data-aos="fade-up" data-aos-delay="100" class="method-card p-6 bg-[#F4F5FA] border border-gray-100 rounded-[14px] hover:translate-y-[-6px] transition-all duration-300 custom-shadow" style="--bar-color:#3B5BDB">
+                <div class="text-3xl font-black text-[#3B5BDB] mb-3">01</div>
+                <h3 class="text-lg text-[#1E1B30] mb-2">Audit Local</h3>
+                <p class="text-sm text-[#6B7280] font-medium">Analyse de votre fiche GMB, présence sémantique et cartographie de vos concurrents directs.</p>
+                <p class="mt-4 text-xs text-[#3B5BDB] font-bold flex items-center gap-1.5"><i data-lucide="clock" class="w-3 h-3"></i>Livraison en 48h</p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="200" class="method-card p-6 bg-[#F4F5FA] border border-gray-100 rounded-[14px] hover:translate-y-[-6px] transition-all duration-300 custom-shadow" style="--bar-color:#6B40D8">
+                <div class="text-3xl font-black text-[#6B40D8] mb-3">02</div>
+                <h3 class="text-lg text-[#1E1B30] mb-2">Stratégie sur-mesure</h3>
+                <p class="text-sm text-[#6B7280] font-medium">Plan de déploiement sémantique indexé sur vos requêtes métiers les plus rentables.</p>
+                <p class="mt-4 text-xs text-[#6B40D8] font-bold flex items-center gap-1.5"><i data-lucide="target" class="w-3 h-3"></i>Personnalisé par secteur</p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="300" class="method-card p-6 bg-[#F4F5FA] border border-gray-100 rounded-[14px] hover:translate-y-[-6px] transition-all duration-300 custom-shadow" style="--bar-color:#C03080">
+                <div class="text-3xl font-black text-[#C03080] mb-3">03</div>
+                <h3 class="text-lg text-[#1E1B30] mb-2">Déploiement</h3>
+                <p class="text-sm text-[#6B7280] font-medium">Optimisation technique, contenus géo-ciblés, structuration des avis et netlinking local.</p>
+                <p class="mt-4 text-xs text-[#C03080] font-bold flex items-center gap-1.5"><i data-lucide="rocket" class="w-3 h-3"></i>Résultats dès J+30</p>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="400" class="method-card p-6 bg-[#F4F5FA] border border-gray-100 rounded-[14px] hover:translate-y-[-6px] transition-all duration-300 custom-shadow" style="--bar-color:#E85A30">
+                <div class="text-3xl font-black text-[#E85A30] mb-3">04</div>
+                <h3 class="text-lg text-[#1E1B30] mb-2">Suivi & Reporting</h3>
+                <p class="text-sm text-[#6B7280] font-medium">Analyse mensuelle : positions, volume d'appels, demandes d'itinéraires et recommandations.</p>
+                <p class="mt-4 text-xs text-[#E85A30] font-bold flex items-center gap-1.5"><i data-lucide="bar-chart-2" class="w-3 h-3"></i>Dashboard en temps réel</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CLIENTS -->
+<section id="clients" class="py-20 bg-[#F4F5FA] border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6">
+        <div class="text-center max-w-xl mx-auto mb-14" data-aos="fade-up">
+            <p class="text-xs font-bold uppercase tracking-widest text-[#C03080] mb-3">Cibles d'accompagnement</p>
+            <h2 class="text-3xl sm:text-4xl text-[#1E1B30]">Vous vous <span class="text-grad">reconnaissez ?</span></h2>
+        </div>
+        <div class="grid md:grid-cols-3 gap-8">
+            <div data-aos="fade-up" data-aos-delay="100" class="bg-white p-8 rounded-[14px] custom-shadow border border-gray-100 flex flex-col hover:translate-y-[-4px] transition-all duration-300">
+                <div class="w-12 h-12 bg-[#3B5BDB]/10 text-[#3B5BDB] rounded-xl flex items-center justify-center mb-5"><i data-lucide="wrench" class="w-5 h-5"></i></div>
+                <h3 class="text-xl text-[#1E1B30] mb-3">PME & Artisans</h3>
+                <p class="text-sm text-[#6B7280] font-medium leading-relaxed mb-5 flex-1">Savoir-faire d'excellence mais invisible en ligne. Nous transformons votre présence en levier de croissance durable.</p>
+                <div class="bg-[#3B5BDB]/8 border border-[#3B5BDB]/20 rounded-[10px] p-3 mb-5">
+                    <p class="text-xs font-bold text-[#3B5BDB]">Résultat type : <span class="text-[#1E1B30]">+110% d'appels en 45 jours</span></p>
+                </div>
+                <div class="border-t border-gray-100 pt-4 flex flex-wrap gap-2 text-xs font-bold text-[#3B5BDB]">
+                    <span class="bg-gray-100 px-2.5 py-1 rounded-md">Plombier</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Électricien</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Menuisier</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Garage</span>
+                </div>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="200" class="bg-white p-8 rounded-[14px] custom-shadow border border-gray-100 flex flex-col hover:translate-y-[-4px] transition-all duration-300">
+                <div class="w-12 h-12 bg-[#6B40D8]/10 text-[#6B40D8] rounded-xl flex items-center justify-center mb-5"><i data-lucide="scale" class="w-5 h-5"></i></div>
+                <h3 class="text-xl text-[#1E1B30] mb-3">Professions Libérales</h3>
+                <p class="text-sm text-[#6B7280] font-medium leading-relaxed mb-5 flex-1">Votre réputation locale est votre actif le plus précieux. Nous la développons de façon éthique pour attirer des clients qualifiés.</p>
+                <div class="bg-[#6B40D8]/8 border border-[#6B40D8]/20 rounded-[10px] p-3 mb-5">
+                    <p class="text-xs font-bold text-[#6B40D8]">Résultat type : <span class="text-[#1E1B30]">+40% de RDV locaux</span></p>
+                </div>
+                <div class="border-t border-gray-100 pt-4 flex flex-wrap gap-2 text-xs font-bold text-[#6B40D8]">
+                    <span class="bg-gray-100 px-2.5 py-1 rounded-md">Avocat</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Médecin</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Kiné</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Comptable</span>
+                </div>
+            </div>
+            <div data-aos="fade-up" data-aos-delay="300" class="bg-white p-8 rounded-[14px] custom-shadow border border-gray-100 flex flex-col hover:translate-y-[-4px] transition-all duration-300">
+                <div class="w-12 h-12 bg-[#E85A30]/10 text-[#E85A30] rounded-xl flex items-center justify-center mb-5"><i data-lucide="store" class="w-5 h-5"></i></div>
+                <h3 class="text-xl text-[#1E1B30] mb-3">Commerces Multi-sites</h3>
+                <p class="text-sm text-[#6B7280] font-medium leading-relaxed mb-5 flex-1">Réseau ou franchise sur plusieurs villes. Nous harmonisons et optimisons chaque point de vente simultanément.</p>
+                <div class="bg-[#E85A30]/8 border border-[#E85A30]/20 rounded-[10px] p-3 mb-5">
+                    <p class="text-xs font-bold text-[#E85A30]">Résultat type : <span class="text-[#1E1B30]">Top 3 sur chaque ville cible</span></p>
+                </div>
+                <div class="border-t border-gray-100 pt-4 flex flex-wrap gap-2 text-xs font-bold text-[#E85A30]">
+                    <span class="bg-gray-100 px-2.5 py-1 rounded-md">Franchise</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Réseaux</span><span class="bg-gray-100 px-2.5 py-1 rounded-md">Multi-villes</span>
+                </div>
+            </div>
+        </div>
+        <div class="text-center mt-10" data-aos="fade-up">
+            <a href="formules.html" class="custom-grad text-white font-bold text-sm px-8 py-4 rounded-[14px] custom-shadow hover:opacity-95 transition-all inline-block">
+                Voir nos formules et tarifs →
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section id="temoignages" class="py-20 bg-white border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6">
+        <div class="text-center max-w-xl mx-auto mb-14" data-aos="fade-up">
+            <p class="text-xs font-bold uppercase tracking-widest text-[#E85A30] mb-3">Preuve de performance</p>
+            <h2 class="text-3xl sm:text-4xl text-[#1E1B30]">Ce que disent nos <span class="text-grad">clients partenaires</span></h2>
+            <div class="flex items-center justify-center gap-1.5 mt-4">
+                <div class="flex text-[#E85A30]">
+                    <i data-lucide="star" class="w-5 h-5 fill-current"></i><i data-lucide="star" class="w-5 h-5 fill-current"></i><i data-lucide="star" class="w-5 h-5 fill-current"></i><i data-lucide="star" class="w-5 h-5 fill-current"></i><i data-lucide="star" class="w-5 h-5 fill-current"></i>
+                </div>
+                <span class="text-sm font-bold text-[#1E1B30]">5.0/5</span>
+                <span class="text-sm text-[#6B7280] font-medium">· 47 avis vérifiés</span>
+            </div>
+        </div>
+        <div class="grid md:grid-cols-3 gap-6">
+            <article class="bg-[#F4F5FA] p-6 rounded-[14px] border border-gray-100 flex flex-col custom-shadow hover:translate-y-[-4px] transition-all duration-300" data-aos="fade-up" data-aos-delay="100">
+                <div class="flex text-[#E85A30] gap-0.5 mb-4"><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i></div>
+                <p class="text-[#1E1B30] text-sm font-medium italic leading-relaxed flex-1">"En 3 mois, l'agence a propulsé notre établissement en pôle position sur Maps. Le volume d'appels qualifiés a tout simplement doublé. ROI exceptionnel."</p>
+                <div class="mt-5 flex items-center gap-3 border-t border-gray-200/60 pt-4">
+                    <div class="w-9 h-9 rounded-full custom-grad text-white flex items-center justify-center text-xs font-bold flex-shrink-0">MD</div>
+                    <div class="flex-1"><p class="text-sm font-bold text-[#1E1B30]">Marc D.</p><p class="text-xs text-[#6B7280] font-medium">Plomberie Durand (Lyon)</p></div>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-600 font-bold px-2 py-1 rounded-md">+110% appels</span>
+                </div>
+            </article>
+            <article class="bg-[#F4F5FA] p-6 rounded-[14px] border border-gray-100 flex flex-col custom-shadow hover:translate-y-[-4px] transition-all duration-300" data-aos="fade-up" data-aos-delay="200">
+                <div class="flex text-[#E85A30] gap-0.5 mb-4"><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i></div>
+                <p class="text-[#1E1B30] text-sm font-medium italic leading-relaxed flex-1">"Un travail rigoureux, parfaitement conforme aux directives Google. Notre cabinet a enregistré +40% de prises de rendez-vous locaux en deux mois."</p>
+                <div class="mt-5 flex items-center gap-3 border-t border-gray-200/60 pt-4">
+                    <div class="w-9 h-9 rounded-full custom-grad text-white flex items-center justify-center text-xs font-bold flex-shrink-0">SL</div>
+                    <div class="flex-1"><p class="text-sm font-bold text-[#1E1B30]">Sophie L.</p><p class="text-xs text-[#6B7280] font-medium">Cabinet Lefèvre (Paris)</p></div>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-600 font-bold px-2 py-1 rounded-md">+40% RDV</span>
+                </div>
+            </article>
+            <article class="bg-[#F4F5FA] p-6 rounded-[14px] border border-gray-100 flex flex-col custom-shadow hover:translate-y-[-4px] transition-all duration-300" data-aos="fade-up" data-aos-delay="300">
+                <div class="flex text-[#E85A30] gap-0.5 mb-4"><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i></div>
+                <p class="text-[#1E1B30] text-sm font-medium italic leading-relaxed flex-1">"Gérer 5 fiches d'établissements était devenu impossible. L'équipe a centralisé, optimisé et déployé une stratégie redoutable en temps record."</p>
+                <div class="mt-5 flex items-center gap-3 border-t border-gray-200/60 pt-4">
+                    <div class="w-9 h-9 rounded-full custom-grad text-white flex items-center justify-center text-xs font-bold flex-shrink-0">TB</div>
+                    <div class="flex-1"><p class="text-sm font-bold text-[#1E1B30]">Thomas B.</p><p class="text-xs text-[#6B7280] font-medium">Réseau Auto-École (Bordeaux)</p></div>
+                    <span class="text-[10px] bg-emerald-50 text-emerald-600 font-bold px-2 py-1 rounded-md">5 fiches Top 3</span>
+                </div>
+            </article>
+        </div>
+    </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" class="py-20 bg-[#F4F5FA] border-b border-gray-200/60">
+    <div class="max-w-[900px] mx-auto px-6">
+        <div class="text-center mb-12" data-aos="fade-up">
+            <p class="text-xs font-bold uppercase tracking-widest text-[#1E1B30] mb-3">FAQ</p>
+            <h2 class="text-3xl sm:text-4xl text-[#1E1B30]">Questions <span class="text-grad">fréquentes</span></h2>
+        </div>
+        <div class="space-y-3">
+            <details class="bg-white rounded-[14px] border border-gray-200/80 overflow-hidden custom-shadow" data-aos="fade-up">
+                <summary class="w-full text-left px-6 py-5 font-bold text-sm sm:text-base text-[#1E1B30] flex justify-between items-center cursor-pointer select-none">
+                    <span>Qu'est-ce que le SEO Local et pourquoi est-ce crucial ?</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-[#3B5BDB] faq-icon flex-shrink-0 ml-3"></i>
+                </summary>
+                <div class="px-6 pb-5 text-sm text-[#6B7280] font-medium border-t border-gray-100 pt-4 leading-relaxed">Le SEO local désigne l'ensemble des techniques visant à positionner un établissement physique dans les résultats géolocalisés de Google (Pack Maps). Plus de 80% des consommateurs effectuent des recherches de proximité avant de se déplacer.</div>
+            </details>
+            <details class="bg-white rounded-[14px] border border-gray-200/80 overflow-hidden custom-shadow" data-aos="fade-up">
+                <summary class="w-full text-left px-6 py-5 font-bold text-sm sm:text-base text-[#1E1B30] flex justify-between items-center cursor-pointer select-none">
+                    <span>En combien de temps voit-on des résultats ?</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-[#3B5BDB] faq-icon flex-shrink-0 ml-3"></i>
+                </summary>
+                <div class="px-6 pb-5 text-sm text-[#6B7280] font-medium border-t border-gray-100 pt-4 leading-relaxed">L'impact s'observe généralement sous 30 à 60 jours après le déploiement technique complet, en fonction de la concurrence locale dans votre secteur.</div>
+            </details>
+            <details class="bg-white rounded-[14px] border border-gray-200/80 overflow-hidden custom-shadow" data-aos="fade-up">
+                <summary class="w-full text-left px-6 py-5 font-bold text-sm sm:text-base text-[#1E1B30] flex justify-between items-center cursor-pointer select-none">
+                    <span>Faut-il avoir un site web pour bénéficier du SEO local ?</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-[#3B5BDB] faq-icon flex-shrink-0 ml-3"></i>
+                </summary>
+                <div class="px-6 pb-5 text-sm text-[#6B7280] font-medium border-t border-gray-100 pt-4 leading-relaxed">Non. La fiche Google My Business peut fonctionner de façon autonome. Cependant, un site web bien structuré amplifie significativement les résultats en renforçant la cohérence de votre présence digitale.</div>
+            </details>
+            <details class="bg-white rounded-[14px] border border-gray-200/80 overflow-hidden custom-shadow" data-aos="fade-up">
+                <summary class="w-full text-left px-6 py-5 font-bold text-sm sm:text-base text-[#1E1B30] flex justify-between items-center cursor-pointer select-none">
+                    <span>Quelle est la différence avec le référencement classique ?</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-[#3B5BDB] faq-icon flex-shrink-0 ml-3"></i>
+                </summary>
+                <div class="px-6 pb-5 text-sm text-[#6B7280] font-medium border-t border-gray-100 pt-4 leading-relaxed">Le SEO classique classe un site au niveau national ou mondial. Le SEO local croise des critères de proximité géographique pour répondre à un internaute situé à quelques kilomètres de chez vous.</div>
+            </details>
+        </div>
+    </div>
+</section>
+
+<!-- CTA BAND -->
+<section class="py-20 bg-white">
+    <div class="max-w-[900px] mx-auto px-6 text-center" data-aos="fade-up">
+        <p class="text-xs font-bold uppercase tracking-widest text-[#3B5BDB] mb-4">Passez à l'action</p>
+        <h2 class="text-3xl sm:text-5xl text-[#1E1B30] mb-4">Prêt à <span class="text-grad">dominer votre zone locale ?</span></h2>
+        <p class="text-[#6B7280] font-medium max-w-lg mx-auto mb-10">Découvrez nos formules transparentes ou obtenez votre diagnostic gratuit sous 48h.</p>
+        <div class="flex flex-wrap gap-4 justify-center">
+            <a href="formules.html" class="custom-grad text-white font-bold text-sm px-8 py-4 rounded-[14px] custom-shadow hover:opacity-95 transition-all shadow-[0_8px_32px_rgba(59,91,219,.25)]">
+                Voir les formules & tarifs →
+            </a>
+            <a href="contact.html" class="bg-white border-2 border-gray-200 text-[#1E1B30] font-bold text-sm px-8 py-4 rounded-[14px] hover:border-[#3B5BDB] hover:text-[#3B5BDB] transition-all">
+                Audit gratuit sous 48h
+            </a>
+        </div>
+        <div class="flex flex-wrap gap-6 justify-center mt-8 text-xs text-[#6B7280] font-semibold">
+            <span class="flex items-center gap-1.5"><i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>Sans engagement</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="star" class="w-4 h-4 text-[#E85A30] fill-current"></i>5.0/5 · 47 avis</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4 text-[#3B5BDB]"></i>Réponse sous 48h</span>
+        </div>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-[#1E1B30] text-gray-400 pt-12 pb-6 border-t border-gray-800">
+    <div class="max-w-[1160px] mx-auto px-6">
+        <div class="grid md:grid-cols-4 gap-10 mb-10">
+            <div class="md:col-span-2">
+                <p class="font-black text-white text-xl tracking-wider mb-1" style="font-family:'MuseoModerno',sans-serif">BE THE ONE</p>
+                <p class="text-xs text-gray-500 font-medium mb-4 uppercase tracking-widest">Performance SEO Local</p>
+                <p class="text-sm text-gray-400 font-medium leading-relaxed max-w-xs">Agence spécialisée en référencement local et optimisation Google My Business.</p>
+                <div class="flex gap-3 mt-5">
+                    <a href="tel:+33643876252" class="w-9 h-9 bg-gray-800 hover:bg-[#3B5BDB] text-gray-400 hover:text-white rounded-lg flex items-center justify-center transition-all"><i data-lucide="phone" class="w-4 h-4"></i></a>
+                    <a href="mailto:contact@betheone-agence.fr" class="w-9 h-9 bg-gray-800 hover:bg-[#6B40D8] text-gray-400 hover:text-white rounded-lg flex items-center justify-center transition-all"><i data-lucide="mail" class="w-4 h-4"></i></a>
+                </div>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm mb-4">Pages</p>
+                <ul class="space-y-2.5 text-sm font-medium">
+                    <li><a href="landing.html"  class="text-gray-400 hover:text-white transition">Accueil</a></li>
+                    <li><a href="formules.html" class="text-gray-400 hover:text-white transition">Formules & Tarifs</a></li>
+                    <li><a href="blog.html"     class="text-gray-400 hover:text-white transition">Blog SEO</a></li>
+                    <li><a href="contact.html"  class="text-gray-400 hover:text-white transition">Contact & Audit</a></li>
+                </ul>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm mb-4">Contact</p>
+                <ul class="space-y-3 text-sm font-medium">
+                    <li class="flex items-center gap-2 text-gray-400"><i data-lucide="phone" class="w-3.5 h-3.5 text-[#3B5BDB]"></i>06 43 87 62 52</li>
+                    <li class="flex items-center gap-2 text-gray-400"><i data-lucide="mail" class="w-3.5 h-3.5 text-[#6B40D8]"></i>contact@betheone-agence.fr</li>
+                    <li class="flex items-start gap-2 text-gray-400"><i data-lucide="clock" class="w-3.5 h-3.5 text-[#E85A30] mt-0.5"></i>Lun–Ven · 9h–18h</li>
+                </ul>
+            </div>
+        </div>
+        <div class="border-t border-gray-800 pt-6 flex flex-wrap gap-4 justify-between items-center text-xs text-gray-500">
+            <p class="font-medium">&copy; 2026 Be the One Agence. Tous droits réservés.</p>
+            <div class="flex gap-4 font-medium">
+                <a href="#" class="hover:text-white transition">Mentions légales</a>
+                <a href="#" class="hover:text-white transition">CGV</a>
+                <a href="#" class="hover:text-white transition">Confidentialité</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+    AOS.init({once:true,offset:80,duration:700});
+    lucide.createIcons();
+
+    window.addEventListener('scroll',()=>{
+        const s=window.scrollY,d=document.documentElement.scrollHeight-window.innerHeight;
+        document.getElementById('progress-bar').style.width=(s/d*100)+'%';
+        document.getElementById('scroll-top').classList.toggle('visible',s>500);
+    },{passive:true});
+
+    const mm=document.getElementById('mobile-menu');
+    document.getElementById('menu-toggle').addEventListener('click',()=>{
+        const open=mm.classList.toggle('open');
+        document.getElementById('ico-open').classList.toggle('hidden',open);
+        document.getElementById('ico-close').classList.toggle('hidden',!open);
+    });
+    function closeMobileMenu(){mm.classList.remove('open');document.getElementById('ico-open').classList.remove('hidden');document.getElementById('ico-close').classList.add('hidden');}
+
+    function animateCounter(el){
+        const t=parseFloat(el.dataset.target),pre=el.dataset.prefix||'',suf=el.dataset.suffix||'',fl=el.dataset.float==='true';
+        const steps=55,dur=1600;let i=0;
+        const timer=setInterval(()=>{i++;const e=1-Math.pow(1-i/steps,3),c=t*e;el.textContent=pre+(fl?c.toFixed(1):Math.floor(c))+suf;if(i>=steps){el.textContent=pre+(fl?t.toFixed(1):t)+suf;clearInterval(timer);}},dur/steps);
+    }
+    const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting&&!e.target.dataset.counted){e.target.dataset.counted='1';animateCounter(e.target);}});},{threshold:.3});
+    document.querySelectorAll('.stat-num').forEach(el=>obs.observe(el));
+
+    // Micro-interactions
+    document.querySelectorAll('a.custom-grad,button.custom-grad').forEach(b=>{
+        b.classList.add('micro');
+        b.addEventListener('click',function(e){
+            const r=document.createElement('span');r.className='ripple';
+            const rect=this.getBoundingClientRect(),s=Math.max(rect.width,rect.height);
+            r.style.cssText=`width:${s}px;height:${s}px;left:${e.clientX-rect.left-s/2}px;top:${e.clientY-rect.top-s/2}px`;
+            this.appendChild(r);setTimeout(()=>r.remove(),600);
+        });
+    });
+    document.querySelectorAll('a:not(.custom-grad)').forEach(b=>{
+        if(b.className&&(b.className.includes('border')||b.className.includes('bg-white')))b.classList.add('micro-sec');
+    });
+    document.querySelectorAll('a,button').forEach(el=>{
+        if(el.innerHTML.includes('→')&&!el.querySelector('.arrow-nudge'))
+            el.innerHTML=el.innerHTML.replace(/→/g,'<span class="arrow-nudge">→</span>');
+    });
+</script>
+</body>
+</html>

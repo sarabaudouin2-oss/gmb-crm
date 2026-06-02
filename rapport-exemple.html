@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rapport GMB — Exemple BeTheOne</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #F4F5FA;
+      color: #1E1B30;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── Layout ── */
+    .page {
+      width: 794px;
+      margin: 0 auto 32px;
+      background: white;
+      box-shadow: 0 8px 40px rgba(0,0,0,.12);
+    }
+    @media print {
+      body { background: white; }
+      .page { margin: 0; box-shadow: none; page-break-after: always; }
+      .no-print { display: none !important; }
+    }
+
+    /* ── Toolbar (screen only) ── */
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #1E1B30;
+      color: white;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .toolbar strong { color: #C4B5FD; }
+    .btn-print {
+      background: linear-gradient(135deg,#6B40D8,#C03080);
+      color: white;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    /* ── PAGE 1 : COUVERTURE (fond clair) ── */
+    .cover {
+      background: linear-gradient(160deg, #F5F3FF 0%, #ffffff 50%, #FDF2F8 100%);
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+      min-height: 1120px;
+      display: flex;
+      flex-direction: column;
+      border-top: 6px solid transparent;
+      border-image: linear-gradient(90deg,#6B40D8,#C03080,#E85A30) 1;
+    }
+    .cover-bg-circles {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .cover-bg-circles span {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .cover-bg-circles span:nth-child(1) {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(107,64,216,.07) 0%, transparent 70%);
+      top: -150px; right: -100px;
+    }
+    .cover-bg-circles span:nth-child(2) {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(192,48,128,.05) 0%, transparent 70%);
+      bottom: 50px; left: -80px;
+    }
+    .cover-bg-circles span:nth-child(3) {
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(232,90,48,.04) 0%, transparent 70%);
+      top: 400px; left: 350px;
+    }
+
+    /* Header agence */
+    .cover-header {
+      padding: 32px 48px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+    .agency-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .agency-logo-icon {
+      width: 48px; height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg,#6B40D8,#C03080,#E85A30);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 900;
+      color: white;
+      box-shadow: 0 8px 24px rgba(107,64,216,.3);
+    }
+    .agency-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: #1E1B30;
+      letter-spacing: -.02em;
+    }
+    .agency-tagline {
+      font-size: 11px;
+      color: #9CA3AF;
+      margin-top: 1px;
+    }
+    .cover-date {
+      font-size: 11px;
+      color: #9CA3AF;
+      text-align: right;
+    }
+    .cover-date strong {
+      display: block;
+      font-size: 13px;
+      color: #374151;
+      margin-top: 2px;
+    }
+
+    /* Hero */
+    .cover-hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 48px;
+      position: relative;
+      z-index: 2;
+      text-align: center;
+    }
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #EEF2FF;
+      border: 1px solid #C7D2FE;
+      color: #3B5BDB;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 14px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      margin-bottom: 24px;
+    }
+    .cover-title {
+      font-size: 40px;
+      font-weight: 900;
+      color: #1E1B30;
+      line-height: 1.1;
+      letter-spacing: -.03em;
+      margin-bottom: 12px;
+      max-width: 580px;
+    }
+    .cover-title span {
+      background: linear-gradient(135deg,#6B40D8,#C03080,#E85A30);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .cover-subtitle {
+      font-size: 15px;
+      color: #6B7280;
+      margin-bottom: 36px;
+      max-width: 440px;
+      line-height: 1.6;
+    }
+
+    /* Score global hero */
+    .cover-score-hero {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      background: white;
+      border: 1.5px solid #E9D5FF;
+      border-radius: 20px;
+      padding: 24px 36px;
+      box-shadow: 0 8px 32px rgba(107,64,216,.1);
+      margin-bottom: 28px;
+      max-width: 520px;
+      width: 100%;
+    }
+    .score-big-circle {
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      background: conic-gradient(#E85A30 0% 47%, #F4F5FA 47% 100%);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .score-big-inner {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      background: white;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .score-big-num {
+      font-size: 28px;
+      font-weight: 900;
+      color: #E85A30;
+      line-height: 1;
+    }
+    .score-big-denom {
+      font-size: 10px;
+      color: #9CA3AF;
+    }
+    .score-hero-right { flex: 1; text-align: left; }
+    .score-hero-label {
+      font-size: 18px;
+      font-weight: 900;
+      color: #1E1B30;
+      margin-bottom: 4px;
+    }
+    .score-hero-sub {
+      font-size: 12.5px;
+      color: #6B7280;
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+    .score-hero-bar-wrap {
+      height: 8px;
+      background: #F4F5FA;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .score-hero-bar {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg,#E85A30,#d97706);
+    }
+    .score-hero-range {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #D1D5DB;
+      margin-top: 3px;
+    }
+
+    /* Alarme chiffre */
+    .cover-alert {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 10px;
+      max-width: 520px;
+      width: 100%;
+      margin-bottom: 28px;
+    }
+    .cover-alert-stat {
+      background: white;
+      border: 1.5px solid #E5E7EB;
+      border-radius: 14px;
+      padding: 18px 14px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.04);
+      position: relative;
+      overflow: hidden;
+    }
+    .cover-alert-stat::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .cover-alert-stat.danger::before { background: #dc2626; }
+    .cover-alert-stat.warning::before { background: #d97706; }
+    .cover-alert-stat.info::before { background: #6B40D8; }
+    .cover-alert-stat .number {
+      font-size: 32px;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .cover-alert-stat.danger .number { color: #dc2626; }
+    .cover-alert-stat.warning .number { color: #d97706; }
+    .cover-alert-stat.info .number { color: #6B40D8; }
+    .cover-alert-stat .unit {
+      font-size: 12px;
+      color: #6B7280;
+      line-height: 1.4;
+    }
+    .cover-alert-stat .stat-icon {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    /* Score piliers row */
+    .cover-score-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: 520px;
+      width: 100%;
+    }
+    .cover-score-card {
+      background: white;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 14px 16px;
+      text-align: center;
+      flex: 1;
+      min-width: 80px;
+    }
+    .cover-score-card .score-num {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .cover-score-card .score-lbl {
+      font-size: 9.5px;
+      color: #9CA3AF;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-top: 3px;
+    }
+    .score-bad { color: #dc2626; }
+    .score-medium { color: #d97706; }
+    .score-good { color: #059669; }
+
+    /* Footer cover */
+    .cover-footer {
+      padding: 20px 48px;
+      border-top: 1px solid #F4F5FA;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+    .cover-footer-client {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .cover-footer-client-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg,#E85A30,#C03080);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: white;
+    }
+    .cover-footer-client-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1E1B30;
+    }
+    .cover-footer-client-info {
+      font-size: 11px;
+      color: #9CA3AF;
+      margin-top: 2px;
+    }
+    .cover-footer-conf {
+      font-size: 10px;
+      color: #D1D5DB;
+      text-align: right;
+    }
+
+    /* ── PAGE 2 : DIAGNOSTIC ── */
+    .page-inner {
+      padding: 48px;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 36px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #F4F5FA;
+    }
+    .page-header-agency {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .page-header-logo {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg,#6B40D8,#C03080,#E85A30);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 900; color: white;
+    }
+    .page-header-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6B40D8;
+    }
+    .page-header-right {
+      font-size: 11px;
+      color: #9CA3AF;
+      text-align: right;
+    }
+    .page-header-right strong {
+      display: block;
+      font-size: 12px;
+      color: #374151;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: #6B40D8;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg,#E5E7EB,transparent);
+    }
+
+    /* Pillars */
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(5,1fr);
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .pillar-card {
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+      border: 1px solid;
+    }
+    .pillar-card .p-score {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .pillar-card .p-bar {
+      height: 4px;
+      border-radius: 2px;
+      margin: 6px auto;
+      width: 80%;
+    }
+    .pillar-card .p-name {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-top: 4px;
+    }
+    .pillar-card .p-label {
+      font-size: 9.5px;
+      margin-top: 2px;
+    }
+    .p-red { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+    .p-red .p-bar { background: #dc2626; }
+    .p-orange { color: #d97706; background: #fffbeb; border-color: #fde68a; }
+    .p-orange .p-bar { background: #d97706; }
+    .p-green { color: #059669; background: #f0fdf4; border-color: #bbf7d0; }
+    .p-green .p-bar { background: #059669; }
+
+    /* Forces / Faiblesses */
+    .sw-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 32px;
+    }
+    .sw-box {
+      border-radius: 14px;
+      padding: 18px;
+      border: 1px solid;
+    }
+    .sw-box.strengths { background: #f0fdf4; border-color: #bbf7d0; }
+    .sw-box.weaknesses { background: #fef2f2; border-color: #fecaca; }
+    .sw-title {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sw-box.strengths .sw-title { color: #059669; }
+    .sw-box.weaknesses .sw-title { color: #dc2626; }
+    .sw-item {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #374151;
+      align-items: flex-start;
+    }
+    .sw-item .icon { flex-shrink: 0; font-weight: 900; margin-top: 1px; }
+    .sw-box.strengths .icon { color: #059669; }
+    .sw-box.weaknesses .icon { color: #dc2626; }
+
+    /* Benchmark concurrents */
+    .bench-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 32px;
+    }
+    .bench-table thead tr {
+      background: #F4F5FA;
+    }
+    .bench-table th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: #6B7280;
+      border-bottom: 2px solid #E5E7EB;
+    }
+    .bench-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #F4F5FA;
+      color: #374151;
+    }
+    .bench-table tr.highlight td {
+      background: linear-gradient(90deg,#F5F3FF,#FDF2F8);
+      font-weight: 700;
+      color: #6B40D8;
+    }
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .rank-1 { background: #fbbf24; color: white; }
+    .rank-2 { background: #94a3b8; color: white; }
+    .rank-3 { background: #b45309; color: white; }
+    .rank-me { background: #6B40D8; color: white; }
+    .threat-high { color: #dc2626; font-weight: 700; }
+    .threat-med  { color: #d97706; font-weight: 700; }
+    .threat-low  { color: #059669; font-weight: 700; }
+    .bar-cell { display: flex; align-items: center; gap: 6px; }
+    .mini-bar { height: 6px; border-radius: 3px; }
+
+    /* ── PAGE 3 : PLAN D'ACTION ── */
+    .roadmap {
+      margin-bottom: 32px;
+    }
+    .roadmap-month {
+      border-radius: 14px;
+      border: 1px solid;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .rm-1 { background: #fef2f2; border-color: #fecaca; }
+    .rm-2 { background: #fffbeb; border-color: #fde68a; }
+    .rm-3 { background: #f0fdf4; border-color: #bbf7d0; }
+    .roadmap-month-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .rm-month-num {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 3px;
+    }
+    .rm-1 .rm-month-num { color: #dc2626; }
+    .rm-2 .rm-month-num { color: #d97706; }
+    .rm-3 .rm-month-num { color: #059669; }
+    .rm-title {
+      font-size: 16px;
+      font-weight: 900;
+      color: #1E1B30;
+    }
+    .rm-objective {
+      background: rgba(107,64,216,.08);
+      border: 1px solid rgba(107,64,216,.2);
+      color: #6B40D8;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+    }
+    .rm-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .rm-action {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 12px;
+      color: #374151;
+      line-height: 1.4;
+    }
+    .rm-action-dot {
+      width: 18px; height: 18px;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      font-weight: 900;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .rm-1 .rm-action-dot { background: #dc2626; color: white; }
+    .rm-2 .rm-action-dot { background: #d97706; color: white; }
+    .rm-3 .rm-action-dot { background: #059669; color: white; }
+
+    /* KPIs attendus */
+    .kpis-grid {
+      display: grid;
+      grid-template-columns: repeat(4,1fr);
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .kpi-card {
+      background: linear-gradient(135deg,#F5F3FF,#FDF2F8);
+      border: 1px solid #E9D5FF;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .kpi-card .kpi-num {
+      font-size: 28px;
+      font-weight: 900;
+      color: #6B40D8;
+      line-height: 1;
+    }
+    .kpi-card .kpi-lbl {
+      font-size: 11px;
+      color: #6B7280;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+
+    /* Mots-clés */
+    .kw-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 32px;
+    }
+    .kw-table thead tr { background: #F4F5FA; }
+    .kw-table th {
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: #6B7280;
+      border-bottom: 2px solid #E5E7EB;
+    }
+    .kw-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #F4F5FA;
+      color: #374151;
+    }
+    .pos-badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .pos-top3  { background: #d1fae5; color: #059669; }
+    .pos-top10 { background: #ffedd5; color: #d97706; }
+    .pos-top20 { background: #fef2f2; color: #dc2626; }
+    .prio-top    { background: #EEF2FF; color: #3B5BDB; border-radius:20px; padding:2px 9px; font-size:11px; font-weight:700; }
+    .prio-urgent { background: #fef2f2; color: #dc2626; border-radius:20px; padding:2px 9px; font-size:11px; font-weight:700; }
+    .prio-keep   { background: #f0fdf4; color: #059669; border-radius:20px; padding:2px 9px; font-size:11px; font-weight:700; }
+    .evo-up   { color: #059669; font-weight: 700; }
+    .evo-down { color: #dc2626; font-weight: 700; }
+    .evo-stable { color: #9CA3AF; }
+
+    /* ── PAGE 4 : CTA (fond clair) ── */
+    .cta-page {
+      background: linear-gradient(160deg, #F5F3FF 0%, #ffffff 50%, #FDF2F8 100%);
+      min-height: 1120px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      border-top: 6px solid transparent;
+      border-image: linear-gradient(90deg,#6B40D8,#C03080,#E85A30) 1;
+    }
+    .cta-page .cover-bg-circles span:nth-child(1) {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(107,64,216,.06) 0%, transparent 70%);
+      top: -100px; right: -150px;
+    }
+    .cta-page .cover-bg-circles span:nth-child(2) {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(192,48,128,.04) 0%, transparent 70%);
+      bottom: 0; left: -100px;
+    }
+
+    .cta-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 50px 80px;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+    .cta-icon {
+      width: 80px; height: 80px;
+      border-radius: 22px;
+      background: linear-gradient(135deg,#6B40D8,#C03080,#E85A30);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; font-weight: 900; color: white;
+      margin: 0 auto 28px;
+      box-shadow: 0 16px 48px rgba(107,64,216,.25);
+    }
+    .cta-headline {
+      font-size: 34px;
+      font-weight: 900;
+      color: #1E1B30;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+      margin-bottom: 14px;
+      max-width: 500px;
+    }
+    .cta-headline span {
+      background: linear-gradient(135deg,#6B40D8,#C03080,#E85A30);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .cta-sub {
+      font-size: 14.5px;
+      color: #6B7280;
+      line-height: 1.6;
+      margin-bottom: 36px;
+      max-width: 440px;
+    }
+
+    .cta-promise-grid {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 12px;
+      margin-bottom: 36px;
+      width: 100%;
+      max-width: 540px;
+    }
+    .cta-promise-card {
+      background: white;
+      border: 1.5px solid #E9D5FF;
+      border-radius: 14px;
+      padding: 18px 14px;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(107,64,216,.06);
+    }
+    .cta-promise-card .p-icon { font-size: 24px; margin-bottom: 8px; }
+    .cta-promise-card .p-title { font-size: 13px; font-weight: 700; color: #1E1B30; margin-bottom: 4px; }
+    .cta-promise-card .p-desc { font-size: 11px; color: #9CA3AF; line-height: 1.4; }
+
+    .cta-contact-box {
+      background: linear-gradient(135deg,#F5F3FF,#FDF2F8);
+      border: 1.5px solid #C4B5FD;
+      border-radius: 20px;
+      padding: 28px 36px;
+      width: 100%;
+      max-width: 460px;
+      margin-bottom: 28px;
+    }
+    .cta-contact-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1E1B30;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+    }
+    .cta-contact-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: #374151;
+    }
+    .cta-contact-row span:first-child {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: #EEF2FF;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .cta-contact-row strong { color: #6B40D8; }
+
+    .cta-urgency {
+      font-size: 12px;
+      color: #9CA3AF;
+      border-top: 1px solid #F4F5FA;
+      padding-top: 20px;
+      max-width: 420px;
+      line-height: 1.6;
+    }
+    .cta-urgency strong { color: #374151; }
+
+    /* Confidentiality footer */
+    .cta-page-footer {
+      padding: 20px 48px;
+      border-top: 1px solid #F4F5FA;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 2;
+    }
+    .cta-page-footer-left {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .cta-page-footer-logo {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      background: linear-gradient(135deg,#6B40D8,#C03080);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 900; color: white;
+    }
+    .cta-page-footer-txt { font-size: 11px; color: #D1D5DB; }
+    .cta-page-footer-txt strong { color: #9CA3AF; }
+
+    /* Quick win banner */
+    .quickwins {
+      background: linear-gradient(135deg,#EEF2FF,#FDF2F8);
+      border: 1.5px solid #C4B5FD;
+      border-radius: 14px;
+      padding: 20px 22px;
+      margin-bottom: 32px;
+    }
+    .quickwins-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: #3B5BDB;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .quickwins-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    .qw-item {
+      background: white;
+      border-radius: 10px;
+      padding: 12px 14px;
+      border: 1px solid #E9D5FF;
+      font-size: 12px;
+      color: #374151;
+      line-height: 1.4;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .qw-num {
+      width: 20px; height: 20px;
+      background: linear-gradient(135deg,#6B40D8,#C03080);
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: white;
+      flex-shrink: 0; margin-top: 1px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Toolbar screen -->
+<div class="toolbar no-print">
+  <div>📋 <strong>Aperçu rapport</strong> — données fictives (exemple Aasgard Vannes)</div>
+  <button class="btn-print" onclick="window.print()">📄 Imprimer / Exporter PDF</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     PAGE 1 — COUVERTURE
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="cover">
+    <div class="cover-bg-circles">
+      <span></span><span></span><span></span>
+    </div>
+
+    <!-- Header agence -->
+    <div class="cover-header">
+      <div class="agency-logo">
+        <div class="agency-logo-icon">B</div>
+        <div>
+          <div class="agency-name">BeTheOne</div>
+          <div class="agency-tagline">Agence Google My Business</div>
+        </div>
+      </div>
+      <div class="cover-date">
+        Rapport confidentiel
+        <strong>1 juin 2026</strong>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="cover-hero">
+      <div class="cover-badge">🗺️ Analyse Google My Business</div>
+      <div class="cover-title">
+        Votre fiche Google :<br>
+        <span>où en êtes-vous vraiment ?</span>
+      </div>
+      <div class="cover-subtitle">
+        Analyse complète de votre visibilité locale, benchmark concurrentiel et plan d'optimisation continue pour dominer — et rester — en TOP 3 Google Maps.
+      </div>
+
+      <!-- Score global mis en avant -->
+      <div class="cover-score-hero">
+        <div class="score-big-circle">
+          <div class="score-big-inner">
+            <div class="score-big-num">47</div>
+            <div class="score-big-denom">/100</div>
+          </div>
+        </div>
+        <div class="score-hero-right">
+          <div class="score-hero-label">Score de visibilité globale</div>
+          <div class="score-hero-sub">Votre fiche est <strong style="color:#E85A30">en dessous du seuil de compétitivité</strong> (70/100). Des optimisations régulières sont nécessaires pour progresser et maintenir votre position.</div>
+          <div class="score-hero-bar-wrap">
+            <div class="score-hero-bar" style="width:47%"></div>
+          </div>
+          <div class="score-hero-range">
+            <span>0 — Invisible</span>
+            <span>50 — Compétitif</span>
+            <span>100 — Leader</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerte positionnement -->
+      <div class="cover-alert">
+        <div class="cover-alert-stat danger">
+          <div class="stat-icon">👆</div>
+          <div class="number">×3</div>
+          <div class="unit">moins de clics que<br>le leader local</div>
+        </div>
+        <div class="cover-alert-stat warning">
+          <div class="stat-icon">👁️</div>
+          <div class="number">−68%</div>
+          <div class="unit">de visibilité<br>sur votre zone</div>
+        </div>
+        <div class="cover-alert-stat info">
+          <div class="stat-icon">📍</div>
+          <div class="number">#6</div>
+          <div class="unit">position actuelle<br>Google Maps</div>
+        </div>
+      </div>
+
+      <!-- Scores piliers -->
+      <div class="cover-score-row">
+        <div class="cover-score-card">
+          <div class="score-num score-bad">38</div>
+          <div class="score-lbl">Pertinence</div>
+        </div>
+        <div class="cover-score-card">
+          <div class="score-num score-medium">65</div>
+          <div class="score-lbl">Proximité</div>
+        </div>
+        <div class="cover-score-card">
+          <div class="score-num score-bad">42</div>
+          <div class="score-lbl">Notoriété</div>
+        </div>
+        <div class="cover-score-card">
+          <div class="score-num score-medium">55</div>
+          <div class="score-lbl">Avis</div>
+        </div>
+        <div class="cover-score-card">
+          <div class="score-num score-good">70</div>
+          <div class="score-lbl">Complétion</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="cover-footer">
+      <div class="cover-footer-client">
+        <div class="cover-footer-client-icon">🎮</div>
+        <div>
+          <div class="cover-footer-client-name">Aasgard Vannes</div>
+          <div class="cover-footer-client-info">Escape game · Vannes, Bretagne</div>
+        </div>
+      </div>
+      <div class="cover-footer-conf">
+        Document confidentiel<br>Réservé à l'usage interne
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     PAGE 2 — DIAGNOSTIC
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-inner">
+
+    <!-- Header répété -->
+    <div class="page-header">
+      <div class="page-header-agency">
+        <div class="page-header-logo">B</div>
+        <div class="page-header-name">BeTheOne · Rapport GMB</div>
+      </div>
+      <div class="page-header-right">
+        Aasgard Vannes · Escape game
+        <strong>Diagnostic & Benchmark</strong>
+      </div>
+    </div>
+
+    <!-- Piliers -->
+    <div class="section-title">📊 Les 5 piliers de votre visibilité</div>
+    <div class="pillars-grid">
+      <div class="pillar-card p-red">
+        <div class="p-score">38</div>
+        <div class="p-bar" style="width:38%"></div>
+        <div class="p-name">Pertinence</div>
+        <div class="p-label" style="color:#dc2626">Faible</div>
+      </div>
+      <div class="pillar-card p-orange">
+        <div class="p-score">65</div>
+        <div class="p-bar" style="width:65%"></div>
+        <div class="p-name">Proximité</div>
+        <div class="p-label" style="color:#d97706">Moyen</div>
+      </div>
+      <div class="pillar-card p-red">
+        <div class="p-score">42</div>
+        <div class="p-bar" style="width:42%"></div>
+        <div class="p-name">Notoriété</div>
+        <div class="p-label" style="color:#dc2626">Faible</div>
+      </div>
+      <div class="pillar-card p-orange">
+        <div class="p-score">55</div>
+        <div class="p-bar" style="width:55%"></div>
+        <div class="p-name">Avis</div>
+        <div class="p-label" style="color:#d97706">Moyen</div>
+      </div>
+      <div class="pillar-card p-green">
+        <div class="p-score">70</div>
+        <div class="p-bar" style="width:70%"></div>
+        <div class="p-name">Complétion</div>
+        <div class="p-label" style="color:#059669">Bon</div>
+      </div>
+    </div>
+
+    <!-- Forces / Faiblesses -->
+    <div class="section-title">💡 Forces & axes d'amélioration</div>
+    <div class="sw-grid">
+      <div class="sw-box strengths">
+        <div class="sw-title">✓ Points forts</div>
+        <div class="sw-item"><span class="icon">✓</span> Fiche complète avec horaires et site web</div>
+        <div class="sw-item"><span class="icon">✓</span> Bonne note générale (4.6 ⭐) — au-dessus de la moyenne</div>
+        <div class="sw-item"><span class="icon">✓</span> Positionnement unique dans la niche escape game à Vannes</div>
+      </div>
+      <div class="sw-box weaknesses">
+        <div class="sw-title">! Points à améliorer</div>
+        <div class="sw-item"><span class="icon">!</span> Seulement 28 avis — les concurrents en ont 2× plus</div>
+        <div class="sw-item"><span class="icon">!</span> Aucun post publié depuis 45 jours</div>
+        <div class="sw-item"><span class="icon">!</span> Description sans mots-clés locaux ("escape game Vannes")</div>
+        <div class="sw-item"><span class="icon">!</span> Catégories secondaires manquantes (loisirs, anniversaire…)</div>
+      </div>
+    </div>
+
+    <!-- Benchmark -->
+    <div class="section-title">🏆 Benchmark vs concurrents locaux</div>
+    <table class="bench-table">
+      <thead>
+        <tr>
+          <th>Rang</th>
+          <th>Établissement</th>
+          <th>Note</th>
+          <th>Avis</th>
+          <th>Photos</th>
+          <th>Posts</th>
+          <th>Réponses</th>
+          <th>Écart à combler</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="rank-badge rank-1">1</span></td>
+          <td>Escape Game Aventure Vannes</td>
+          <td>⭐ 4.8</td>
+          <td><div class="bar-cell">87 <div class="mini-bar" style="background:#059669;width:60px"></div></div></td>
+          <td>45</td>
+          <td>✅ Oui</td>
+          <td>90%</td>
+          <td style="font-size:11px;color:#6B7280;">Référence #1</td>
+        </tr>
+        <tr>
+          <td><span class="rank-badge rank-2">2</span></td>
+          <td>MindEscape Vannes</td>
+          <td>⭐ 4.6</td>
+          <td><div class="bar-cell">52 <div class="mini-bar" style="background:#d97706;width:36px"></div></div></td>
+          <td>30</td>
+          <td>✅ Oui</td>
+          <td>70%</td>
+          <td style="font-size:11px;color:#6B7280;">+24 avis · +posts</td>
+        </tr>
+        <tr>
+          <td><span class="rank-badge rank-3">3</span></td>
+          <td>Riddlebox Lorient</td>
+          <td>⭐ 4.4</td>
+          <td><div class="bar-cell">34 <div class="mini-bar" style="background:#b45309;width:23px"></div></div></td>
+          <td>18</td>
+          <td>❌ Non</td>
+          <td>40%</td>
+          <td style="font-size:11px;color:#6B7280;">+6 avis · +photos</td>
+        </tr>
+        <tr class="highlight">
+          <td><span class="rank-badge rank-me">6</span></td>
+          <td><strong>Aasgard Vannes</strong> <em style="font-size:10px;color:#9CA3AF;font-weight:400">(vous)</em></td>
+          <td>⭐ 4.6</td>
+          <td><div class="bar-cell">28 <div class="mini-bar" style="background:#6B40D8;width:19px"></div></div></td>
+          <td>12</td>
+          <td>❌ Non</td>
+          <td>50%</td>
+          <td style="font-size:11px;">
+            <span style="color:#dc2626;font-weight:700;">−59 avis</span><br>
+            <span style="color:#dc2626;font-weight:700;">−33 photos</span><br>
+            <span style="color:#dc2626;font-weight:700;">0 post actif</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Quick wins -->
+    <div class="quickwins">
+      <div class="quickwins-title">⚡ 3 actions rapides — résultats en moins de 30 jours</div>
+      <div class="quickwins-list">
+        <div class="qw-item">
+          <div class="qw-num">1</div>
+          Publier 1 post/semaine avec les mots-clés "escape game Vannes" → +visibilité locale immédiate
+        </div>
+        <div class="qw-item">
+          <div class="qw-num">2</div>
+          Demander 10 avis ciblés à vos clients récents → passe de 28 à 38 avis, dépasse Riddlebox
+        </div>
+        <div class="qw-item">
+          <div class="qw-num">3</div>
+          Réécrire la description avec 3 mots-clés locaux + CTA → +pertinence pour Google en 7 jours
+        </div>
+      </div>
+    </div>
+
+    <!-- Mots-clés -->
+    <div class="section-title">🔍 Mots-clés & positionnement actuel</div>
+    <table class="kw-table">
+      <thead>
+        <tr>
+          <th>Mot-clé</th>
+          <th>Volume</th>
+          <th>Position actuelle</th>
+          <th>Évolution</th>
+          <th>Priorité</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>escape game Vannes</strong></td>
+          <td>500–1k/mois</td>
+          <td><span class="pos-badge pos-top10">TOP 6</span></td>
+          <td><span class="evo-up">↑ +2</span></td>
+          <td><span class="prio-top">TOP</span></td>
+          <td>Optimiser description + répondre avis</td>
+        </tr>
+        <tr>
+          <td>salle escape Vannes</td>
+          <td>200–500/mois</td>
+          <td><span class="pos-badge pos-top10">TOP 8</span></td>
+          <td><span class="evo-up">↑ +3</span></td>
+          <td><span class="prio-top">TOP</span></td>
+          <td>Créer un post dédié</td>
+        </tr>
+        <tr>
+          <td>activité originale Vannes</td>
+          <td>100–200/mois</td>
+          <td><span class="pos-badge pos-top20">TOP 14</span></td>
+          <td><span class="evo-down">↓ -1</span></td>
+          <td><span class="prio-urgent">Urgent</span></td>
+          <td>Ajouter dans les services + photos</td>
+        </tr>
+        <tr>
+          <td>escape game Séné</td>
+          <td>&lt;50/mois</td>
+          <td><span class="pos-badge pos-top3">🏆 TOP 3</span></td>
+          <td><span class="evo-up">↑ +1</span></td>
+          <td><span class="prio-keep">Maintenir</span></td>
+          <td>2 posts/mois mentionnant Séné</td>
+        </tr>
+        <tr>
+          <td>cadeau anniversaire Vannes</td>
+          <td>50–200/mois</td>
+          <td><span class="pos-badge pos-top20">TOP 19</span></td>
+          <td><span class="evo-stable">→ stable</span></td>
+          <td><span class="prio-urgent">Urgent</span></td>
+          <td>Post offre cadeau + photo</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     PAGE 3 — PLAN D'ACTION 90 JOURS
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-inner">
+
+    <div class="page-header">
+      <div class="page-header-agency">
+        <div class="page-header-logo">B</div>
+        <div class="page-header-name">BeTheOne · Rapport GMB</div>
+      </div>
+      <div class="page-header-right">
+        Aasgard Vannes · Escape game
+        <strong>Plan d'action 90 jours</strong>
+      </div>
+    </div>
+
+    <!-- Message long terme -->
+    <div style="background:linear-gradient(135deg,#EEF2FF,#F5F3FF);border:1.5px solid #C7D2FE;border-radius:14px;padding:18px 22px;margin-bottom:24px;display:flex;gap:16px;align-items:flex-start;">
+      <div style="font-size:28px;flex-shrink:0;">🏁</div>
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#3B5BDB;margin-bottom:5px;">90 jours pour lancer — pas pour s'arrêter</div>
+        <div style="font-size:12.5px;color:#374151;line-height:1.6;">Les premiers résultats sont visibles sous 90 jours. Mais <strong>Google Maps est un travail continu</strong> : chaque semaine sans action, un concurrent peut vous dépasser. Maintenir le TOP 3 demande des optimisations régulières — posts, avis, photos, mots-clés — tout au long de l'année.</div>
+      </div>
+    </div>
+
+    <!-- KPIs attendus -->
+    <div class="section-title">📈 Premiers résultats visibles — 90 jours</div>
+    <div class="kpis-grid">
+      <div class="kpi-card">
+        <div class="kpi-num">TOP 3</div>
+        <div class="kpi-lbl">Position cible sur "escape game Vannes"</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num">+60</div>
+        <div class="kpi-lbl">Nouveaux avis Google collectés</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num">×2.5</div>
+        <div class="kpi-lbl">Clics sur votre fiche Google</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num">75+</div>
+        <div class="kpi-lbl">Score global fiche (actuellement 47)</div>
+      </div>
+    </div>
+
+    <!-- Roadmap -->
+    <div class="section-title">🗺️ Roadmap mois par mois</div>
+    <div class="roadmap">
+
+      <div class="roadmap-month rm-1">
+        <div class="roadmap-month-header">
+          <div>
+            <div class="rm-month-num">Mois 1 — Juillet 2026</div>
+            <div class="rm-title">Fondations</div>
+          </div>
+          <div class="rm-objective">Objectif : Score fiche → 65/100</div>
+        </div>
+        <div class="rm-actions">
+          <div class="rm-action"><div class="rm-action-dot">1</div>Réécrire la description avec 5 mots-clés locaux ciblés</div>
+          <div class="rm-action"><div class="rm-action-dot">2</div>Ajouter 3 catégories secondaires manquantes</div>
+          <div class="rm-action"><div class="rm-action-dot">3</div>Publier 20 photos pro (ambiance, salles, équipes)</div>
+          <div class="rm-action"><div class="rm-action-dot">4</div>Mettre en place le processus de collecte d'avis post-session</div>
+          <div class="rm-action"><div class="rm-action-dot">5</div>Créer les services GMB avec descriptions keyword-rich</div>
+        </div>
+      </div>
+
+      <div class="roadmap-month rm-2">
+        <div class="roadmap-month-header">
+          <div>
+            <div class="rm-month-num">Mois 2 — Août 2026</div>
+            <div class="rm-title">Notoriété & Contenu</div>
+          </div>
+          <div class="rm-objective">Objectif : TOP 5 · 50+ avis</div>
+        </div>
+        <div class="rm-actions">
+          <div class="rm-action"><div class="rm-action-dot">1</div>4 posts GMB ciblés par mois (conseil, offre, réalisation, témoignage)</div>
+          <div class="rm-action"><div class="rm-action-dot">2</div>Campagne avis auprès des 200 derniers clients</div>
+          <div class="rm-action"><div class="rm-action-dot">3</div>Répondre à 100% des avis existants</div>
+          <div class="rm-action"><div class="rm-action-dot">4</div>Créer une offre "anniversaire" + post dédié</div>
+        </div>
+      </div>
+
+      <div class="roadmap-month rm-3">
+        <div class="roadmap-month-header">
+          <div>
+            <div class="rm-month-num">Mois 3 — Septembre 2026</div>
+            <div class="rm-title">Domination Locale</div>
+          </div>
+          <div class="rm-objective">Objectif : TOP 3 · 80+ avis</div>
+        </div>
+        <div class="rm-actions">
+          <div class="rm-action"><div class="rm-action-dot">1</div>Optimisation fine des zones géographiques (Séné, Auray, Arradon)</div>
+          <div class="rm-action"><div class="rm-action-dot">2</div>Posts ciblés par commune pour élargir la couverture carte</div>
+          <div class="rm-action"><div class="rm-action-dot">3</div>Audit de suivi + rapport de performance</div>
+          <div class="rm-action"><div class="rm-action-dot">4</div>Mise en place du suivi mensuel automatisé</div>
+        </div>
+      </div>
+
+      <!-- Phase 4 : long terme -->
+      <div style="background:linear-gradient(135deg,#F5F3FF,#EEF2FF);border:1.5px solid #C4B5FD;border-radius:14px;padding:18px 20px;">
+        <div class="roadmap-month-header" style="margin-bottom:10px;">
+          <div>
+            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B40D8;margin-bottom:3px;">Mois 4 et au-delà — Suivi continu</div>
+            <div style="font-size:16px;font-weight:900;color:#1E1B30;">Garder votre place — chaque semaine</div>
+          </div>
+          <div style="background:linear-gradient(135deg,#6B40D8,#C03080);color:white;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;">♾️ Engagement mensuel</div>
+        </div>
+        <div style="font-size:12px;color:#374151;line-height:1.6;margin-bottom:12px;">
+          Le TOP 3 ne se gagne pas une fois pour toutes. Google réévalue les fiches en permanence. <strong>Chaque semaine sans action est une opportunité pour vos concurrents.</strong>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+          <div style="background:white;border-radius:10px;padding:12px;border:1px solid #E9D5FF;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">📝</div>
+            <div style="font-size:11px;font-weight:700;color:#1E1B30;margin-bottom:2px;">4 posts / mois</div>
+            <div style="font-size:10px;color:#9CA3AF;">Actualités, offres, conseils, témoignages</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:12px;border:1px solid #E9D5FF;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">⭐</div>
+            <div style="font-size:11px;font-weight:700;color:#1E1B30;margin-bottom:2px;">Suivi avis</div>
+            <div style="font-size:10px;color:#9CA3AF;">Réponses systématiques + collecte active</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:12px;border:1px solid #E9D5FF;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">🗺️</div>
+            <div style="font-size:11px;font-weight:700;color:#1E1B30;margin-bottom:2px;">Scan mensuel</div>
+            <div style="font-size:10px;color:#9CA3AF;">Vérification des positions sur la carte</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:12px;border:1px solid #E9D5FF;text-align:center;">
+            <div style="font-size:18px;margin-bottom:4px;">📊</div>
+            <div style="font-size:11px;font-weight:700;color:#1E1B30;margin-bottom:2px;">Rapport mensuel</div>
+            <div style="font-size:10px;color:#9CA3AF;">KPIs, évolutions, ajustements stratégiques</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Ce que le TOP 3 change concrètement -->
+    <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:16px;padding:22px 28px;">
+      <div style="font-size:12px;font-weight:800;color:#6B40D8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:16px;display:flex;align-items:center;gap:6px;">
+        📈 Ce que le TOP 3 change concrètement
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px;">
+        <div style="text-align:center;">
+          <div style="font-size:22px;font-weight:900;color:#dc2626;line-height:1">#6</div>
+          <div style="font-size:11px;color:#6B7280;margin-top:4px">Position actuelle<br>Google Maps</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:22px;font-weight:900;color:#059669;line-height:1">TOP 3</div>
+          <div style="font-size:11px;color:#6B7280;margin-top:4px">Objectif<br>en 90 jours</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:22px;font-weight:900;color:#6B40D8;line-height:1">×3</div>
+          <div style="font-size:11px;color:#6B7280;margin-top:4px">Plus de clics<br>sur votre fiche</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:22px;font-weight:900;color:#059669;line-height:1">×5</div>
+          <div style="font-size:11px;color:#6B7280;margin-top:4px">Plus d'appels<br>entrants estimés</div>
+        </div>
+      </div>
+      <div style="background:rgba(107,64,216,.06);border-radius:10px;padding:12px 16px;font-size:12px;color:#374151;line-height:1.6;border-left:3px solid #6B40D8;">
+        📊 <strong>Données secteur :</strong> les établissements en TOP 3 Google Maps captent en moyenne <strong>73% des clics</strong> sur leur requête principale, contre 8% pour la position 6. Source : études SEO local 2024.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     PAGE 4 — CTA & CONTACT
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="cta-page">
+    <div class="cover-bg-circles">
+      <span></span><span></span>
+    </div>
+
+    <div class="cta-content">
+      <div class="cta-icon">B</div>
+
+      <div class="cta-headline">
+        TOP 3 — et<br>
+        <span>y rester durablement.</span>
+      </div>
+
+      <div class="cta-sub">
+        Atteindre le TOP 3 en 90 jours, c'est l'objectif de départ. <strong style="color:#1E1B30">Le garder, c'est le vrai travail.</strong><br>
+        Nous assurons les optimisations hebdomadaires pour que votre fiche reste visible, compétitive et en tête — chaque mois.
+      </div>
+
+      <!-- Promesses -->
+      <div class="cta-promise-grid">
+        <div class="cta-promise-card">
+          <div class="p-icon">🚀</div>
+          <div class="p-title">TOP 3 en 90 jours</div>
+          <div class="p-desc">Premières positions visibles dès le premier mois</div>
+        </div>
+        <div class="cta-promise-card">
+          <div class="p-icon">♾️</div>
+          <div class="p-title">Optimisation continue</div>
+          <div class="p-desc">Chaque semaine, votre fiche est travaillée pour rester en tête</div>
+        </div>
+        <div class="cta-promise-card">
+          <div class="p-icon">📊</div>
+          <div class="p-title">Rapport mensuel</div>
+          <div class="p-desc">Vos positions, clics, avis et progrès — chaque mois</div>
+        </div>
+      </div>
+
+      <!-- Contact -->
+      <div class="cta-contact-box">
+        <div class="cta-contact-title">📞 Parlons-en — consultation gratuite 30 min</div>
+        <div class="cta-contact-row">
+          <span>📧</span>
+          <div><strong>contact@betheone.fr</strong></div>
+        </div>
+        <div class="cta-contact-row">
+          <span>📞</span>
+          <div><strong>06 XX XX XX XX</strong> — Sara Baudouin</div>
+        </div>
+        <div class="cta-contact-row">
+          <span>🌐</span>
+          <div><strong>betheone.fr</strong></div>
+        </div>
+      </div>
+
+      <div class="cta-urgency">
+        <strong>Ce rapport est valable 30 jours.</strong> Passé ce délai, les données concurrentielles auront évolué. Vos concurrents n'attendent pas — chaque semaine sans action est une occasion manquée.
+      </div>
+    </div>
+
+    <div class="cta-page-footer">
+      <div class="cta-page-footer-left">
+        <div class="cta-page-footer-logo">B</div>
+        <div class="cta-page-footer-txt"><strong>BeTheOne</strong> · Agence Google My Business</div>
+      </div>
+      <div class="cta-page-footer-txt">Document confidentiel · © 2026 BeTheOne · Tous droits réservés</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

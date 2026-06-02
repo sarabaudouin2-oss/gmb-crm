@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fr" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog SEO Local — Guides, Stratégies & Actualités Google My Business | Be the One</title>
+    <meta name="description" content="Découvrez nos guides pratiques sur le SEO local, l'optimisation Google My Business, la gestion des avis et le référencement local en France. Mis à jour régulièrement.">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://www.betheone-agence.fr/blog">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Blog","name":"Blog SEO Local — Be the One","url":"https://www.betheone-agence.fr/blog","description":"Guides et stratégies pour dominer le référencement local Google Maps","publisher":{"@type":"Organization","name":"Be the One Agence"}}</script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..1000;1,9..40,300..1000&family=MuseoModerno:wght@900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <style>
+        :root{--blue:#3B5BDB;--violet:#6B40D8;--rose:#C03080;--orange:#E85A30;--bg:#F4F5FA;--dark:#1E1B30;--muted:#6B7280;--grad:linear-gradient(135deg,#3B5BDB 0%,#6B40D8 35%,#C03080 70%,#E85A30 100%);--shadow:0 4px 24px rgba(30,27,48,.05);--shadow-lg:0 12px 48px rgba(30,27,48,.10)}
+        *,*::before,*::after{box-sizing:border-box}
+        body{font-family:'DM Sans',sans-serif;background:#F4F5FA;color:#1E1B30;line-height:1.6;-webkit-font-smoothing:antialiased}
+        h1{font-family:'MuseoModerno',sans-serif;font-weight:900;line-height:1.1}
+        h2,h3,h4{font-family:'DM Sans',sans-serif;font-weight:900;line-height:1.2}
+        .custom-grad{background:var(--grad)}
+        .text-grad{background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+        .custom-shadow{box-shadow:var(--shadow)}
+        .custom-shadow-lg{box-shadow:var(--shadow-lg)}
+        #progress-bar{position:fixed;top:0;left:0;height:3px;background:var(--grad);z-index:9999;width:0;transition:width .08s linear}
+        #mobile-menu{max-height:0;overflow:hidden;transition:max-height .4s ease}
+        #mobile-menu.open{max-height:400px}
+        #scroll-top{opacity:0;pointer-events:none;transition:opacity .3s}
+        #scroll-top.visible{opacity:1;pointer-events:all}
+        @keyframes pulse-soft{0%,100%{opacity:1}50%{opacity:.5}}
+        .pulse-soft{animation:pulse-soft 2s ease-in-out infinite}
+        .nav-active{color:#3B5BDB !important;border-bottom:2px solid #3B5BDB;padding-bottom:2px}
+        .breadcrumb a{color:#6B7280;font-size:.75rem;font-weight:600}
+        .breadcrumb span{color:#6B7280;font-size:.75rem;margin:0 6px}
+        /* ── Micro-interactions ── */
+        .micro{position:relative;overflow:hidden;transition:transform .2s ease,box-shadow .2s ease !important}
+        .micro:hover{transform:translateY(-2px) scale(1.015) !important;box-shadow:0 14px 40px rgba(59,91,219,.28) !important}
+        .micro:active{transform:scale(.96) !important;box-shadow:0 4px 16px rgba(59,91,219,.15) !important}
+        .micro-sec{transition:transform .2s ease,box-shadow .2s ease !important}
+        .micro-sec:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(30,27,48,.09) !important}
+        .micro-sec:active{transform:scale(.98) !important}
+        .ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.32);transform:scale(0);animation:rippleAnim .55s linear;pointer-events:none}
+        @keyframes rippleAnim{to{transform:scale(4);opacity:0}}
+        .arrow-nudge{display:inline-block;transition:transform .2s ease}
+        a:hover .arrow-nudge,button:hover .arrow-nudge{transform:translateX(5px)}
+
+        /* Article cards */
+        .article-card{transition:transform .3s ease,box-shadow .3s ease}
+        .article-card:hover{transform:translateY(-5px);box-shadow:0 20px 50px rgba(30,27,48,.10)}
+        .article-card:hover .article-arrow{transform:translateX(4px)}
+        .article-arrow{transition:transform .25s ease}
+
+        /* Category pills */
+        .cat-pill{cursor:pointer;transition:all .2s}
+        .cat-pill.active{color:white}
+        .cat-pill[data-cat="all"].active{background:#1E1B30}
+        .cat-pill[data-cat="guide"].active{background:#3B5BDB}
+        .cat-pill[data-cat="strategie"].active{background:#6B40D8}
+        .cat-pill[data-cat="technique"].active{background:#C03080}
+        .cat-pill[data-cat="reputation"].active{background:#E85A30}
+        .cat-pill[data-cat="bases"].active{background:#0EA5E9}
+
+        /* Category badge colors */
+        .badge-guide{background:#EEF2FF;color:#3B5BDB}
+        .badge-strategie{background:#F3F0FF;color:#6B40D8}
+        .badge-technique{background:#FDF2F8;color:#C03080}
+        .badge-reputation{background:#FEF0EB;color:#E85A30}
+        .badge-bases{background:#E0F2FE;color:#0284C7}
+        .badge-urgent{background:#FEF2F2;color:#DC2626}
+
+        /* Newsletter input */
+        .nl-input{background:white;padding:.75rem 1rem;border:1.5px solid #E5E7EB;border-radius:10px;font-size:.875rem;font-weight:500;outline:none;transition:border-color .2s;font-family:'DM Sans',sans-serif;flex:1}
+        .nl-input:focus{border-color:#3B5BDB;box-shadow:0 0 0 3px rgba(59,91,219,.1)}
+
+        /* Featured article gradient overlay */
+        .featured-overlay{background:linear-gradient(to top,rgba(30,27,48,.85) 0%,rgba(30,27,48,.3) 60%,transparent 100%)}
+
+        /* Reading time dot */
+        .read-dot{width:4px;height:4px;background:#6B7280;border-radius:50%;display:inline-block;margin:0 6px;vertical-align:middle}
+    </style>
+</head>
+<body class="overflow-x-hidden">
+<div id="progress-bar"></div>
+<button id="scroll-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" class="fixed bottom-24 md:bottom-8 right-6 z-50 w-11 h-11 custom-grad text-white rounded-2xl shadow-lg flex items-center justify-center hover:scale-110 transition-transform">
+    <i data-lucide="chevron-up" class="w-5 h-5"></i>
+</button>
+<div class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3">
+    <a href="contact.html" class="custom-grad text-white text-xs font-bold uppercase tracking-wider w-full block text-center py-3.5 rounded-[14px]">Audit GMB Gratuit →</a>
+</div>
+
+<!-- HEADER -->
+<header class="bg-white/90 backdrop-blur-md sticky top-0 z-50 border-b border-gray-200/60">
+    <div class="max-w-[1160px] mx-auto px-6 h-20 flex justify-between items-center">
+        <a href="landing.html" class="flex flex-col">
+            <span class="text-2xl font-black tracking-tight text-grad" style="font-family:'MuseoModerno',sans-serif">BE THE ONE</span>
+            <span class="text-[10px] text-[#6B7280] tracking-widest font-bold uppercase -mt-0.5">Performance SEO Local</span>
+        </a>
+        <nav class="hidden md:flex space-x-7 text-sm font-semibold">
+            <a href="landing.html"  class="text-[#6B7280] hover:text-[#3B5BDB] transition">Accueil</a>
+            <a href="formules.html" class="text-[#6B7280] hover:text-[#3B5BDB] transition">Formules</a>
+            <a href="blog.html"     class="nav-active transition">Blog SEO</a>
+            <a href="contact.html"  class="text-[#6B7280] hover:text-[#3B5BDB] transition">Contact</a>
+        </nav>
+        <div class="flex items-center gap-3">
+            <a href="contact.html" class="hidden md:block custom-grad text-white text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-[14px] custom-shadow hover:opacity-95 transition-all">Audit Gratuit</a>
+            <button id="menu-toggle" class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition">
+                <i data-lucide="menu" class="w-5 h-5" id="ico-open"></i>
+                <i data-lucide="x"    class="w-5 h-5 hidden" id="ico-close"></i>
+            </button>
+        </div>
+    </div>
+    <div id="mobile-menu" class="md:hidden bg-white border-t border-gray-100">
+        <div class="px-6 py-5 space-y-4 text-sm font-semibold">
+            <a href="landing.html"  class="block text-[#1E1B30] hover:text-[#3B5BDB] py-1 transition" onclick="closeMobileMenu()">Accueil</a>
+            <a href="formules.html" class="block text-[#1E1B30] hover:text-[#3B5BDB] py-1 transition" onclick="closeMobileMenu()">Formules</a>
+            <a href="blog.html"     class="block text-[#3B5BDB] font-bold py-1" onclick="closeMobileMenu()">Blog SEO</a>
+            <a href="contact.html"  class="block text-[#1E1B30] hover:text-[#3B5BDB] py-1 transition" onclick="closeMobileMenu()">Contact</a>
+            <a href="contact.html" class="custom-grad text-white text-xs font-bold uppercase tracking-wider px-5 py-3.5 rounded-[14px] block text-center" onclick="closeMobileMenu()">Audit GMB Gratuit</a>
+        </div>
+    </div>
+</header>
+
+<!-- BREADCRUMB -->
+<div class="max-w-[1160px] mx-auto px-6 pt-6 breadcrumb flex items-center">
+    <a href="landing.html">Accueil</a><span>›</span><span class="text-[#1E1B30] text-xs font-bold">Blog SEO Local</span>
+</div>
+
+<!-- HERO -->
+<section class="py-14 lg:py-16 max-w-[1160px] mx-auto px-6" data-aos="fade-up">
+    <div class="max-w-2xl">
+        <div class="inline-flex items-center gap-2 bg-[#3B5BDB]/10 text-[#3B5BDB] text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-md mb-5">
+            <i data-lucide="rss" class="w-3.5 h-3.5"></i>
+            Mis à jour · Mai 2026
+        </div>
+        <h1 class="text-4xl sm:text-5xl text-[#1E1B30] tracking-tight">
+            Ressources <span class="text-grad">SEO Local</span> — guides, stratégies & actualités
+        </h1>
+        <p class="mt-4 text-[#6B7280] text-base sm:text-lg font-medium max-w-xl">
+            Tout ce dont vous avez besoin pour comprendre, maîtriser et dominer le référencement local Google Maps — rédigé par nos experts terrain.
+        </p>
+    </div>
+</section>
+
+<!-- CATEGORY FILTER -->
+<section class="pb-10 max-w-[1160px] mx-auto px-6">
+    <div class="flex flex-wrap gap-2" id="cat-filters">
+        <button class="cat-pill active text-xs font-bold px-4 py-2 rounded-full border-2 border-[#1E1B30]" data-cat="all">Tous les articles</button>
+        <button class="cat-pill text-xs font-bold px-4 py-2 rounded-full border-2 border-gray-200 text-[#6B7280]" data-cat="guide">Guide complet</button>
+        <button class="cat-pill text-xs font-bold px-4 py-2 rounded-full border-2 border-gray-200 text-[#6B7280]" data-cat="strategie">Stratégie</button>
+        <button class="cat-pill text-xs font-bold px-4 py-2 rounded-full border-2 border-gray-200 text-[#6B7280]" data-cat="technique">Technique</button>
+        <button class="cat-pill text-xs font-bold px-4 py-2 rounded-full border-2 border-gray-200 text-[#6B7280]" data-cat="reputation">E-Réputation</button>
+        <button class="cat-pill text-xs font-bold px-4 py-2 rounded-full border-2 border-gray-200 text-[#6B7280]" data-cat="bases">Les Bases</button>
+    </div>
+</section>
+
+<!-- FEATURED ARTICLE -->
+<section class="pb-12 max-w-[1160px] mx-auto px-6" data-cat-item="guide" data-aos="fade-up">
+    <a href="#" class="group block rounded-[24px] overflow-hidden custom-shadow-lg relative" style="min-height:420px;background:linear-gradient(135deg,#EEF2FF 0%,#F3F0FF 100%)">
+        <div class="absolute inset-0 flex">
+            <!-- Left: colored graphic placeholder -->
+            <div class="hidden sm:flex w-2/5 items-center justify-center p-10 relative overflow-hidden">
+                <div class="absolute inset-0 opacity-10" style="background:var(--grad)"></div>
+                <div class="text-center relative z-10">
+                    <div class="text-8xl font-black text-grad leading-none mb-3">GMB</div>
+                    <div class="text-sm font-bold text-[#3B5BDB] uppercase tracking-widest">Guide 2026</div>
+                    <div class="flex justify-center text-[#E85A30] mt-4 gap-0.5">
+                        <i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i><i data-lucide="star" class="w-4 h-4 fill-current"></i>
+                    </div>
+                </div>
+            </div>
+            <!-- Right: content -->
+            <div class="flex-1 flex flex-col justify-center p-8 sm:p-10">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="badge-guide text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">Guide complet</span>
+                    <span class="text-xs text-[#6B7280] font-medium">Article vedette</span>
+                </div>
+                <h2 class="text-2xl sm:text-3xl text-[#1E1B30] mb-4 group-hover:text-[#3B5BDB] transition-colors">
+                    Comment optimiser votre fiche Google My Business en 2026 : le guide complet
+                </h2>
+                <p class="text-sm text-[#6B7280] font-medium leading-relaxed mb-6 max-w-lg">
+                    Photos, catégories, horaires, posts, avis, Q&A… Découvrez les 18 points d'optimisation incontournables pour propulser votre fiche dans le Top 3 du Pack Local, étape par étape.
+                </p>
+                <div class="flex items-center justify-between flex-wrap gap-4">
+                    <div class="flex items-center gap-3 text-xs text-[#6B7280] font-medium">
+                        <div class="flex items-center gap-1.5">
+                            <div class="w-7 h-7 custom-grad rounded-full flex items-center justify-center text-white text-[9px] font-bold">BTO</div>
+                            <span>Be the One</span>
+                        </div>
+                        <span class="read-dot"></span>
+                        <span>12 février 2026</span>
+                        <span class="read-dot"></span>
+                        <span>8 min de lecture</span>
+                    </div>
+                    <span class="text-sm font-bold text-[#3B5BDB] flex items-center gap-1.5 group-hover:gap-3 transition-all">
+                        Lire l'article <i data-lucide="arrow-right" class="w-4 h-4 article-arrow"></i>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </a>
+</section>
+
+<!-- ARTICLE GRID -->
+<section class="pb-12 max-w-[1160px] mx-auto px-6">
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="articles-grid">
+
+        <!-- Article 2 -->
+        <article class="article-card bg-white rounded-[20px] border border-gray-100 custom-shadow overflow-hidden flex flex-col" data-cat="strategie" data-aos="fade-up" data-aos-delay="100">
+            <div class="h-36 flex items-center justify-center relative overflow-hidden" style="background:linear-gradient(135deg,#F3F0FF 0%,#EEF2FF 100%)">
+                <div class="text-5xl font-black text-[#6B40D8] opacity-15 absolute">Maps</div>
+                <div class="relative text-center z-10">
+                    <i data-lucide="map" class="w-10 h-10 text-[#6B40D8] mx-auto mb-1"></i>
+                    <p class="text-xs font-bold text-[#6B40D8] uppercase tracking-wider">Pack Local</p>
+                </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="badge-strategie text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Stratégie</span>
+                    <span class="text-[10px] text-[#6B7280] font-medium">6 min</span>
+                </div>
+                <h3 class="text-base font-bold text-[#1E1B30] mb-3 flex-1 leading-snug group-hover:text-[#6B40D8]">
+                    <a href="#" class="hover:text-[#6B40D8] transition">Pack Local Google Maps : les 7 facteurs clés de classement que vos concurrents ignorent</a>
+                </h3>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed mb-5">Pertinence, distance, notoriété… Décryptage des signaux algorithmiques que Google utilise pour construire le Pack Local et comment les travailler concrètement.</p>
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                    <span class="text-[11px] text-[#6B7280] font-medium">18 mars 2026</span>
+                    <a href="#" class="text-xs font-bold text-[#6B40D8] flex items-center gap-1 hover:gap-2 transition-all article-arrow-wrap">Lire <i data-lucide="arrow-right" class="w-3.5 h-3.5 article-arrow"></i></a>
+                </div>
+            </div>
+        </article>
+
+        <!-- Article 3 -->
+        <article class="article-card bg-white rounded-[20px] border border-gray-100 custom-shadow overflow-hidden flex flex-col" data-cat="reputation" data-aos="fade-up" data-aos-delay="150">
+            <div class="h-36 flex items-center justify-center relative overflow-hidden" style="background:linear-gradient(135deg,#FEF0EB 0%,#FDF2F8 100%)">
+                <div class="relative text-center z-10">
+                    <div class="flex justify-center text-[#E85A30] gap-0.5 mb-2">
+                        <i data-lucide="star" class="w-8 h-8 fill-current"></i><i data-lucide="star" class="w-8 h-8 fill-current"></i><i data-lucide="star" class="w-8 h-8 fill-current"></i>
+                    </div>
+                    <p class="text-xs font-bold text-[#E85A30] uppercase tracking-wider">Avis Google</p>
+                </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="badge-reputation text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">E-Réputation</span>
+                    <span class="text-[10px] text-[#6B7280] font-medium">5 min</span>
+                </div>
+                <h3 class="text-base font-bold text-[#1E1B30] mb-3 flex-1 leading-snug">
+                    <a href="#" class="hover:text-[#E85A30] transition">Avis Google : comment en obtenir 10× plus sans risquer une suspension de votre fiche</a>
+                </h3>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed mb-5">Email, SMS, QR code, lien direct… Les méthodes légitimes qui fonctionnent vraiment pour collecter des avis positifs, et les erreurs qui peuvent vous coûter votre fiche.</p>
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                    <span class="text-[11px] text-[#6B7280] font-medium">2 avril 2026</span>
+                    <a href="#" class="text-xs font-bold text-[#E85A30] flex items-center gap-1 hover:gap-2 transition-all">Lire <i data-lucide="arrow-right" class="w-3.5 h-3.5 article-arrow"></i></a>
+                </div>
+            </div>
+        </article>
+
+        <!-- Article 4 -->
+        <article class="article-card bg-white rounded-[20px] border border-gray-100 custom-shadow overflow-hidden flex flex-col" data-cat="technique" data-aos="fade-up" data-aos-delay="200">
+            <div class="h-36 flex items-center justify-center relative overflow-hidden" style="background:linear-gradient(135deg,#FDF2F8 0%,#F3F0FF 100%)">
+                <div class="relative text-center z-10">
+                    <i data-lucide="link" class="w-10 h-10 text-[#C03080] mx-auto mb-1"></i>
+                    <p class="text-xs font-bold text-[#C03080] uppercase tracking-wider">Netlinking Local</p>
+                </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="badge-technique text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Technique</span>
+                    <span class="text-[10px] text-[#6B7280] font-medium">7 min</span>
+                </div>
+                <h3 class="text-base font-bold text-[#1E1B30] mb-3 flex-1 leading-snug">
+                    <a href="#" class="hover:text-[#C03080] transition">Netlinking local : 8 sources de liens pour booster votre autorité de zone géographique</a>
+                </h3>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed mb-5">Annuaires locaux, presse régionale, partenaires de quartier, associations… Les 8 viviers de backlinks locaux à activer immédiatement pour renforcer votre positionnement.</p>
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                    <span class="text-[11px] text-[#6B7280] font-medium">14 avril 2026</span>
+                    <a href="#" class="text-xs font-bold text-[#C03080] flex items-center gap-1 hover:gap-2 transition-all">Lire <i data-lucide="arrow-right" class="w-3.5 h-3.5 article-arrow"></i></a>
+                </div>
+            </div>
+        </article>
+
+    </div>
+</section>
+
+<!-- NEWSLETTER -->
+<section class="pb-12 max-w-[1160px] mx-auto px-6" data-aos="fade-up">
+    <div class="bg-white rounded-[24px] border border-gray-100 custom-shadow p-8 sm:p-10">
+        <div class="max-w-xl mx-auto text-center">
+            <div class="w-12 h-12 custom-grad rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-[0_4px_16px_rgba(59,91,219,.25)]">
+                <i data-lucide="mail" class="w-5 h-5 text-white"></i>
+            </div>
+            <h2 class="text-2xl text-[#1E1B30] mb-2">La newsletter des <span class="text-grad">pros du SEO local</span></h2>
+            <p class="text-sm text-[#6B7280] font-medium mb-6">1 email par mois · Stratégies actionnables · Mises à jour de l'algorithme Google · 0 spam</p>
+            <form id="nl-form" class="flex gap-3 max-w-md mx-auto">
+                <input type="email" required placeholder="votre@email.fr" class="nl-input" id="nl-email">
+                <button type="submit" class="custom-grad text-white text-xs font-bold uppercase tracking-wider px-5 py-3 rounded-[10px] hover:opacity-95 transition-all whitespace-nowrap shadow-[0_4px_16px_rgba(59,91,219,.25)]">
+                    S'abonner
+                </button>
+            </form>
+            <p id="nl-success" class="hidden mt-3 text-sm font-bold text-emerald-600">✓ Inscription confirmée — bienvenue dans la newsletter !</p>
+            <p class="mt-3 text-[11px] text-[#6B7280] font-medium">Déjà <strong class="text-[#1E1B30]">1 240 professionnels</strong> abonnés · Désabonnement en 1 clic</p>
+        </div>
+    </div>
+</section>
+
+<!-- MORE ARTICLES -->
+<section class="pb-20 max-w-[1160px] mx-auto px-6">
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- Article 5 -->
+        <article class="article-card bg-white rounded-[20px] border border-gray-100 custom-shadow overflow-hidden flex flex-col" data-cat="technique" data-aos="fade-up" data-aos-delay="100">
+            <div class="h-36 flex items-center justify-center relative overflow-hidden" style="background:linear-gradient(135deg,#FEF2F2 0%,#FEF0EB 100%)">
+                <div class="relative text-center z-10">
+                    <i data-lucide="alert-triangle" class="w-10 h-10 text-red-500 mx-auto mb-1"></i>
+                    <p class="text-xs font-bold text-red-500 uppercase tracking-wider">Fiche suspendue</p>
+                </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="badge-urgent text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Urgence</span>
+                    <span class="text-[10px] text-[#6B7280] font-medium">4 min</span>
+                </div>
+                <h3 class="text-base font-bold text-[#1E1B30] mb-3 flex-1 leading-snug">
+                    <a href="#" class="hover:text-red-500 transition">Fiche GMB suspendue : causes fréquentes et procédure officielle de rétablissement</a>
+                </h3>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed mb-5">Suspension soudaine de votre fiche ? Pas de panique. Voici les raisons les plus courantes et le processus de recours étape par étape pour la rétablir rapidement.</p>
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                    <span class="text-[11px] text-[#6B7280] font-medium">28 avril 2026</span>
+                    <a href="#" class="text-xs font-bold text-red-500 flex items-center gap-1 hover:gap-2 transition-all">Lire <i data-lucide="arrow-right" class="w-3.5 h-3.5 article-arrow"></i></a>
+                </div>
+            </div>
+        </article>
+
+        <!-- Article 6 -->
+        <article class="article-card bg-white rounded-[20px] border border-gray-100 custom-shadow overflow-hidden flex flex-col" data-cat="bases" data-aos="fade-up" data-aos-delay="150">
+            <div class="h-36 flex items-center justify-center relative overflow-hidden" style="background:linear-gradient(135deg,#E0F2FE 0%,#EEF2FF 100%)">
+                <div class="relative text-center z-10">
+                    <i data-lucide="git-compare" class="w-10 h-10 text-sky-500 mx-auto mb-1"></i>
+                    <p class="text-xs font-bold text-sky-500 uppercase tracking-wider">SEO vs SEO Local</p>
+                </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="badge-bases text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Les Bases</span>
+                    <span class="text-[10px] text-[#6B7280] font-medium">5 min</span>
+                </div>
+                <h3 class="text-base font-bold text-[#1E1B30] mb-3 flex-1 leading-snug">
+                    <a href="#" class="hover:text-sky-500 transition">SEO Local vs SEO Classique : différences, complémentarités et stratégie pour 2026</a>
+                </h3>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed mb-5">On confond souvent les deux. Pourtant, leurs signaux, leurs outils et leurs indicateurs de performance sont très différents. On clarifie tout avec des exemples concrets.</p>
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                    <span class="text-[11px] text-[#6B7280] font-medium">6 mai 2026</span>
+                    <a href="#" class="text-xs font-bold text-sky-500 flex items-center gap-1 hover:gap-2 transition-all">Lire <i data-lucide="arrow-right" class="w-3.5 h-3.5 article-arrow"></i></a>
+                </div>
+            </div>
+        </article>
+
+        <!-- Article 7 -->
+        <article class="article-card bg-white rounded-[20px] border border-gray-100 custom-shadow overflow-hidden flex flex-col" data-cat="strategie" data-aos="fade-up" data-aos-delay="200">
+            <div class="h-36 flex items-center justify-center relative overflow-hidden" style="background:linear-gradient(135deg,#F3F0FF 0%,#FDF2F8 100%)">
+                <div class="relative text-center z-10">
+                    <i data-lucide="image" class="w-10 h-10 text-[#6B40D8] mx-auto mb-1"></i>
+                    <p class="text-xs font-bold text-[#6B40D8] uppercase tracking-wider">Photos GMB</p>
+                </div>
+            </div>
+            <div class="p-6 flex flex-col flex-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="badge-strategie text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Stratégie</span>
+                    <span class="text-[10px] text-[#6B7280] font-medium">4 min</span>
+                </div>
+                <h3 class="text-base font-bold text-[#1E1B30] mb-3 flex-1 leading-snug">
+                    <a href="#" class="hover:text-[#6B40D8] transition">Photos Google My Business : le type, la fréquence et les formats qui boostent votre CTR</a>
+                </h3>
+                <p class="text-xs text-[#6B7280] font-medium leading-relaxed mb-5">Les fiches avec des photos récentes et de qualité reçoivent 42% de demandes d'itinéraires en plus. Voici exactement quoi publier, comment et à quelle fréquence.</p>
+                <div class="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                    <span class="text-[11px] text-[#6B7280] font-medium">12 mai 2026</span>
+                    <a href="#" class="text-xs font-bold text-[#6B40D8] flex items-center gap-1 hover:gap-2 transition-all">Lire <i data-lucide="arrow-right" class="w-3.5 h-3.5 article-arrow"></i></a>
+                </div>
+            </div>
+        </article>
+
+    </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section class="py-20 bg-white border-t border-gray-200/60">
+    <div class="max-w-[900px] mx-auto px-6 text-center" data-aos="fade-up">
+        <p class="text-xs font-bold uppercase tracking-widest text-[#3B5BDB] mb-4">Passez de la lecture à l'action</p>
+        <h2 class="text-3xl sm:text-4xl text-[#1E1B30] mb-4">Vous avez lu, vous savez. <br>Il ne reste plus qu'à <span class="text-grad">dominer votre zone.</span></h2>
+        <p class="text-[#6B7280] font-medium max-w-md mx-auto mb-8">Obtenez votre diagnostic de visibilité locale gratuit. Nos experts s'occupent du reste.</p>
+        <div class="flex flex-wrap gap-4 justify-center">
+            <a href="contact.html" class="custom-grad text-white font-bold text-sm px-8 py-4 rounded-[14px] custom-shadow hover:opacity-95 transition-all shadow-[0_8px_32px_rgba(59,91,219,.25)]">
+                Audit gratuit sous 48h →
+            </a>
+            <a href="formules.html" class="bg-white border-2 border-gray-200 text-[#1E1B30] font-bold text-sm px-8 py-4 rounded-[14px] hover:border-[#3B5BDB] hover:text-[#3B5BDB] transition-all">
+                Voir les formules
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="bg-[#1E1B30] text-gray-400 pt-12 pb-6 border-t border-gray-800">
+    <div class="max-w-[1160px] mx-auto px-6">
+        <div class="grid md:grid-cols-4 gap-10 mb-10">
+            <div class="md:col-span-2">
+                <p class="font-black text-white text-xl tracking-wider mb-1" style="font-family:'MuseoModerno',sans-serif">BE THE ONE</p>
+                <p class="text-xs text-gray-500 font-medium mb-4 uppercase tracking-widest">Performance SEO Local</p>
+                <p class="text-sm text-gray-400 font-medium leading-relaxed max-w-xs">Agence spécialisée en référencement local et optimisation Google My Business.</p>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm mb-4">Pages</p>
+                <ul class="space-y-2.5 text-sm font-medium">
+                    <li><a href="landing.html"  class="text-gray-400 hover:text-white transition">Accueil</a></li>
+                    <li><a href="formules.html" class="text-gray-400 hover:text-white transition">Formules & Tarifs</a></li>
+                    <li><a href="blog.html"     class="text-white font-bold transition">Blog SEO</a></li>
+                    <li><a href="contact.html"  class="text-gray-400 hover:text-white transition">Contact & Audit</a></li>
+                </ul>
+            </div>
+            <div>
+                <p class="text-white font-bold text-sm mb-4">Contact</p>
+                <ul class="space-y-3 text-sm font-medium">
+                    <li class="flex items-center gap-2 text-gray-400"><i data-lucide="phone" class="w-3.5 h-3.5 text-[#3B5BDB]"></i>06 43 87 62 52</li>
+                    <li class="flex items-center gap-2 text-gray-400"><i data-lucide="mail" class="w-3.5 h-3.5 text-[#6B40D8]"></i>contact@betheone-agence.fr</li>
+                    <li class="flex items-start gap-2 text-gray-400"><i data-lucide="clock" class="w-3.5 h-3.5 text-[#E85A30] mt-0.5"></i>Lun–Ven · 9h–18h</li>
+                </ul>
+            </div>
+        </div>
+        <div class="border-t border-gray-800 pt-6 flex flex-wrap gap-4 justify-between items-center text-xs text-gray-500">
+            <p>&copy; 2026 Be the One Agence. Tous droits réservés.</p>
+            <div class="flex gap-4"><a href="#" class="hover:text-white transition">Mentions légales</a><a href="#" class="hover:text-white transition">CGV</a><a href="#" class="hover:text-white transition">Confidentialité</a></div>
+        </div>
+    </div>
+</footer>
+
+<script>
+    AOS.init({once:true,offset:80,duration:700});
+    lucide.createIcons();
+
+    window.addEventListener('scroll',()=>{
+        const s=window.scrollY,d=document.documentElement.scrollHeight-window.innerHeight;
+        document.getElementById('progress-bar').style.width=(s/d*100)+'%';
+        document.getElementById('scroll-top').classList.toggle('visible',s>400);
+    },{passive:true});
+
+    const mm=document.getElementById('mobile-menu');
+    document.getElementById('menu-toggle').addEventListener('click',()=>{
+        const open=mm.classList.toggle('open');
+        document.getElementById('ico-open').classList.toggle('hidden',open);
+        document.getElementById('ico-close').classList.toggle('hidden',!open);
+    });
+    function closeMobileMenu(){mm.classList.remove('open');document.getElementById('ico-open').classList.remove('hidden');document.getElementById('ico-close').classList.add('hidden');}
+
+    // Category filter
+    const pills = document.querySelectorAll('.cat-pill');
+    pills.forEach(pill=>{
+        pill.addEventListener('click',()=>{
+            pills.forEach(p=>{
+                p.classList.remove('active');
+                p.style.borderColor='#E5E7EB';
+                p.style.color='#6B7280';
+            });
+            pill.classList.add('active');
+            pill.style.borderColor='transparent';
+            const cat=pill.dataset.cat;
+            // Filter articles
+            document.querySelectorAll('[data-cat]').forEach(art=>{
+                if(cat==='all'||art.dataset.cat===cat){
+                    art.style.display='';
+                    art.style.opacity='1';
+                } else {
+                    art.style.opacity='0.25';
+                }
+            });
+            // Featured article
+            const featured=document.querySelector('[data-cat-item="guide"]');
+            if(featured){featured.style.opacity=(cat==='all'||cat==='guide')?'1':'0.25';}
+        });
+    });
+
+    // Newsletter
+    document.getElementById('nl-form').addEventListener('submit',e=>{
+        e.preventDefault();
+        e.target.style.display='none';
+        document.getElementById('nl-success').classList.remove('hidden');
+    });
+
+    // Micro-interactions
+    document.querySelectorAll('a.custom-grad,button.custom-grad').forEach(b=>{
+        b.classList.add('micro');
+        b.addEventListener('click',function(e){
+            const r=document.createElement('span');r.className='ripple';
+            const rect=this.getBoundingClientRect(),s=Math.max(rect.width,rect.height);
+            r.style.cssText=`width:${s}px;height:${s}px;left:${e.clientX-rect.left-s/2}px;top:${e.clientY-rect.top-s/2}px`;
+            this.appendChild(r);setTimeout(()=>r.remove(),600);
+        });
+    });
+    document.querySelectorAll('a:not(.custom-grad)').forEach(b=>{
+        if(b.className&&(b.className.includes('border')||b.className.includes('bg-white')))b.classList.add('micro-sec');
+    });
+    document.querySelectorAll('a,button').forEach(el=>{
+        if(el.innerHTML.includes('→')&&!el.querySelector('.arrow-nudge'))
+            el.innerHTML=el.innerHTML.replace(/→/g,'<span class="arrow-nudge">→</span>');
+    });
+</script>
+</body>
+</html>

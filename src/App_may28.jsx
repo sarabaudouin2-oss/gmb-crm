@@ -7815,6 +7815,106 @@ function App() {
       }, 36e5);
       return () => clearInterval(_);
     }, [b]));
+
+  // Gestion du retour OAuth Google (#gmb-auth?clientId=...&access_token=...&refresh_token=...)
+  D.useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith("#gmb-auth?")) {
+      const params = new URLSearchParams(hash.replace("#gmb-auth?", ""));
+      const clientId = parseInt(params.get("clientId"));
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+      const expires_in = parseInt(params.get("expires_in") || "3600");
+      if (clientId && access_token) {
+        const expires_at = Date.now() + expires_in * 1000;
+        x((prev) => {
+          const updated = prev.map((cl) =>
+            cl.id === clientId
+              ? { ...cl, googleTokens: { access_token, refresh_token, expires_at } }
+              : cl
+          );
+          saveClients(updated);
+          return updated;
+        });
+        window.location.hash = "";
+        alert("✅ Google connecté avec succès ! Les stats GMB seront récupérées automatiquement.");
+      }
+    } else if (hash.startsWith("#gmb-auth-error")) {
+      const msg = new URLSearchParams(hash.replace("#gmb-auth-error?", "")).get("msg") || "Erreur inconnue";
+      alert("❌ Erreur Google OAuth : " + msg);
+      window.location.hash = "";
+    }
+  }, []);
+
+  // Alerte modification fiche + nouveaux avis — vérifie tous les clients connectés au démarrage
+  const [ficheAlerts, setFicheAlerts] = D.useState([]);
+  const [reviewAlerts, setReviewAlerts] = D.useState([]);
+  D.useEffect(() => {
+    const checkAllReviews = async () => {
+      const revAlerts = [];
+      const locationAlerts = [];
+      for (const cl of b) {
+        if (!cl.googleTokens?.access_token || !cl.gmbLocationName) continue;
+        try {
+          const tokens = cl.googleTokens;
+          let token = tokens.access_token;
+          // Refresh si expiré
+          if (Date.now() >= (tokens.expires_at || 0) - 60000 && tokens.refresh_token) {
+            const r = await fetch(`/api/auth/refresh?refresh_token=${encodeURIComponent(tokens.refresh_token)}`);
+            const d = await r.json();
+            if (d.access_token) token = d.access_token;
+          }
+          const since = cl.lastReviewCheck || new Date(Date.now() - 7 * 86400000).toISOString();
+          const res = await fetch(`/api/gmb/check-reviews?location_name=${encodeURIComponent(cl.gmbLocationName)}&since=${encodeURIComponent(since)}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (!data.error && data.newCount > 0) {
+            revAlerts.push({ clientId: cl.id, clientName: cl.name, count: data.newCount, reviews: data.newReviews || [] });
+            if (Notification.permission === "granted") {
+              const neg = (data.newReviews||[]).filter(r => r.rating <= 2);
+              new Notification(neg.length ? `⚠️ Avis négatif — ${cl.name}` : `⭐ Nouvel avis — ${cl.name}`, {
+                body: neg.length ? `${neg.length} avis négatif(s) sans réponse !` : `${data.newCount} nouvel(s) avis à traiter`,
+                icon: "/favicon.ico", tag: `review_${cl.id}`,
+              });
+            }
+          }
+
+          // Vérification modification de fiche
+          try {
+            const locRes = await fetch(`/api/gmb/check-location?location_name=${encodeURIComponent(cl.gmbLocationName)}`, { headers: { Authorization: `Bearer ${token}` } });
+            const locData = await locRes.json();
+            if (!locData.error && locData.snapshot) {
+              const prev = cl.lastLocationSnapshot;
+              const curr = locData.snapshot;
+              if (prev) {
+                const changes = [];
+                if (prev.title !== curr.title) changes.push(`Nom : "${prev.title}" → "${curr.title}"`);
+                if (prev.phone !== curr.phone) changes.push(`Tél : "${prev.phone}" → "${curr.phone}"`);
+                if (prev.address !== curr.address) changes.push(`Adresse modifiée`);
+                if (prev.website !== curr.website) changes.push(`Site web modifié`);
+                if (prev.hours !== curr.hours) changes.push(`Horaires modifiés`);
+                if (changes.length > 0) {
+                  locationAlerts.push({ clientId: cl.id, clientName: cl.name, changes });
+                  if (Notification.permission === "granted") {
+                    new Notification(`⚠️ Fiche modifiée — ${cl.name}`, { body: changes[0], icon: "/favicon.ico", tag: `loc_${cl.id}` });
+                  }
+                }
+              }
+              // Sauvegarde le snapshot
+              x(prev2 => { const u = prev2.map(c => c.id===cl.id ? {...c, lastLocationSnapshot: curr} : c); saveClients(u); return u; });
+            }
+          } catch(_) {}
+        } catch(_) {}
+      }
+      if (revAlerts.length > 0) setReviewAlerts(revAlerts);
+      if (locationAlerts.length > 0) setFicheAlerts(locationAlerts);
+    };
+    // Vérifie 3 secondes après le login (laisser l'app s'initialiser)
+    const timer = setTimeout(checkAllReviews, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const R = () => {
     i.trim() === ADMIN_CODE ? (t(!0), s("")) : s("Mot de passe incorrect");
   };
@@ -7891,9 +7991,41 @@ function App() {
           sidebarOpen: u,
           setSidebarOpen: m,
         }),
-        n.jsx("main", {
+        n.jsxs("main", {
           style: { flex: 1, overflowY: "auto", background: "#F4F5FA" },
-          children: d
+          children: [
+            // Bandeau alertes modifications de fiche
+            ficheAlerts.length > 0 && n.jsxs("div",{style:{background:"linear-gradient(135deg,#DC2626,#d97706)",padding:"12px 24px",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"},children:[
+              n.jsx("div",{style:{fontSize:14,fontWeight:700,color:"white",flexShrink:0},children:"⚠️ Fiches modifiées par Google"}),
+              n.jsx("div",{style:{display:"flex",gap:8,flexWrap:"wrap",flex:1},children:
+                ficheAlerts.map(al=>n.jsxs("button",{
+                  key:al.clientId,
+                  onClick:()=>{ k("client",b.find(c=>c.id===al.clientId)); setFicheAlerts(prev=>prev.filter(a=>a.clientId!==al.clientId)); },
+                  style:{background:"white",color:"#DC2626",border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                  children:["⚠️ "+al.clientName+" — "+al.changes[0]]
+                }))
+              }),
+              n.jsx("button",{onClick:()=>setFicheAlerts([]),style:{background:"rgba(255,255,255,0.2)",color:"white",border:"none",borderRadius:6,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit"},children:"✕"}),
+            ]}),
+
+            // Bandeau alertes nouveaux avis
+            reviewAlerts.length > 0 && n.jsxs("div",{style:{background:"linear-gradient(135deg,#1E1B30,#6B40D8)",padding:"12px 24px",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"},children:[
+              n.jsx("div",{style:{fontSize:14,fontWeight:700,color:"white",flexShrink:0},children:"🔔 Nouveaux avis Google"}),
+              n.jsx("div",{style:{display:"flex",gap:8,flexWrap:"wrap",flex:1},children:
+                reviewAlerts.map(al=>n.jsxs("button",{
+                  key:al.clientId,
+                  onClick:()=>{ k("client",b.find(c=>c.id===al.clientId)); setReviewAlerts(prev=>prev.filter(a=>a.clientId!==al.clientId)); },
+                  style:{background:"white",color:"#1E1B30",border:"none",borderRadius:8,padding:"5px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6},
+                  children:[
+                    al.reviews.some(r=>r.rating<=2) ? "⚠️" : "⭐",
+                    al.clientName,
+                    n.jsx("span",{style:{background:"#e63946",color:"white",borderRadius:10,padding:"1px 6px",fontSize:11},children:al.count+" nouveau"+(al.count>1?"x":"")}),
+                  ]
+                }))
+              }),
+              n.jsx("button",{onClick:()=>setReviewAlerts([]),style:{background:"rgba(255,255,255,0.15)",color:"white",border:"none",borderRadius:6,padding:"4px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit"},children:"✕"}),
+            ]}),
+            d
             ? n.jsx(ClientDetail, {
                 client: d,
                 clients: b,
@@ -7967,6 +8099,7 @@ function App() {
                                 setAuth: t,
                               })
                             : null,
+          ]
         }),
         n.jsx(ChatBot, {
           apiKey: j,
@@ -24063,6 +24196,53 @@ function PublicationsTab({ client: e, clients: t, upd: i, hasEnvKey: r, apiKey: 
   const [showAddPost, setShowAddPost] = D.useState(false);
   const [newPost, setNewPost] = D.useState({ title: "", type: "Realisation", date: new Date().toISOString().slice(0,10), photoCount: 0, note: "" });
 
+  // Publication directe sur Google
+  const [publishingToGoogle, setPublishingToGoogle] = D.useState(false);
+  const [publishGoogleSuccess, setPublishGoogleSuccess] = D.useState(false);
+  const [showPublishModal, setShowPublishModal] = D.useState(false);
+  const [publishForm, setPublishForm] = D.useState({ text: "", cta_type: "LEARN_MORE", cta_url: "", topic: "STANDARD" });
+
+  const googleTokens = e.googleTokens || null;
+  const isGoogleConnected = !!(googleTokens?.access_token && e.gmbLocationName);
+
+  const getValidGoogleToken = async () => {
+    if (!googleTokens) return null;
+    if (Date.now() < (googleTokens.expires_at || 0) - 60000) return googleTokens.access_token;
+    if (!googleTokens.refresh_token) return null;
+    try {
+      const res = await fetch(`/api/auth/refresh?refresh_token=${encodeURIComponent(googleTokens.refresh_token)}`);
+      const data = await res.json();
+      if (data.access_token) {
+        i(t.map(cl => cl.id === e.id ? { ...cl, googleTokens: { ...googleTokens, access_token: data.access_token, expires_at: Date.now() + (data.expires_in||3600)*1000 } } : cl));
+        return data.access_token;
+      }
+    } catch(_) {}
+    return null;
+  };
+
+  const publishPostToGoogle = async () => {
+    if (!publishForm.text.trim()) return;
+    setPublishingToGoogle(true);
+    try {
+      const token = await getValidGoogleToken();
+      if (!token) { alert("Token Google expiré — reconnecte Google."); setPublishingToGoogle(false); return; }
+      const body = { location_name: e.gmbLocationName, summary: publishForm.text, topic_type: publishForm.topic };
+      if (publishForm.cta_type && publishForm.cta_url) { body.call_to_action_type = publishForm.cta_type; body.call_to_action_url = publishForm.cta_url; }
+      const res = await fetch("/api/gmb/create-post", { method:"POST", headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" }, body:JSON.stringify(body) });
+      const data = await res.json();
+      if (data.success) {
+        setPublishGoogleSuccess(true);
+        setShowPublishModal(false);
+        setPublishForm({ text:"", cta_type:"LEARN_MORE", cta_url:"", topic:"STANDARD" });
+        // Enregistre aussi dans le log local
+        const updated = t.map(cl => cl.id === e.id ? { ...cl, publishedPosts: [...publishedPosts, { title:publishForm.text.slice(0,60), type:"Actualite", date:new Date().toISOString().slice(0,10), note:"Publié sur Google", id:Date.now() }] } : cl);
+        i(updated);
+        setTimeout(() => setPublishGoogleSuccess(false), 4000);
+      } else { alert("Erreur : " + (data.error || "Inconnue")); }
+    } catch(err) { alert("Erreur : " + err.message); }
+    setPublishingToGoogle(false);
+  };
+
   const apiKey = o || localStorage.getItem("bto_apikey") || "";
   const hasKey = !!(r || apiKey);
 
@@ -24140,15 +24320,75 @@ Rédige la publication GMB optimisée.`;
 ;
 ;
 
+  // Planification posts
+  const scheduledPosts = e.scheduledPosts || [];
+  const [showScheduleModal, setShowScheduleModal] = D.useState(false);
+  const [scheduleForm, setScheduleForm] = D.useState({ text:"", date:"", time:"09:00", topic:"STANDARD", cta_type:"", cta_url:"" });
+
+  const saveScheduledPost = () => {
+    if (!scheduleForm.text.trim() || !scheduleForm.date) return;
+    const post = { ...scheduleForm, id: Date.now(), status: "scheduled", createdAt: new Date().toISOString() };
+    i(t.map(cl => cl.id === e.id ? { ...cl, scheduledPosts: [...scheduledPosts, post] } : cl));
+    setScheduleForm({ text:"", date:"", time:"09:00", topic:"STANDARD", cta_type:"", cta_url:"" });
+    setShowScheduleModal(false);
+  };
+  const deleteScheduledPost = (id) => i(t.map(cl => cl.id === e.id ? { ...cl, scheduledPosts: scheduledPosts.filter(p=>p.id!==id) } : cl));
+
   const tabs2 = [
     { id: "generator", label: "✨ Générateur IA" },
     { id: "ideas", label: `💡 Idées audit (${(P.postIdeas||[]).length})` },
     { id: "published", label: `📋 Posts publiés (${publishedPosts.length})` },
+    { id: "scheduled", label: `📅 Planifiés (${scheduledPosts.length})` },
   ];
 
   return n.jsxs("div", {
     style: { display: "flex", flexDirection: "column", height: "100%" },
     children: [
+
+      // Bandeau succès publication Google
+      publishGoogleSuccess && n.jsx("div",{style:{background:"linear-gradient(135deg,#34A853,#4285F4)",padding:"12px 24px",fontSize:13,fontWeight:700,color:"white",textAlign:"center"},children:"🚀 Post publié sur Google My Business avec succès !"}),
+
+      // Modale publication Google
+      showPublishModal && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setShowPublishModal(false),children:
+        n.jsxs("div",{style:{background:"white",borderRadius:16,padding:28,maxWidth:560,width:"92%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"},onClick:ev=>ev.stopPropagation(),children:[
+          n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16},children:[
+            n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30"},children:"🚀 Publier sur Google My Business"}),
+            n.jsx("button",{onClick:()=>setShowPublishModal(false),style:{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"},children:"✕"}),
+          ]}),
+          n.jsx("label",{style:{fontSize:12,fontWeight:700,color:"#374151",display:"block",marginBottom:6},children:"Texte du post *"}),
+          n.jsx("textarea",{value:publishForm.text,onChange:ev=>setPublishForm(f=>({...f,text:ev.target.value})),rows:6,style:{width:"100%",border:"2px solid #D1D5DB",borderRadius:10,padding:"10px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,boxSizing:"border-box",marginBottom:14}}),
+          n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16},children:[
+            n.jsxs("div",{children:[
+              n.jsx("label",{style:{fontSize:12,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Type de post"}),
+              n.jsxs("select",{value:publishForm.topic,onChange:ev=>setPublishForm(f=>({...f,topic:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:13,fontFamily:"inherit"},children:[
+                n.jsx("option",{value:"STANDARD",children:"📝 Standard"}),
+                n.jsx("option",{value:"EVENT",children:"📅 Événement"}),
+                n.jsx("option",{value:"OFFER",children:"🏷️ Offre"}),
+              ]}),
+            ]}),
+            n.jsxs("div",{children:[
+              n.jsx("label",{style:{fontSize:12,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Bouton d'action"}),
+              n.jsxs("select",{value:publishForm.cta_type,onChange:ev=>setPublishForm(f=>({...f,cta_type:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:13,fontFamily:"inherit"},children:[
+                n.jsx("option",{value:"",children:"Aucun"}),
+                n.jsx("option",{value:"LEARN_MORE",children:"En savoir plus"}),
+                n.jsx("option",{value:"BOOK",children:"Réserver"}),
+                n.jsx("option",{value:"ORDER",children:"Commander"}),
+                n.jsx("option",{value:"SIGN_UP",children:"S'inscrire"}),
+                n.jsx("option",{value:"CALL",children:"Appeler"}),
+              ]}),
+            ]}),
+          ]}),
+          publishForm.cta_type && n.jsxs("div",{style:{marginBottom:16},children:[
+            n.jsx("label",{style:{fontSize:12,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"URL du bouton"}),
+            n.jsx("input",{type:"url",value:publishForm.cta_url,onChange:ev=>setPublishForm(f=>({...f,cta_url:ev.target.value})),placeholder:"https://...",style:{width:"100%",padding:"8px 12px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
+          ]}),
+          n.jsxs("div",{style:{display:"flex",gap:10,justifyContent:"flex-end"},children:[
+            n.jsx("button",{onClick:()=>setShowPublishModal(false),style:{padding:"9px 18px",borderRadius:8,border:"1px solid #D1D5DB",background:"white",color:"#374151",fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
+            n.jsx("button",{onClick:publishPostToGoogle,disabled:publishingToGoogle||!publishForm.text.trim(),style:{padding:"9px 22px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#4285F4,#34A853)",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:publishingToGoogle?"⏳ Publication...":"🚀 Publier maintenant"}),
+          ]}),
+        ]})
+      }),
+
       // Sub-tabs
       n.jsx("div", {
         style: { display: "flex", gap: 4, padding: "14px 24px 0", borderBottom: "1px solid #F3F4F6", overflowX: "auto" },
@@ -24247,6 +24487,11 @@ Rédige la publication GMB optimisée.`;
                     onClick: () => { setShowAddPost(true); setNewPost(p2 => ({ ...p2, title: genTitle, type: genType })); },
                     style: { background: "white", border: "1.5px solid #E5E7EB", color: "#374151", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
                     children: "📋 Enregistrer dans le journal",
+                  }),
+                  isGoogleConnected && n.jsx("button", {
+                    onClick: () => { setPublishForm(f => ({...f, text: genResult})); setShowPublishModal(true); },
+                    style: { background: "linear-gradient(135deg,#4285F4,#34A853)", color: "white", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+                    children: "🚀 Publier sur Google",
                   }),
                 ]}),
               ]}),
@@ -24390,6 +24635,82 @@ Rédige la publication GMB optimisée.`;
                   })),
                 ]}),
           ]}),
+
+          // ── PLANIFIÉS ──
+          subTab === "scheduled" && n.jsxs("div",{className:"fade",children:[
+            n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20},children:[
+              n.jsxs("div",{children:[
+                n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30",marginBottom:4},children:"📅 Posts planifiés"}),
+                n.jsx("div",{style:{fontSize:12,color:"#6B7280"},children:isGoogleConnected ? "Ces posts seront publiés automatiquement à la date prévue." : "Connecte Google pour activer la publication automatique."}),
+              ]}),
+              n.jsxs("div",{style:{display:"flex",gap:8},children:[
+                n.jsx("button",{onClick:()=>setShowScheduleModal(true),style:{background:"#6B40D8",color:"white",border:"none",borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"+ Planifier un post"}),
+              ]}),
+            ]}),
+
+            // Modale planification
+            showScheduleModal && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setShowScheduleModal(false),children:
+              n.jsxs("div",{style:{background:"white",borderRadius:16,padding:28,maxWidth:540,width:"92%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"},onClick:ev=>ev.stopPropagation(),children:[
+                n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16},children:[
+                  n.jsx("div",{style:{fontSize:15,fontWeight:800,color:"#1E1B30"},children:"📅 Planifier un post Google"}),
+                  n.jsx("button",{onClick:()=>setShowScheduleModal(false),style:{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"},children:"✕"}),
+                ]}),
+                n.jsx("label",{style:{fontSize:12,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Texte du post *"}),
+                n.jsx("textarea",{value:scheduleForm.text,onChange:ev=>setScheduleForm(f=>({...f,text:ev.target.value})),rows:5,style:{width:"100%",border:"2px solid #D1D5DB",borderRadius:10,padding:"10px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,boxSizing:"border-box",marginBottom:12}}),
+                n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16},children:[
+                  n.jsxs("div",{children:[
+                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Date *"}),
+                    n.jsx("input",{type:"date",value:scheduleForm.date,onChange:ev=>setScheduleForm(f=>({...f,date:ev.target.value})),min:new Date().toISOString().slice(0,10),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
+                  ]}),
+                  n.jsxs("div",{children:[
+                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Heure"}),
+                    n.jsx("input",{type:"time",value:scheduleForm.time,onChange:ev=>setScheduleForm(f=>({...f,time:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
+                  ]}),
+                  n.jsxs("div",{children:[
+                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Type"}),
+                    n.jsxs("select",{value:scheduleForm.topic,onChange:ev=>setScheduleForm(f=>({...f,topic:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit"},children:[
+                      n.jsx("option",{value:"STANDARD",children:"📝 Standard"}),
+                      n.jsx("option",{value:"EVENT",children:"📅 Événement"}),
+                      n.jsx("option",{value:"OFFER",children:"🏷️ Offre"}),
+                    ]}),
+                  ]}),
+                ]}),
+                n.jsxs("div",{style:{display:"flex",gap:10,justifyContent:"flex-end"},children:[
+                  n.jsx("button",{onClick:()=>setShowScheduleModal(false),style:{padding:"9px 16px",borderRadius:8,border:"1px solid #D1D5DB",background:"white",color:"#374151",fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
+                  n.jsx("button",{onClick:saveScheduledPost,disabled:!scheduleForm.text.trim()||!scheduleForm.date,style:{padding:"9px 22px",borderRadius:8,border:"none",background:"#6B40D8",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"💾 Planifier"}),
+                ]}),
+              ]})
+            }),
+
+            // Liste des posts planifiés
+            scheduledPosts.length === 0
+              ? n.jsxs("div",{style:{textAlign:"center",padding:"48px 0",color:"#9CA3AF"},children:[
+                  n.jsx("div",{style:{fontSize:40,marginBottom:12},children:"📅"}),
+                  n.jsx("div",{style:{fontSize:14,fontWeight:600,color:"#374151",marginBottom:6},children:"Aucun post planifié"}),
+                  n.jsx("div",{style:{fontSize:12},children:"Planifie tes prochains posts Google à l'avance."}),
+                ]})
+              : n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:10},children:
+                  [...scheduledPosts].sort((a,b)=>a.date.localeCompare(b.date)).map(p=>n.jsxs("div",{
+                    key:p.id,
+                    style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:12,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:14},
+                    children:[
+                      n.jsxs("div",{style:{background:"#F3F0FF",borderRadius:10,padding:"8px 12px",textAlign:"center",flexShrink:0,minWidth:52},children:[
+                        n.jsx("div",{style:{fontSize:18,fontWeight:900,color:"#6B40D8"},children:new Date(p.date).getDate()}),
+                        n.jsx("div",{style:{fontSize:10,color:"#9CA3AF",fontWeight:700},children:new Date(p.date).toLocaleDateString("fr-FR",{month:"short"}).toUpperCase()}),
+                      ]}),
+                      n.jsxs("div",{style:{flex:1},children:[
+                        n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:4},children:[
+                          n.jsx("span",{style:{background:p.status==="published"?"#D1FAE5":"#F3F0FF",color:p.status==="published"?"#065F46":"#6B40D8",borderRadius:8,padding:"2px 8px",fontSize:11,fontWeight:700},children:p.status==="published"?"✅ Publié":"⏳ Planifié"}),
+                          n.jsx("span",{style:{fontSize:11,color:"#9CA3AF"},children:p.time}),
+                          n.jsx("span",{style:{fontSize:11,color:"#9CA3AF"},children:p.topic==="OFFER"?"🏷️ Offre":p.topic==="EVENT"?"📅 Événement":"📝 Standard"}),
+                        ]}),
+                        n.jsx("div",{style:{fontSize:13,color:"#374151",lineHeight:1.5},children:p.text.slice(0,120)+(p.text.length>120?"...":"")}),
+                      ]}),
+                      p.status !== "published" && n.jsx("button",{onClick:()=>deleteScheduledPost(p.id),style:{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:16},children:"✕"}),
+                    ]
+                  }))
+                }),
+          ]}),
         ]
       }),
     ]
@@ -24426,6 +24747,100 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
   const nextSteps = nextStepsAll[CM] || [];
   const [showAddStep, setShowAddStep] = D.useState(false);
   const [newStep, setNewStep] = D.useState({ text:"", priority:"important" });
+  const [syncingGmb, setSyncingGmb] = D.useState(false);
+  const [syncStatus, setSyncStatus] = D.useState(null);
+  // Avis en temps réel
+  const [liveReviews, setLiveReviews] = D.useState(null); // null = pas encore chargé
+  const [loadingReviews, setLoadingReviews] = D.useState(false);
+  const [newReviewsCount, setNewReviewsCount] = D.useState(0);
+  const [replyingTo, setReplyingTo] = D.useState(null); // reviewId en cours
+  const [replyText, setReplyText] = D.useState("");
+  const [generatingReply, setGeneratingReply] = D.useState(false);
+  const [publishingReply, setPublishingReply] = D.useState(false);
+  const [replySuccess, setReplySuccess] = D.useState(null);
+  const [showLinkFiche, setShowLinkFiche] = D.useState(false);
+  const [ficheInput, setFicheInput] = D.useState(e.gmbLocationName || "");
+  const [gmbLocations, setGmbLocations] = D.useState([]);
+  const [loadingLocations, setLoadingLocations] = D.useState(false);
+  const [locationsError, setLocationsError] = D.useState(null);
+
+  // Google tokens
+  const googleTokens = e.googleTokens || null;
+  const isGoogleConnected = !!(googleTokens && googleTokens.access_token);
+
+  // Récupère un access_token valide (refresh si expiré)
+  const getValidToken = async () => {
+    if (!googleTokens) return null;
+    if (Date.now() < (googleTokens.expires_at || 0) - 60000) {
+      return googleTokens.access_token;
+    }
+    if (!googleTokens.refresh_token) return null;
+    try {
+      const res = await fetch(`/api/auth/refresh?refresh_token=${encodeURIComponent(googleTokens.refresh_token)}`);
+      const data = await res.json();
+      if (data.access_token) {
+        const newTokens = { ...googleTokens, access_token: data.access_token, expires_at: Date.now() + (data.expires_in || 3600) * 1000 };
+        i(t.map(cl => cl.id === e.id ? { ...cl, googleTokens: newTokens } : cl));
+        return data.access_token;
+      }
+    } catch(_) {}
+    return null;
+  };
+
+  // Sync automatique des stats GMB depuis l'API Google
+  const syncGmbStats = async () => {
+    const locationName = e.gmbLocationName;
+    if (!locationName) {
+      setSyncStatus("no_location");
+      return;
+    }
+    setSyncingGmb(true);
+    setSyncStatus(null);
+    try {
+      const token = await getValidToken();
+      if (!token) { setSyncStatus("error"); setSyncingGmb(false); return; }
+
+      // Stats du mois courant
+      const [insRes, photoRes] = await Promise.all([
+        fetch(`/api/gmb/insights?location_name=${encodeURIComponent(locationName)}&month=${CM}`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/gmb/photos?location_name=${encodeURIComponent(locationName)}`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const ins = await insRes.json();
+      const photos = await photoRes.json();
+
+      // Stats du mois précédent
+      const prevDate = new Date(CM + "-01");
+      prevDate.setMonth(prevDate.getMonth() - 1);
+      const prevMonth = prevDate.toISOString().slice(0, 7);
+      const prevInsRes = await fetch(`/api/gmb/insights?location_name=${encodeURIComponent(locationName)}&month=${prevMonth}`, { headers: { Authorization: `Bearer ${token}` } });
+      const prevIns = await prevInsRes.json();
+
+      if (ins.error) { setSyncStatus("error"); setSyncingGmb(false); return; }
+
+      const newGmbStats = {
+        ...(e.gmbStats || {}),
+        [CM]: {
+          vuesRecherche: String(ins.vuesRecherche || 0),
+          vuesMaps: String(ins.vuesMaps || 0),
+          appels: String(ins.appels || 0),
+          clicsWeb: String(ins.clicsWeb || 0),
+          itineraires: String(ins.itineraires || 0),
+          vuesPhotos: String(photos.vuesPhotos || 0),
+          prevVuesRecherche: String(prevIns.vuesRecherche || 0),
+          prevVuesMaps: String(prevIns.vuesMaps || 0),
+          prevAppels: String(prevIns.appels || 0),
+          prevClicsWeb: String(prevIns.clicsWeb || 0),
+          prevItineraires: String(prevIns.itineraires || 0),
+          prevVuesPhotos: "",
+        }
+      };
+      i(t.map(cl => cl.id === e.id ? { ...cl, gmbStats: newGmbStats } : cl));
+      setSyncStatus("ok");
+    } catch(err) {
+      setSyncStatus("error");
+    }
+    setSyncingGmb(false);
+  };
 
   // Current data
   const extracted = (e.data || {}).extracted || {};
@@ -24476,6 +24891,111 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
     return n.jsx("span",{style:{color:good?"#059669":"#DC2626",fontWeight:700},children:`${d>0?"↑ +":"↓ "}${Math.abs(d)}`});
   };
   const scCol = (s) => s >= 70 ? "#059669" : s >= 50 ? "#d97706" : "#E85A30";
+
+  // Charger les avis depuis l'API Google
+  const fetchLiveReviews = async () => {
+    if (!isGoogleConnected || !e.gmbLocationName) return;
+    setLoadingReviews(true);
+    try {
+      const token = await getValidToken();
+      if (!token) { setLoadingReviews(false); return; }
+      const since = e.lastReviewCheck || null;
+      const url = `/api/gmb/check-reviews?location_name=${encodeURIComponent(e.gmbLocationName)}${since ? "&since="+encodeURIComponent(since) : ""}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!data.error) {
+        setLiveReviews(data.reviews || []);
+        setNewReviewsCount(data.newCount || 0);
+        // Sauvegarde la date du dernier check
+        i(t.map(cl => cl.id === e.id ? { ...cl, lastReviewCheck: new Date().toISOString() } : cl));
+      }
+    } catch(_) {}
+    setLoadingReviews(false);
+  };
+
+  // Générer une réponse IA à un avis
+  const generateAiReply = async (review) => {
+    setGeneratingReply(true);
+    const apiKey = localStorage.getItem("bto_apikey") || "";
+    if (!apiKey) { setReplyText("Clé API Claude manquante (Mon Espace → Paramètres)."); setGeneratingReply(false); return; }
+    const prompt = `Tu es le gérant de "${e.name}", ${e.category||""} à ${e.city||""}.
+Rédige une réponse professionnelle, chaleureuse et personnalisée à cet avis Google.
+Note : ${review.rating}/5 étoiles
+Avis : "${review.text || "(pas de texte)"}"
+Auteur : ${review.author}
+
+Règles :
+- Maximum 3 phrases
+- Remercie le client par son prénom si possible
+- Si avis négatif : empathie + solution concrète
+- Si avis positif : chaleureux + invite à revenir
+- Pas de formules génériques
+- Ton professionnel mais humain
+Réponds uniquement avec le texte de la réponse, sans guillemets.`;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+      });
+      const data = await res.json();
+      setReplyText(data.content?.[0]?.text || "");
+    } catch(err) { setReplyText("Erreur : " + err.message); }
+    setGeneratingReply(false);
+  };
+
+  // Publier la réponse sur Google
+  const publishReply = async (reviewName) => {
+    if (!replyText.trim()) return;
+    setPublishingReply(true);
+    try {
+      const token = await getValidToken();
+      if (!token) { setPublishingReply(false); return; }
+      const res = await fetch("/api/gmb/post-reply", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ review_name: reviewName, reply_text: replyText }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReplySuccess(reviewName);
+        setReplyingTo(null);
+        setReplyText("");
+        // Met à jour l'avis local
+        setLiveReviews(prev => prev.map(rv => rv.name === reviewName ? { ...rv, reply: replyText } : rv));
+        setTimeout(() => setReplySuccess(null), 3000);
+      } else {
+        alert("Erreur publication : " + (data.error || "Inconnue"));
+      }
+    } catch(err) { alert("Erreur : " + err.message); }
+    setPublishingReply(false);
+  };
+
+  // Lier la fiche GMB (location name)
+  const saveFicheLink = (locationName) => {
+    const v = (locationName || ficheInput).trim();
+    if (!v) return;
+    i(t.map(cl => cl.id === e.id ? { ...cl, gmbLocationName: v } : cl));
+    setShowLinkFiche(false);
+    setSyncStatus(null);
+  };
+
+  // Ouvrir la modale et charger les fiches automatiquement
+  const openLinkFiche = async () => {
+    setShowLinkFiche(true);
+    setGmbLocations([]);
+    setLocationsError(null);
+    if (!isGoogleConnected) return;
+    setLoadingLocations(true);
+    try {
+      const token = await getValidToken();
+      if (!token) { setLocationsError("Token expiré — reconnecte Google."); setLoadingLocations(false); return; }
+      const res = await fetch("/api/gmb/list-locations", { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.error) { setLocationsError(data.error); } else { setGmbLocations(data.locations || []); }
+    } catch(err) { setLocationsError(err.message); }
+    setLoadingLocations(false);
+  };
 
   // Save functions
   const savePost = () => {
@@ -25018,10 +25538,91 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
 
             // GMB Stats card
             n.jsxs("div",{style:cardStyle,children:[
-              n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14},children:[
+              n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8},children:[
                 n.jsx("div",{style:sectionTitle,children:"📊 Statistiques GMB — "+monthLabel}),
-                n.jsx("button",{onClick:openGmbForm,style:{background:editingGmb?"#E5E7EB":"#1E1B30",color:editingGmb?"#374151":"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:editingGmb?"✕ Annuler":"✏️ Saisir les stats"}),
+                n.jsxs("div",{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"},children:[
+                  // Bouton sync Google (visible si connecté)
+                  isGoogleConnected && n.jsx("button",{
+                    onClick: syncGmbStats,
+                    disabled: syncingGmb,
+                    style:{background:syncStatus==="ok"?"#059669":syncStatus==="error"?"#DC2626":"#4285F4",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,opacity:syncingGmb?0.7:1},
+                    children: syncingGmb ? "⏳ Synchronisation..." : syncStatus==="ok" ? "✅ Synchronisé" : syncStatus==="error" ? "❌ Erreur sync" : syncStatus==="no_location" ? "⚠️ Fiche non liée" : "🔄 Sync Google"
+                  }),
+                  // Bouton connecter Google (visible si non connecté)
+                  !isGoogleConnected && n.jsx("a",{
+                    href:`/api/auth/google?clientId=${e.id}`,
+                    style:{background:"#4285F4",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5},
+                    children:"🔗 Connecter Google"
+                  }),
+                  n.jsx("button",{onClick:openGmbForm,style:{background:editingGmb?"#E5E7EB":"#1E1B30",color:editingGmb?"#374151":"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:editingGmb?"✕ Annuler":"✏️ Saisir manuellement"}),
+                ]},),
               ]}),
+              // Bandeau si connecté mais fiche non liée
+              isGoogleConnected && !e.gmbLocationName && n.jsxs("div",{style:{background:"#FEF3C7",border:"1px solid #FCD34D",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#92400E",marginBottom:12,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"},children:[
+                n.jsx("span",{children:"⚠️ Google connecté — lie maintenant la fiche GMB de ce client pour activer la synchronisation automatique."}),
+                n.jsx("button",{onClick:openLinkFiche,style:{background:"#92400E",color:"white",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"},children:"🔗 Lier la fiche"}),
+              ]}),
+              // Modale lier fiche GMB — liste automatique
+              showLinkFiche && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setShowLinkFiche(false),children:
+                n.jsxs("div",{style:{background:"white",borderRadius:16,padding:28,maxWidth:560,width:"92%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",maxHeight:"80vh",overflowY:"auto"},onClick:ev=>ev.stopPropagation(),children:[
+                  n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16},children:[
+                    n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30"},children:"🔗 Sélectionner la fiche GMB"}),
+                    n.jsx("button",{onClick:()=>setShowLinkFiche(false),style:{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"},children:"✕"}),
+                  ]}),
+
+                  // Chargement
+                  loadingLocations && n.jsxs("div",{style:{textAlign:"center",padding:"24px 0",color:"#6B7280"},children:[
+                    n.jsx("div",{style:{fontSize:24,marginBottom:8},children:"⏳"}),
+                    n.jsx("div",{style:{fontSize:13},children:"Récupération de tes fiches Google..."}),
+                  ]}),
+
+                  // Erreur
+                  locationsError && n.jsxs("div",{style:{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#DC2626",marginBottom:16},children:[
+                    n.jsx("strong",{children:"Erreur : "}), locationsError,
+                  ]}),
+
+                  // Liste des fiches
+                  !loadingLocations && gmbLocations.length > 0 && n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:12},children:`${gmbLocations.length} fiche(s) trouvée(s) — clique sur la bonne pour la lier à ${e.name}`}),
+                    n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:8},children:
+                      gmbLocations.map(loc => n.jsxs("div",{
+                        key:loc.name,
+                        onClick:()=>saveFicheLink(loc.name),
+                        style:{
+                          border: e.gmbLocationName===loc.name ? "2px solid #4285F4" : "1.5px solid #E5E7EB",
+                          borderRadius:10, padding:"12px 16px", cursor:"pointer",
+                          background: e.gmbLocationName===loc.name ? "#EFF6FF" : "white",
+                          transition:"all 0.15s",
+                        },
+                        children:[
+                          n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"},children:[
+                            n.jsx("div",{style:{fontWeight:700,fontSize:14,color:"#1E1B30"},children:loc.title}),
+                            e.gmbLocationName===loc.name && n.jsx("span",{style:{background:"#4285F4",color:"white",borderRadius:12,padding:"2px 8px",fontSize:11,fontWeight:700},children:"✓ Liée"}),
+                          ]}),
+                          loc.address && n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginTop:3},children:"📍 "+loc.address}),
+                          loc.phone && n.jsx("div",{style:{fontSize:12,color:"#6B7280"},children:"📞 "+loc.phone}),
+                          n.jsx("div",{style:{fontSize:10,color:"#9CA3AF",marginTop:4,fontFamily:"monospace"},children:loc.name}),
+                        ]
+                      }))
+                    }),
+                  ]}),
+
+                  // Aucune fiche / non connecté
+                  !loadingLocations && gmbLocations.length === 0 && !locationsError && n.jsxs("div",{children:[
+                    !isGoogleConnected && n.jsxs("div",{style:{background:"#FEF3C7",border:"1px solid #FCD34D",borderRadius:10,padding:"14px",fontSize:13,color:"#92400E",marginBottom:16},children:[
+                      "⚠️ Google n'est pas encore connecté pour ce client. Ferme cette fenêtre et clique sur ",
+                      n.jsx("strong",{children:"🔗 Connecter Google"}), "."]
+                    }),
+                    n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:8},children:"Ou saisis l'ID manuellement :"}),
+                    n.jsx("input",{
+                      type:"text", value:ficheInput, onChange:ev=>setFicheInput(ev.target.value),
+                      placeholder:"locations/123456789",
+                      style:{width:"100%",padding:"10px 14px",border:"2px solid #D1D5DB",borderRadius:9,fontSize:13,fontFamily:"monospace",marginBottom:12,boxSizing:"border-box"},
+                    }),
+                    n.jsx("button",{onClick:()=>saveFicheLink(),disabled:!ficheInput.trim(),style:{padding:"8px 18px",borderRadius:8,border:"none",background:"#4285F4",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"💾 Enregistrer"}),
+                  ]}),
+                ]})
+              }),
               editingGmb ? n.jsxs("div",{children:[
                 n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:12},children:"Saisissez les stats GMB depuis l'interface Google. Renseignez également les valeurs du mois précédent pour calculer l'évolution."}),
                 n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12,marginBottom:14},children:
@@ -25093,33 +25694,137 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
 
           // ── AVIS ──
           subTab==="avis" && n.jsxs("div",{className:"fade",children:[
+
+            // KPIs
             n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:18},children:[
-              {label:"Total avis",val:parseInt(extracted.reviewCount)||0,col:"#e63946",icon:"⭐"},
-              {label:"Note moyenne",val:extracted.rating?parseFloat(extracted.rating).toFixed(1)+"⭐":"-",col:"#f39c12",icon:"🌟",isStr:true},
-              {label:"Nouveaux ce mois",val:allMonthAvis.length,col:"#27ae60",icon:"🆕"},
+              {label:"Total avis",val:liveReviews ? liveReviews.length : (parseInt(extracted.reviewCount)||0),col:"#e63946"},
+              {label:"Note moyenne",val:liveReviews && liveReviews.length ? (liveReviews.reduce((s,r)=>s+r.rating,0)/liveReviews.length).toFixed(1)+"⭐" : (extracted.rating?parseFloat(extracted.rating).toFixed(1)+"⭐":"-"),col:"#f39c12",isStr:true},
+              {label:"Sans réponse",val:liveReviews ? liveReviews.filter(r=>!r.reply).length : "—",col:"#DC2626"},
+              {label:"Nouveaux",val:newReviewsCount||allMonthAvis.length,col:"#27ae60"},
             ].map(m=>n.jsxs("div",{key:m.label,style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"16px",textAlign:"center",borderTop:`4px solid ${m.col}`},children:[
               n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:".4px",marginBottom:6},children:m.label}),
               n.jsx("div",{style:{fontSize:28,fontWeight:900,color:m.col,lineHeight:1},children:m.val}),
             ]}))}),
-            allMonthAvis.length > 0
-              ? n.jsxs("div",{style:cardStyle,children:[
-                  n.jsx("div",{style:sectionTitle,children:`⭐ Nouveaux avis — ${monthLabel}`}),
-                  n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:12},children:
-                    allMonthAvis.map((av,idx)=>n.jsxs("div",{key:idx,style:{background:"#F9FAFB",borderRadius:12,padding:"14px",borderLeft:"4px solid #f39c12"},children:[
-                      n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6},children:[
-                        n.jsx("span",{style:{fontWeight:700,fontSize:14},children:av.author||av.nom||"Client"}),
-                        n.jsx("span",{style:{color:"#f39c12"},children:"⭐".repeat(Math.min(5,parseInt(av.rating||av.note)||5))}),
-                      ]}),
-                      n.jsx("div",{style:{fontSize:13,color:"#475569",lineHeight:1.5},children:av.text||av.texte||""}),
-                      av.replied!=null&&n.jsx("div",{style:{marginTop:8},children:n.jsx("span",{style:{background:av.replied?"#d4edda":"#fff3cd",color:av.replied?"#155724":"#856404",padding:"2px 10px",borderRadius:10,fontSize:12,fontWeight:600},children:av.replied?"✓ Répondu":"⏳ En attente de réponse"})}),
-                    ]}))
-                  }),
-                ]})
-              : n.jsxs("div",{style:{...cardStyle,textAlign:"center",padding:"40px"},children:[
-                  n.jsx("div",{style:{fontSize:40,marginBottom:12},children:"⭐"}),
-                  n.jsx("div",{style:{fontSize:14,fontWeight:600,color:"#374151",marginBottom:6},children:"Avis de ce mois"}),
-                  n.jsx("div",{style:{fontSize:12,color:"#9CA3AF"},children:"Les avis récupérés via l'analyse de fiche apparaîtront ici. Score et nombre total visibles ci-dessus."}),
+
+            // Bandeau Google connecté / non connecté
+            n.jsxs("div",{style:{...cardStyle,padding:"14px 18px"},children:[
+              n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8},children:[
+                n.jsxs("div",{style:{fontSize:13,fontWeight:700,color:"#1E1B30"},children:[
+                  "⭐ Tous les avis Google",
+                  isGoogleConnected && e.gmbLocationName && n.jsx("span",{style:{background:"#D1FAE5",color:"#065F46",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700,marginLeft:8},children:"🔴 Live"}),
                 ]}),
+                n.jsxs("div",{style:{display:"flex",gap:8},children:[
+                  isGoogleConnected && e.gmbLocationName
+                    ? n.jsx("button",{onClick:fetchLiveReviews,disabled:loadingReviews,style:{background:"#4285F4",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:loadingReviews?"⏳ Chargement...":"🔄 Actualiser les avis"})
+                    : n.jsx("span",{style:{fontSize:12,color:"#9CA3AF"},children:"Connecte Google pour voir les avis en temps réel"}),
+                ]}),
+              ]}),
+            ]}),
+
+            // Message succès réponse
+            replySuccess && n.jsx("div",{style:{background:"#D1FAE5",border:"1px solid #6EE7B7",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#065F46",fontWeight:600},children:"✅ Réponse publiée sur Google avec succès !"}),
+
+            // Liste des avis live
+            liveReviews && liveReviews.length > 0 && n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:12},children:
+              liveReviews.map(rv => n.jsxs("div",{key:rv.reviewId||rv.name,style:{background:"white",border:rv.rating<=2?"2px solid #FECACA":"1.5px solid #E5E7EB",borderRadius:14,padding:"16px",boxShadow:"0 1px 4px rgba(0,0,0,0.05)"},children:[
+                // Header avis
+                n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8},children:[
+                  n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10},children:[
+                    n.jsx("div",{style:{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,#6B40D8,#C03080)",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontWeight:700,fontSize:14,flexShrink:0},children:(rv.author||"?")[0].toUpperCase()}),
+                    n.jsxs("div",{children:[
+                      n.jsx("div",{style:{fontWeight:700,fontSize:14,color:"#1E1B30"},children:rv.author||"Anonyme"}),
+                      n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:rv.date ? new Date(rv.date).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"}) : ""}),
+                    ]}),
+                  ]}),
+                  n.jsxs("div",{style:{textAlign:"right"},children:[
+                    n.jsx("div",{style:{fontSize:18,letterSpacing:1},children:"⭐".repeat(rv.rating||0)+"☆".repeat(5-(rv.rating||0))}),
+                    rv.rating<=2 && n.jsx("div",{style:{background:"#FEE2E2",color:"#DC2626",borderRadius:8,padding:"2px 8px",fontSize:11,fontWeight:700,marginTop:3},children:"⚠️ Avis négatif"}),
+                  ]}),
+                ]}),
+
+                // Texte avis
+                rv.text && n.jsx("div",{style:{fontSize:13,color:"#475569",lineHeight:1.6,marginBottom:10,background:"#F8FAFC",borderRadius:8,padding:"10px"},children:rv.text}),
+
+                // Réponse existante
+                rv.reply && n.jsxs("div",{style:{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"10px 14px",marginBottom:8},children:[
+                  n.jsx("div",{style:{fontSize:11,fontWeight:700,color:"#065F46",marginBottom:4},children:"✅ Votre réponse :"}),
+                  n.jsx("div",{style:{fontSize:13,color:"#374151",lineHeight:1.5},children:rv.reply}),
+                ]}),
+
+                // Bouton répondre / zone réponse
+                !rv.reply && replyingTo !== rv.reviewId && n.jsxs("div",{style:{display:"flex",gap:8},children:[
+                  n.jsx("button",{
+                    onClick:()=>{ setReplyingTo(rv.reviewId); setReplyText(""); generateAiReply(rv); },
+                    style:{background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                    children:"✨ Répondre avec l'IA"
+                  }),
+                  n.jsx("button",{
+                    onClick:()=>{ setReplyingTo(rv.reviewId); setReplyText(""); },
+                    style:{background:"white",color:"#374151",border:"1.5px solid #D1D5DB",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},
+                    children:"✏️ Rédiger manuellement"
+                  }),
+                ]}),
+
+                // Zone rédaction réponse
+                replyingTo === rv.reviewId && n.jsxs("div",{style:{marginTop:8},children:[
+                  generatingReply && n.jsx("div",{style:{fontSize:12,color:"#6B40D8",marginBottom:8,fontWeight:600},children:"✨ L'IA rédige une réponse..."}),
+                  n.jsx("textarea",{
+                    value:replyText,
+                    onChange:ev=>setReplyText(ev.target.value),
+                    placeholder:"Rédigez votre réponse...",
+                    rows:4,
+                    style:{width:"100%",border:"2px solid #6B40D8",borderRadius:10,padding:"10px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,boxSizing:"border-box"},
+                  }),
+                  n.jsxs("div",{style:{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"},children:[
+                    n.jsx("button",{
+                      onClick:()=>generateAiReply(rv),
+                      disabled:generatingReply,
+                      style:{background:"#F3F0FF",color:"#6B40D8",border:"1.5px solid #DDD6FE",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                      children:"🔄 Regénérer"
+                    }),
+                    n.jsx("button",{
+                      onClick:()=>publishReply(rv.name),
+                      disabled:publishingReply||!replyText.trim(),
+                      style:{background:"#4285F4",color:"white",border:"none",borderRadius:8,padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                      children:publishingReply?"⏳ Publication...":"📤 Publier sur Google"
+                    }),
+                    n.jsx("button",{
+                      onClick:()=>{ setReplyingTo(null); setReplyText(""); },
+                      style:{background:"white",color:"#9CA3AF",border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer",fontFamily:"inherit"},
+                      children:"Annuler"
+                    }),
+                  ]}),
+                ]}),
+              ]}))
+            }),
+
+            // État vide — avis non encore chargés
+            !liveReviews && !loadingReviews && n.jsxs("div",{style:{...cardStyle,textAlign:"center",padding:"40px"},children:[
+              n.jsx("div",{style:{fontSize:40,marginBottom:12},children:"⭐"}),
+              isGoogleConnected && e.gmbLocationName
+                ? n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:14,fontWeight:600,color:"#374151",marginBottom:8},children:"Clique pour charger les avis Google en temps réel"}),
+                    n.jsx("button",{onClick:fetchLiveReviews,style:{background:"#4285F4",color:"white",border:"none",borderRadius:9,padding:"10px 24px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"🔄 Charger les avis"}),
+                  ]})
+                : n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:14,fontWeight:600,color:"#374151",marginBottom:6},children:"Avis non connectés à Google"}),
+                    n.jsx("div",{style:{fontSize:12,color:"#9CA3AF"},children:"Connecte Google et lie la fiche dans l'onglet Positions & Stats GMB pour voir les avis en temps réel et répondre en 1 clic."}),
+                  ]}),
+            ]}),
+
+            // Avis manuels (ancienne méthode, affichés si pas de live)
+            !liveReviews && allMonthAvis.length > 0 && n.jsxs("div",{style:cardStyle,children:[
+              n.jsx("div",{style:sectionTitle,children:`⭐ Avis saisis manuellement — ${monthLabel}`}),
+              n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:12},children:
+                allMonthAvis.map((av,idx)=>n.jsxs("div",{key:idx,style:{background:"#F9FAFB",borderRadius:12,padding:"14px",borderLeft:"4px solid #f39c12"},children:[
+                  n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6},children:[
+                    n.jsx("span",{style:{fontWeight:700,fontSize:14},children:av.author||av.nom||"Client"}),
+                    n.jsx("span",{style:{color:"#f39c12"},children:"⭐".repeat(Math.min(5,parseInt(av.rating||av.note)||5))}),
+                  ]}),
+                  n.jsx("div",{style:{fontSize:13,color:"#475569",lineHeight:1.5},children:av.text||av.texte||""}),
+                ]}))
+              }),
+            ]}),
           ]}),
 
           // ── MOIS PROCHAIN ──
