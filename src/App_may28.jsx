@@ -24528,6 +24528,9 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
   const [redeemUrl, setRedeemUrl] = D.useState("");
   const [termsConditions, setTermsConditions] = D.useState("");
   const [photoUrl, setPhotoUrl] = D.useState("");
+  const [photoPreview, setPhotoPreview] = D.useState("");
+  const [photoUploading, setPhotoUploading] = D.useState(false);
+  const [photoDragging, setPhotoDragging] = D.useState(false);
   const [schedDate, setSchedDate] = D.useState(prefillDate || new Date().toISOString().slice(0,10));
   const [schedTime, setSchedTime] = D.useState("09:00");
   const [publishing, setPublishing] = D.useState(false);
@@ -24551,6 +24554,31 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
       }
     } catch(_) {}
     return null;
+  };
+
+  const handlePhotoFile = async (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    // Preview local immédiat
+    setPhotoPreview(URL.createObjectURL(file));
+    setPhotoUploading(true);
+    setPhotoUrl("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const r = await fetch("/api/gmb/upload-photo", { method: "POST", body: formData });
+      const data = await r.json();
+      if (data.url) {
+        setPhotoUrl(data.url);
+      } else {
+        setError("Échec de l'upload : " + (data.error || "erreur inconnue"));
+        setPhotoPreview("");
+      }
+    } catch (e) {
+      setError("Erreur upload : " + e.message);
+      setPhotoPreview("");
+    } finally {
+      setPhotoUploading(false);
+    }
   };
 
   const handlePublish = async () => {
@@ -24694,14 +24722,32 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
           n.jsxs("div", { children:[n.jsx("label", { style:{...labelStyle, color:"#065F46"}, children:"Conditions générales" }), n.jsx("input", { type:"text", value:termsConditions, onChange:ev=>setTermsConditions(ev.target.value), placeholder:"Ex : Valable jusqu'au 31 août, dans la limite des stocks", style:{...inputStyle, border:"1.5px solid #86EFAC"} })]}),
         ]}),
 
-        // Photo URL
+        // Photo
         n.jsxs("div", { children:[
-          n.jsx("label", { style:labelStyle, children:"Photo (URL)" }),
-          n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"flex-start" }, children:[
-            n.jsx("input", { type:"url", value:photoUrl, onChange:ev=>setPhotoUrl(ev.target.value), placeholder:"https://… (lien direct vers une image publique)", style:{...inputStyle, flex:1} }),
-            photoUrl && n.jsx("img", { src:photoUrl, alt:"", style:{ width:48, height:48, borderRadius:8, objectFit:"cover", border:"1px solid #E5E7EB", flexShrink:0 }, onError:ev=>ev.target.style.display="none" }),
+          n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }, children:[
+            n.jsx("label", { style:labelStyle, children:"📸 Photo" }),
+            (photoPreview || photoUrl) && n.jsx("button", { onClick:()=>{ setPhotoPreview(""); setPhotoUrl(""); }, style:{ background:"none", border:"none", color:"#EF4444", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"✕ Supprimer" }),
           ]}),
-          n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:4 }, children:"L'image doit être accessible publiquement sur internet (hébergée sur votre site, Google Drive public, Imgur, etc.)" }),
+          // Zone drag & drop
+          (photoPreview || photoUrl)
+            ? n.jsxs("div", { style:{ position:"relative", borderRadius:12, overflow:"hidden", border:"2px solid #E5E7EB" }, children:[
+                n.jsx("img", { src:photoPreview || photoUrl, alt:"", style:{ width:"100%", maxHeight:180, objectFit:"cover", display:"block" } }),
+                photoUploading && n.jsx("div", { style:{ position:"absolute", inset:0, background:"rgba(255,255,255,0.75)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:"#6B40D8" }, children:"⏳ Upload en cours…" }),
+                !photoUploading && !photoUrl && n.jsx("div", { style:{ position:"absolute", inset:0, background:"rgba(255,255,255,0.75)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, color:"#EF4444" }, children:"⚠️ Erreur d'upload" }),
+              ]})
+            : n.jsxs("label", {
+                htmlFor:"photo-upload-input",
+                onDragOver: ev=>{ ev.preventDefault(); setPhotoDragging(true); },
+                onDragLeave: ()=>setPhotoDragging(false),
+                onDrop: ev=>{ ev.preventDefault(); setPhotoDragging(false); const f=ev.dataTransfer.files[0]; if(f) handlePhotoFile(f); },
+                style:{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"28px 16px", borderRadius:12, border:`2px dashed ${photoDragging?"#6B40D8":"#D1D5DB"}`, background:photoDragging?"#F5F3FF":"#FAFAFA", cursor:"pointer", transition:"all 0.15s" },
+                children:[
+                  n.jsx("div", { style:{ fontSize:32 }, children:"🖼️" }),
+                  n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#374151" }, children:"Glisse une photo ici ou clique pour choisir" }),
+                  n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:"JPG, PNG, WEBP — recommandé : 1200×630 px" }),
+                  n.jsx("input", { id:"photo-upload-input", type:"file", accept:"image/*", style:{ display:"none" }, onChange:ev=>{ if(ev.target.files[0]) handlePhotoFile(ev.target.files[0]); } }),
+                ],
+              }),
         ]}),
 
         // Date de programmation (mode schedule)
