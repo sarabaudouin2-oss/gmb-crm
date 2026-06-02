@@ -13134,6 +13134,7 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                       "Score",
                       "Progression",
                       "Audit",
+                      "Google",
                       "",
                     ].map((E) =>
                       n.jsx(
@@ -13361,6 +13362,25 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                             children: new Date(E.date).toLocaleDateString(
                               "fr-FR",
                             ),
+                          }),
+                          // Colonne Google
+                          n.jsx("td", {
+                            style: { padding: "14px 18px" },
+                            onClick: (S) => S.stopPropagation(),
+                            children: E.googleTokens?.access_token
+                              ? n.jsxs("span", {
+                                  style: { display:"inline-flex", alignItems:"center", gap:4, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700, color:"#065F46", whiteSpace:"nowrap" },
+                                  children: [
+                                    n.jsx("span", { style:{ width:6, height:6, borderRadius:"50%", background:"#22C55E", display:"inline-block" } }),
+                                    "Connecté",
+                                  ]
+                                })
+                              : n.jsx("a", {
+                                  href: `/api/auth/google?clientId=${E.id}`,
+                                  onClick: (S) => S.stopPropagation(),
+                                  style: { display:"inline-flex", alignItems:"center", gap:5, background:"#4285F4", color:"white", borderRadius:8, padding:"5px 11px", fontSize:11, fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" },
+                                  children: "🔗 Connecter",
+                                }),
                           }),
                           n.jsx("td", {
                             style: { padding: "14px 18px" },
@@ -16191,6 +16211,20 @@ function ClientDetail({
                       }),
                     ],
                   }),
+                  // Bouton Google dans l'en-tête client
+                  e.googleTokens?.access_token
+                    ? n.jsxs("span", {
+                        style: { display:"flex", alignItems:"center", gap:5, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, color:"#065F46" },
+                        children: [
+                          n.jsx("span",{style:{width:7,height:7,borderRadius:"50%",background:"#22C55E",display:"inline-block"}}),
+                          "Google connecté",
+                        ]
+                      })
+                    : n.jsx("a", {
+                        href: `/api/auth/google?clientId=${e.id}`,
+                        style: { display:"flex", alignItems:"center", gap:6, background:"#4285F4", color:"white", borderRadius:9, padding:"6px 14px", fontSize:12, fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" },
+                        children: "🔗 Connecter Google",
+                      }),
                   n.jsx("button", {
                     className: "btn-ghost",
                     onClick: () => B(!0),
@@ -17732,6 +17766,15 @@ function PostsTab({
     [customSeoKws, setCustomSeoKws] = D.useState(() => (e.avisData || {}).customSeoKeywords || []),
     [newSeoKwInput, setNewSeoKwInput] = D.useState(""),
     [showAddSeoKw, setShowAddSeoKw] = D.useState(false),
+    // Live Google Reviews state
+    [liveGoogleReviews, setLiveGoogleReviews] = D.useState(null),
+    [loadingLiveReviews, setLoadingLiveReviews] = D.useState(false),
+    [liveReviewError, setLiveReviewError] = D.useState(null),
+    [replyingToLive, setReplyingToLive] = D.useState(null),
+    [liveReplyText, setLiveReplyText] = D.useState(""),
+    [generatingLiveReply, setGeneratingLiveReply] = D.useState(false),
+    [publishingLiveReply, setPublishingLiveReply] = D.useState(false),
+    [liveReplySuccess, setLiveReplySuccess] = D.useState(null),
     P = parseFloat(b.note || a.rating || 0),
     T = parseInt(b.totalAvis || a.reviewCount || 0),
     _ = parseInt(b.responseRate || d.responseRate || 0),
@@ -17926,6 +17969,76 @@ Rédige la réponse.`,
           : P >= 3.5
             ? "Moyen"
             : "À améliorer";
+
+  const getValidTokenForAvis = async () => {
+    const gt = e.googleTokens;
+    if (!gt) return null;
+    if (Date.now() < (gt.expires_at || 0) - 60000) return gt.access_token;
+    if (!gt.refresh_token) return null;
+    try {
+      const res = await fetch(`/api/auth/refresh?refresh_token=${encodeURIComponent(gt.refresh_token)}`);
+      const data = await res.json();
+      if (data.access_token) {
+        i(t.map(cl => cl.id === e.id ? { ...cl, googleTokens: { ...gt, access_token: data.access_token, expires_at: Date.now() + (data.expires_in||3600)*1000 } } : cl));
+        return data.access_token;
+      }
+    } catch(_) {}
+    return null;
+  };
+
+  const fetchLiveReviews = async () => {
+    if (!e.gmbLocationName) return;
+    setLoadingLiveReviews(true);
+    setLiveReviewError(null);
+    try {
+      const token = await getValidTokenForAvis();
+      if (!token) { setLiveReviewError("Token Google expiré — reconnectez Google."); setLoadingLiveReviews(false); return; }
+      const res = await fetch(`/api/gmb/check-reviews?location_name=${encodeURIComponent(e.gmbLocationName)}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (data.error) { setLiveReviewError(data.error); } else { setLiveGoogleReviews(data); }
+    } catch(err) { setLiveReviewError(err.message); }
+    setLoadingLiveReviews(false);
+  };
+
+  const generateLiveReply = async (rv) => {
+    const apiKeyLocal = o || localStorage.getItem("bto_apikey") || "";
+    if (!apiKeyLocal || !rv) return;
+    setGeneratingLiveReply(true);
+    try {
+      const toneInstr = rv.rating >= 4 ? "remerciement sincère, rebondis sur un élément positif précis." : rv.rating === 3 ? "remercie pour l'honnêteté, reste positif." : "empathie sincère, excuses mesurées, propose un contact direct.";
+      const sys = `Tu es le gérant de "${e.name}", ${e.category||""} à ${e.city||""}. Réponds personnellement à cet avis client. Salutation + prénom + corps + fermeture chaleureuse. Pas de markdown. ${toneInstr} Signature : ${R || e.name || ""}.`;
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","x-api-key":apiKeyLocal },
+        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:500, system:sys, messages:[{role:"user",content:`Avis de ${rv.author||"un client"} :\n"${rv.text||"(aucun commentaire)"}"\nRédige la réponse.`}] }),
+      });
+      const data = await res.json();
+      const text = (data.content||[]).map(c=>c.text||"").join("").trim();
+      setLiveReplyText(text);
+    } catch(_) {}
+    setGeneratingLiveReply(false);
+  };
+
+  const publishLiveReply = async (rv) => {
+    if (!liveReplyText.trim() || !rv.name) return;
+    setPublishingLiveReply(true);
+    try {
+      const token = await getValidTokenForAvis();
+      if (!token) { alert("Token expiré"); setPublishingLiveReply(false); return; }
+      const res = await fetch("/api/gmb/post-reply", { method:"POST", headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"}, body:JSON.stringify({ review_name: rv.name, reply_text: liveReplyText }) });
+      const data = await res.json();
+      if (data.success) {
+        setLiveReplySuccess(rv.reviewId);
+        setReplyingToLive(null);
+        setLiveReplyText("");
+        // Refresh reviews
+        await fetchLiveReviews();
+        setTimeout(() => setLiveReplySuccess(null), 4000);
+      } else { alert("Erreur : " + (data.error||"Inconnue")); }
+    } catch(err) { alert(err.message); }
+    setPublishingLiveReply(false);
+  };
+
   return n.jsxs("div", {
     style: { padding: "0 2px" },
     children: [
@@ -18060,6 +18173,7 @@ Rédige la réponse.`,
           border: "1px solid #E5E7EB",
         },
         children: [
+          { id: "google_live", l: e.googleTokens?.access_token && e.gmbLocationName ? "🔴 Live Google" : "🔗 Live Google" },
           { id: "suivi", l: "💬 Répondre aux avis" },
           { id: "collecter", l: "🔗 Collecter" },
           { id: "analyse", l: "📊 Analyse" },
@@ -18087,6 +18201,107 @@ Rédige la réponse.`,
           ),
         ),
       }),
+      m === "google_live" && n.jsxs("div", { className: "fade", children: [
+        // Header
+        n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }, children:[
+          n.jsxs("div", { children:[
+            n.jsx("div", { style:{ fontSize:15, fontWeight:800, color:"#1E1B30", marginBottom:3 }, children:"🔴 Avis Google en direct" }),
+            n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children: e.gmbLocationName ? "Chargez les avis depuis votre fiche Google Business" : "Connectez Google et liez votre fiche pour accéder aux avis en direct." }),
+          ]}),
+          e.gmbLocationName && n.jsx("button", {
+            onClick: fetchLiveReviews,
+            disabled: loadingLiveReviews,
+            style:{ background: loadingLiveReviews ? "#E5E7EB" : "linear-gradient(135deg,#4285F4,#34A853)", color: loadingLiveReviews ? "#9CA3AF":"white", border:"none", borderRadius:9, padding:"9px 18px", fontSize:13, fontWeight:700, cursor: loadingLiveReviews ? "not-allowed":"pointer", fontFamily:"inherit" },
+            children: loadingLiveReviews ? "⏳ Chargement…" : "🔄 Charger les avis",
+          }),
+        ]}),
+        !e.gmbLocationName && n.jsxs("div", { style:{ background:"#FFF7ED", border:"1.5px solid #FED7AA", borderRadius:12, padding:"24px", textAlign:"center" }, children:[
+          n.jsx("div", { style:{ fontSize:32, marginBottom:8 }, children:"🔗" }),
+          n.jsx("div", { style:{ fontSize:14, fontWeight:700, color:"#92400E", marginBottom:6 }, children:"Fiche Google non liée" }),
+          n.jsx("div", { style:{ fontSize:12, color:"#B45309" }, children:"Allez dans Suivi mensuel → lier votre fiche Google pour accéder aux avis en direct." }),
+        ]}),
+        liveReviewError && n.jsx("div", { style:{ background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13, color:"#DC2626", fontWeight:600 }, children: "⚠️ " + liveReviewError }),
+        liveReplySuccess && n.jsx("div", { style:{ background:"#D1FAE5", border:"1px solid #6EE7B7", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13, color:"#065F46", fontWeight:700 }, children:"✅ Réponse publiée sur Google avec succès !" }),
+        liveGoogleReviews && n.jsxs("div", { children:[
+          // Stats
+          n.jsxs("div", { style:{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap" }, children:[
+            { label:"Note moyenne", value: liveGoogleReviews.averageRating ? parseFloat(liveGoogleReviews.averageRating).toFixed(1)+"⭐" : "—", col:"#d97706", bg:"#FFFBEB" },
+            { label:"Total avis", value: liveGoogleReviews.totalReviewCount || liveGoogleReviews.reviews?.length || 0, col:"#6B40D8", bg:"#F5F3FF" },
+            { label:"Sans réponse", value: (liveGoogleReviews.reviews||[]).filter(r=>!r.reply).length, col:"#DC2626", bg:"#FEF2F2" },
+          ].map(s => n.jsxs("div", { key:s.label, style:{ background:s.bg, border:`1px solid ${s.col}30`, borderRadius:10, padding:"10px 18px", display:"flex", gap:10, alignItems:"center" }, children:[
+            n.jsx("div", { style:{ fontSize:20, fontWeight:900, color:s.col }, children:s.value }),
+            n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:s.label }),
+          ]})),
+          }),
+          // Liste avis
+          n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:12 }, children:
+            (liveGoogleReviews.reviews||[]).map((rv,ri) => {
+              const stars = "⭐".repeat(rv.rating||0);
+              const isReplying = replyingToLive === ri;
+              return n.jsxs("div", {
+                key:rv.reviewId||ri,
+                style:{ background:"white", border: !rv.reply ? "2px solid #FCA5A5" : "1px solid #E5E7EB", borderRadius:14, padding:"16px 18px", position:"relative" },
+                children:[
+                  !rv.reply && n.jsx("div", { style:{ position:"absolute", top:-8, right:12, background:"#DC2626", color:"white", fontSize:10, fontWeight:700, borderRadius:8, padding:"2px 8px" }, children:"Sans réponse" }),
+                  n.jsxs("div", { style:{ display:"flex", gap:12, alignItems:"flex-start", marginBottom:10 }, children:[
+                    n.jsx("div", { style:{ width:36, height:36, borderRadius:"50%", background:"#F3F4F6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }, children: rv.profilePhoto ? n.jsx("img",{src:rv.profilePhoto,style:{width:36,height:36,borderRadius:"50%",objectFit:"cover"}}) : "👤" }),
+                    n.jsxs("div", { style:{ flex:1 }, children:[
+                      n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }, children:[
+                        n.jsx("span", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children: rv.author }),
+                        n.jsx("span", { style:{ fontSize:13 }, children: stars }),
+                        n.jsx("span", { style:{ fontSize:11, color:"#9CA3AF" }, children: rv.date ? new Date(rv.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}) : "" }),
+                      ]}),
+                      rv.text && n.jsx("div", { style:{ fontSize:13, color:"#374151", lineHeight:1.6, marginTop:6 }, children: rv.text }),
+                    ]}),
+                  ]}),
+                  rv.reply && n.jsxs("div", { style:{ background:"#F0FDF4", borderRadius:10, padding:"10px 14px", marginBottom:8, borderLeft:"3px solid #22C55E" }, children:[
+                    n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#065F46", marginBottom:4 }, children:"✅ Votre réponse" }),
+                    n.jsx("div", { style:{ fontSize:12.5, color:"#374151", lineHeight:1.5 }, children: rv.reply }),
+                  ]}),
+                  !rv.reply && n.jsxs("div", { children:[
+                    !isReplying && n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
+                      n.jsx("button", {
+                        onClick:()=>{ setReplyingToLive(ri); setLiveReplyText(""); },
+                        style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+                        children:"✍️ Répondre",
+                      }),
+                    ]}),
+                    isReplying && n.jsxs("div", { style:{ marginTop:8 }, children:[
+                      n.jsx("textarea", {
+                        value: liveReplyText,
+                        onChange: ev => setLiveReplyText(ev.target.value),
+                        rows:4,
+                        placeholder:"Votre réponse…",
+                        style:{ width:"100%", border:"1.5px solid #D1D5DB", borderRadius:9, padding:"10px", fontSize:13, fontFamily:"inherit", resize:"vertical", lineHeight:1.5, boxSizing:"border-box", marginBottom:8 },
+                      }),
+                      n.jsxs("div", { style:{ display:"flex", gap:8, flexWrap:"wrap" }, children:[
+                        n.jsx("button", {
+                          onClick:()=>generateLiveReply(rv),
+                          disabled: generatingLiveReply,
+                          style:{ background: generatingLiveReply?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color: generatingLiveReply?"#9CA3AF":"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor: generatingLiveReply?"not-allowed":"pointer", fontFamily:"inherit" },
+                          children: generatingLiveReply ? "⏳ Génération…" : "✨ Générer IA",
+                        }),
+                        n.jsx("button", {
+                          onClick:()=>publishLiveReply(rv),
+                          disabled: publishingLiveReply || !liveReplyText.trim(),
+                          style:{ background: publishingLiveReply||!liveReplyText.trim()?"#E5E7EB":"linear-gradient(135deg,#4285F4,#34A853)", color: publishingLiveReply||!liveReplyText.trim()?"#9CA3AF":"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor: publishingLiveReply||!liveReplyText.trim()?"not-allowed":"pointer", fontFamily:"inherit" },
+                          children: publishingLiveReply ? "⏳ Publication…" : "🚀 Publier sur Google",
+                        }),
+                        n.jsx("button", {
+                          onClick:()=>{ setReplyingToLive(null); setLiveReplyText(""); },
+                          style:{ background:"none", border:"1px solid #E5E7EB", borderRadius:8, padding:"7px 12px", fontSize:12, cursor:"pointer", color:"#6B7280", fontFamily:"inherit" },
+                          children:"Annuler",
+                        }),
+                      ]}),
+                    ]}),
+                  ]}),
+                ],
+              });
+            })
+          }),
+        ]}),
+      ]}),
+
       m === "suivi" &&
         n.jsxs("div", {
           children: [
@@ -20475,6 +20690,77 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
           ]}),
         ],
       }),
+      /* ── ZONES DESSERVIES ── */
+      n.jsxs("div", {
+        style: { background: "white", borderRadius: 18, border: "1px solid #E5E7EB", padding: "22px 24px", marginTop: 18 },
+        children: [
+          n.jsxs("div", {
+            style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+            children: [
+              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+                n.jsx("div", { style: { width: 4, height: 24, borderRadius: 2, background: "linear-gradient(135deg,#0891b2,#06b6d4)", flexShrink: 0 } }),
+                n.jsxs("div", {}, { children: [] }),
+                n.jsx("div", { style: { fontSize: 15, fontWeight: 800, color: "#1E1B30" }, children: "🗺️ Zones desservies" }),
+              ]}),
+              n.jsx("span", { style: { fontSize: 11, color: "#6B7280", background: "#F3F4F6", borderRadius: 20, padding: "3px 10px" }, children: `${(t.manualZones||[]).length}/12 zones` }),
+            ],
+          }),
+          n.jsx("div", {
+            style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: (t.manualZones||[]).length < 12 ? 14 : 0 },
+            children: (t.manualZones || []).map((z, gi) =>
+              n.jsxs("div", {
+                key: "zone"+gi,
+                style: { display: "inline-flex", alignItems: "center", gap: 6, background: "#EFF6FF", border: "1.5px solid #BFDBFE", borderRadius: 20, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, color: "#1D4ED8" },
+                children: [
+                  n.jsx("span", { children: z }),
+                  n.jsx("button", {
+                    onClick: () => I({ manualZones: (t.manualZones||[]).filter((_, fi) => fi !== gi) }),
+                    style: { background: "none", border: "none", color: "#93C5FD", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 },
+                    children: "×",
+                  }),
+                ],
+              })
+            ),
+          }),
+          (t.manualZones||[]).length < 12 && n.jsxs("div", {
+            style: { display: "flex", gap: 8, alignItems: "center" },
+            children: [
+              n.jsx("input", {
+                id: "zone-input",
+                placeholder: "Ajouter une zone (ville, quartier…)",
+                style: { flex: 1, padding: "9px 14px", borderRadius: 9, border: "1.5px solid #BFDBFE", fontSize: 13, fontFamily: "inherit", outline: "none" },
+                onKeyDown: (ev) => {
+                  if (ev.key === "Enter" && ev.target.value.trim()) {
+                    const val = ev.target.value.trim();
+                    if (!(t.manualZones||[]).includes(val) && (t.manualZones||[]).length < 12) {
+                      I({ manualZones: [...(t.manualZones||[]), val] });
+                    }
+                    ev.target.value = "";
+                  }
+                },
+              }),
+              n.jsx("button", {
+                onClick: () => {
+                  const inp = document.getElementById("zone-input");
+                  if (inp && inp.value.trim()) {
+                    const val = inp.value.trim();
+                    if (!(t.manualZones||[]).includes(val) && (t.manualZones||[]).length < 12) {
+                      I({ manualZones: [...(t.manualZones||[]), val] });
+                    }
+                    inp.value = "";
+                  }
+                },
+                style: { padding: "9px 18px", borderRadius: 9, border: "none", background: "#1D4ED8", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
+                children: "+ Ajouter",
+              }),
+            ],
+          }),
+          (t.manualZones||[]).length === 0 && n.jsx("div", {
+            style: { textAlign: "center", padding: "20px", color: "#9CA3AF", fontSize: 13 },
+            children: "Aucune zone desservie renseignée. Ajoutez jusqu'à 12 zones.",
+          }),
+        ],
+      }),
     ],
   });
 }
@@ -21362,6 +21648,36 @@ function InfosTab({ client: e, clients: t, upd: i, calcScore: r, getLvl: o }) {
       I === "gmb" &&
         n.jsxs("div", {
           children: [
+            /* ── Bannière stats Google API auto-sync ── */
+            (() => {
+              const CM2 = new Date().toISOString().slice(0,7);
+              const apiStats = (e.gmbStats || {})[CM2];
+              if (!apiStats) return null;
+              const statItems = [
+                { label:"Vues Recherche", value:apiStats.vuesRecherche||0, icon:"🔍", col:"#4F46E5" },
+                { label:"Vues Maps", value:apiStats.vuesMaps||0, icon:"🗺️", col:"#0891b2" },
+                { label:"Appels", value:apiStats.appels||0, icon:"📞", col:"#059669" },
+                { label:"Clics Web", value:apiStats.clicsWeb||0, icon:"🖱️", col:"#d97706" },
+                { label:"Itinéraires", value:apiStats.itineraires||0, icon:"📍", col:"#C03080" },
+              ];
+              return n.jsxs("div", { style:{ background:"linear-gradient(135deg,#F0FDF4,#ECFEFF)", border:"1.5px solid #6EE7B7", borderRadius:14, padding:"16px 20px", marginBottom:16 }, children:[
+                n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }, children:[
+                  n.jsx("div", { style:{ width:32, height:32, background:"linear-gradient(135deg,#34A853,#4285F4)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }, children:"🔄" }),
+                  n.jsxs("div", { children:[
+                    n.jsx("div", { style:{ fontSize:13, fontWeight:800, color:"#065F46" }, children:"Stats synchronisées via Google API" }),
+                    n.jsx("div", { style:{ fontSize:11, color:"#059669" }, children:`Mois en cours · Mis à jour automatiquement via Suivi mensuel` }),
+                  ]}),
+                ]}),
+                n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))", gap:8 }, children:
+                  statItems.map(s => n.jsxs("div", { key:s.label, style:{ background:"white", borderRadius:10, padding:"10px 12px", textAlign:"center", border:`1px solid ${s.col}20` }, children:[
+                    n.jsx("div", { style:{ fontSize:11, marginBottom:4 }, children:s.icon }),
+                    n.jsx("div", { style:{ fontSize:18, fontWeight:900, color:s.col }, children: s.value.toLocaleString("fr-FR") }),
+                    n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", fontWeight:600 }, children:s.label }),
+                  ]}))
+                }),
+                n.jsx("div", { style:{ fontSize:11, color:"#059669", marginTop:10, fontWeight:600 }, children:"💡 Pour mettre à jour : allez dans l'onglet Suivi mensuel → Sync Google" }),
+              ]});
+            })(),
             n.jsxs("div", {
               style: {
                 background: "white",
@@ -24334,11 +24650,29 @@ Rédige la publication GMB optimisée.`;
   };
   const deleteScheduledPost = (id) => i(t.map(cl => cl.id === e.id ? { ...cl, scheduledPosts: scheduledPosts.filter(p=>p.id!==id) } : cl));
 
+  // Calendar state
+  const [calYear, setCalYear] = D.useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = D.useState(new Date().getMonth()); // 0-indexed
+  const [calSelectedDay, setCalSelectedDay] = D.useState(null);
+
+  const allCalPosts = [
+    ...publishedPosts.map(p2 => ({ ...p2, _kind: "published" })),
+    ...scheduledPosts.map(p2 => ({ ...p2, _kind: "scheduled" })),
+  ];
+
+  const getPostsForDay = (y, m, d) => {
+    const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    return allCalPosts.filter(p2 => p2.date === key);
+  };
+
+  const calDaysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const calFirstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const calFirstDowMon = (calFirstDow + 6) % 7; // Monday-first
+
   const tabs2 = [
     { id: "generator", label: "✨ Générateur IA" },
     { id: "ideas", label: `💡 Idées audit (${(P.postIdeas||[]).length})` },
-    { id: "published", label: `📋 Posts publiés (${publishedPosts.length})` },
-    { id: "scheduled", label: `📅 Planifiés (${scheduledPosts.length})` },
+    { id: "calendar", label: `📅 Calendrier (${allCalPosts.length})` },
   ];
 
   return n.jsxs("div", {
@@ -24555,8 +24889,170 @@ Rédige la publication GMB optimisée.`;
                 }),
           ]}),
 
-          // ── POSTS PUBLIÉS ──
-          subTab === "published" && n.jsxs("div", { className: "fade", children: [
+          // ── CALENDRIER ÉDITORIAL ──
+          subTab === "calendar" && n.jsxs("div", { className: "fade", children: [
+            // Header
+            n.jsxs("div", { style: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }, children:[
+              n.jsxs("div", { children:[
+                n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"#1E1B30", marginBottom:4 }, children:"Calendrier éditorial" }),
+                n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"Posts publiés 📋 et planifiés 📅 en un seul endroit" }),
+              ]}),
+              n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center" }, children:[
+                n.jsx("button", {
+                  onClick:()=>setShowAddPost(true),
+                  style:{ background:"#F3F4F6", color:"#374151", border:"1px solid #E5E7EB", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+                  children:"+ Journal",
+                }),
+                isGoogleConnected && n.jsx("button", {
+                  onClick:()=>setShowScheduleModal(true),
+                  style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+                  children:"+ Planifier Google",
+                }),
+              ]}),
+            ]}),
+
+            // Add form journal
+            showAddPost && n.jsxs("div", { style: { background: "#F9FAFB", border: "1.5px solid #E5E7EB", borderRadius: 14, padding: "18px 22px", marginBottom: 20 }, children: [
+              n.jsx("div", { style: { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 14 }, children: "Nouveau post publié" }),
+              n.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }, children: [
+                n.jsxs("div", { style: { flex: 2, minWidth: 180 }, children: [
+                  n.jsx("label", { style: { fontSize: 11, color: "#6B7280", display: "block", marginBottom: 4, fontWeight: 600 }, children: "Titre / sujet *" }),
+                  n.jsx("input", { type: "text", value: newPost.title, onChange: ev => setNewPost(p2 => ({ ...p2, title: ev.target.value })), placeholder: "Ex : Rénovation salle de bain Dupont", style: { width: "100%", padding: "8px 10px", border: "1.5px solid #D1D5DB", borderRadius: 7, fontSize: 13, boxSizing: "border-box" } }),
+                ]}),
+                n.jsxs("div", { children: [
+                  n.jsx("label", { style: { fontSize: 11, color: "#6B7280", display: "block", marginBottom: 4, fontWeight: 600 }, children: "Type" }),
+                  n.jsx("select", { value: newPost.type, onChange: ev => setNewPost(p2 => ({ ...p2, type: ev.target.value })), style: { padding: "8px 10px", border: "1.5px solid #D1D5DB", borderRadius: 7, fontSize: 13, fontFamily: "inherit" }, children: postTypes.map(pt => n.jsx("option", { value: pt, children: `${typeIcons[pt]} ${pt}` }, pt)) }),
+                ]}),
+                n.jsxs("div", { children: [
+                  n.jsx("label", { style: { fontSize: 11, color: "#6B7280", display: "block", marginBottom: 4, fontWeight: 600 }, children: "Date" }),
+                  n.jsx("input", { type: "date", value: newPost.date, onChange: ev => setNewPost(p2 => ({ ...p2, date: ev.target.value })), style: { padding: "8px 10px", border: "1.5px solid #D1D5DB", borderRadius: 7, fontSize: 13, fontFamily: "inherit" } }),
+                ]}),
+              ]}),
+              n.jsxs("div", { style: { display: "flex", gap: 8 }, children: [
+                n.jsx("button", { onClick: savePublishedPost, style: { background: "#6B40D8", color: "white", border: "none", borderRadius: 7, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "✅ Enregistrer" }),
+                n.jsx("button", { onClick: () => setShowAddPost(false), style: { background: "none", border: "1.5px solid #E5E7EB", borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: "#6B7280", fontFamily: "inherit" }, children: "Annuler" }),
+              ]}),
+            ]}),
+
+            // Modale planification
+            showScheduleModal && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setShowScheduleModal(false),children:
+              n.jsxs("div",{style:{background:"white",borderRadius:16,padding:28,maxWidth:540,width:"92%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"},onClick:ev=>ev.stopPropagation(),children:[
+                n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16},children:[
+                  n.jsx("div",{style:{fontSize:15,fontWeight:800,color:"#1E1B30"},children:"📅 Planifier un post Google"}),
+                  n.jsx("button",{onClick:()=>setShowScheduleModal(false),style:{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"},children:"✕"}),
+                ]}),
+                n.jsx("textarea",{value:scheduleForm.text,onChange:ev=>setScheduleForm(f=>({...f,text:ev.target.value})),rows:5,placeholder:"Texte du post *",style:{width:"100%",border:"2px solid #D1D5DB",borderRadius:10,padding:"10px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,boxSizing:"border-box",marginBottom:12}}),
+                n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16},children:[
+                  n.jsxs("div",{children:[
+                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Date *"}),
+                    n.jsx("input",{type:"date",value:scheduleForm.date,onChange:ev=>setScheduleForm(f=>({...f,date:ev.target.value})),min:new Date().toISOString().slice(0,10),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
+                  ]}),
+                  n.jsxs("div",{children:[
+                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Heure"}),
+                    n.jsx("input",{type:"time",value:scheduleForm.time,onChange:ev=>setScheduleForm(f=>({...f,time:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
+                  ]}),
+                ]}),
+                n.jsxs("div",{style:{display:"flex",gap:10,justifyContent:"flex-end"},children:[
+                  n.jsx("button",{onClick:()=>setShowScheduleModal(false),style:{padding:"9px 16px",borderRadius:8,border:"1px solid #D1D5DB",background:"white",color:"#374151",fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
+                  n.jsx("button",{onClick:saveScheduledPost,disabled:!scheduleForm.text.trim()||!scheduleForm.date,style:{padding:"9px 22px",borderRadius:8,border:"none",background:"#6B40D8",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"💾 Planifier"}),
+                ]}),
+              ]})
+            }),
+
+            // Navigation mois
+            n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:16 }, children:[
+              n.jsx("button", {
+                onClick:()=>{ if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1); setCalSelectedDay(null); },
+                style:{ background:"none", border:"1px solid #E5E7EB", borderRadius:8, width:34, height:34, cursor:"pointer", fontSize:16 },
+                children:"‹",
+              }),
+              n.jsx("div", { style:{ fontSize:15, fontWeight:800, color:"#1E1B30", minWidth:160, textAlign:"center" }, children:
+                new Date(calYear, calMonth, 1).toLocaleDateString("fr-FR", { month:"long", year:"numeric" }).replace(/^\w/, c=>c.toUpperCase())
+              }),
+              n.jsx("button", {
+                onClick:()=>{ if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1); setCalSelectedDay(null); },
+                style:{ background:"none", border:"1px solid #E5E7EB", borderRadius:8, width:34, height:34, cursor:"pointer", fontSize:16 },
+                children:"›",
+              }),
+            ]}),
+
+            // Grille calendrier
+            n.jsxs("div", { style:{ background:"white", borderRadius:16, border:"1px solid #E5E7EB", overflow:"hidden" }, children:[
+              // Header jours
+              n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#F9FAFB", borderBottom:"1px solid #E5E7EB" }, children:
+                ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d =>
+                  n.jsx("div", { key:d, style:{ padding:"10px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:".5px" }, children:d })
+                )
+              }),
+              // Cellules
+              n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }, children:
+                Array.from({ length: calFirstDowMon + calDaysInMonth }, (_, i) => {
+                  if (i < calFirstDowMon) return n.jsx("div", { key:"empty"+i, style:{ minHeight:80, borderRight:"1px solid #F3F4F6", borderBottom:"1px solid #F3F4F6", background:"#FAFAFA" } });
+                  const day = i - calFirstDowMon + 1;
+                  const posts = getPostsForDay(calYear, calMonth, day);
+                  const today = new Date();
+                  const isToday = today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===day;
+                  const isSelected = calSelectedDay === day;
+                  return n.jsxs("div", {
+                    key:"day"+day,
+                    onClick:()=>setCalSelectedDay(isSelected ? null : day),
+                    style:{ minHeight:80, borderRight:"1px solid #F3F4F6", borderBottom:"1px solid #F3F4F6", padding:"6px 8px", cursor: posts.length > 0 ? "pointer" : "default", background: isSelected ? "#F5F3FF" : isToday ? "#EFF6FF" : "white", transition:"background 0.15s" },
+                    children:[
+                      n.jsx("div", { style:{ fontSize:12, fontWeight: isToday ? 800 : 500, marginBottom:4, width:22, height:22, borderRadius:"50%", background:isToday?"#4F46E5":"transparent", color:isToday?"white":"#374151", display:"flex", alignItems:"center", justifyContent:"center" }, children:day }),
+                      posts.slice(0,2).map((p2,pi) => n.jsx("div", {
+                        key:pi,
+                        style:{ fontSize:10, fontWeight:700, borderRadius:4, padding:"2px 5px", marginBottom:2, background: p2._kind==="scheduled" ? "#F3F0FF" : "#F0FDF4", color: p2._kind==="scheduled" ? "#6B40D8" : "#065F46", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" },
+                        children: (p2._kind==="scheduled" ? "⏳ " : "✅ ") + (p2.title || p2.text || "").slice(0,20),
+                      })),
+                      posts.length > 2 && n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", fontWeight:600 }, children:`+${posts.length-2}` }),
+                    ],
+                  });
+                })
+              }),
+            ]}),
+
+            // Détail du jour sélectionné
+            calSelectedDay !== null && (() => {
+              const dayPosts = getPostsForDay(calYear, calMonth, calSelectedDay);
+              if (!dayPosts.length) return null;
+              return n.jsxs("div", { style:{ marginTop:16, background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"16px 20px" }, children:[
+                n.jsx("div", { style:{ fontSize:13, fontWeight:800, color:"#1E1B30", marginBottom:12 }, children:
+                  `Posts du ${calSelectedDay} ${new Date(calYear,calMonth,1).toLocaleDateString("fr-FR",{month:"long"})}`
+                }),
+                dayPosts.map((p2,pi) => n.jsxs("div", {
+                  key:pi,
+                  style:{ background: p2._kind==="scheduled" ? "#F5F3FF" : "#F0FDF4", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"flex-start", gap:10 },
+                  children:[
+                    n.jsx("div", { style:{ fontSize:20, flexShrink:0 }, children: typeIcons[p2.type] || (p2._kind==="scheduled"?"📅":"📋") }),
+                    n.jsxs("div", { style:{ flex:1 }, children:[
+                      n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", marginBottom:4 }, children:[
+                        n.jsx("span", { style:{ fontSize:12, fontWeight:700, color:"#1E1B30" }, children: p2.title || (p2.text||"").slice(0,60) }),
+                        n.jsx("span", { style:{ fontSize:10, fontWeight:700, borderRadius:8, padding:"2px 8px", background: p2._kind==="scheduled"?"#EDE9FE":"#D1FAE5", color: p2._kind==="scheduled"?"#6B40D8":"#065F46" }, children: p2._kind==="scheduled"?"⏳ Planifié":"✅ Publié" }),
+                      ]}),
+                      p2.text && n.jsx("div", { style:{ fontSize:12, color:"#6B7280", lineHeight:1.5 }, children: p2.text.slice(0,150)+(p2.text.length>150?"...":"") }),
+                      p2.time && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:4 }, children:`🕐 ${p2.time}` }),
+                    ]}),
+                    p2._kind==="scheduled" && p2.status!=="published" && n.jsx("button",{onClick:()=>deleteScheduledPost(p2.id),style:{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:14},children:"✕"}),
+                    p2._kind==="published" && n.jsx("button",{onClick:()=>deletePost(p2.id),style:{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:14},children:"✕"}),
+                  ],
+                })),
+              ]});
+            })(),
+
+            // Stats du mois
+            allCalPosts.length > 0 && n.jsxs("div", { style:{ display:"flex", gap:10, marginTop:16, flexWrap:"wrap" }, children:[
+              { label:"Posts publiés", value:publishedPosts.length, col:"#059669", bg:"#F0FDF4" },
+              { label:"Planifiés", value:scheduledPosts.length, col:"#6B40D8", bg:"#F5F3FF" },
+              { label:"Ce mois", value:allCalPosts.filter(p2=>p2.date&&p2.date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,"0")}`)).length, col:"#0891b2", bg:"#ECFEFF" },
+            ].map(s=>n.jsxs("div",{key:s.label,style:{background:s.bg,border:`1px solid ${s.col}30`,borderRadius:10,padding:"10px 18px",display:"flex",gap:10,alignItems:"center"},children:[
+              n.jsx("div",{style:{fontSize:22,fontWeight:900,color:s.col},children:s.value}),
+              n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:s.label}),
+            ]}))
+            }),
+          ]}),
+
+          // ── POSTS PUBLIÉS (kept for backward compat but hidden) ──
+          subTab === "published_hidden" && n.jsxs("div", { className: "fade", children: [
             n.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }, children: [
               n.jsxs("div", { children: [
                 n.jsx("div", { style: { fontSize: 16, fontWeight: 800, color: "#1E1B30", marginBottom: 4 }, children: "Journal des publications" }),
@@ -24636,8 +25132,8 @@ Rédige la publication GMB optimisée.`;
                 ]}),
           ]}),
 
-          // ── PLANIFIÉS ──
-          subTab === "scheduled" && n.jsxs("div",{className:"fade",children:[
+          // ── PLANIFIÉS (hidden — merged into calendar) ──
+          subTab === "scheduled_hidden" && n.jsxs("div",{className:"fade",children:[
             n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20},children:[
               n.jsxs("div",{children:[
                 n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30",marginBottom:4},children:"📅 Posts planifiés"}),
@@ -24862,7 +25358,7 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
     if (!kwData || !kwData.scans || kwData.scans.length === 0) return null;
     const lastScan = kwData.scans[kwData.scans.length-1];
     const cells = lastScan.cells || [];
-    const ranks = cells.map(c => c.rank).filter(r2 => r2 && r2 < 21);
+    const ranks = cells.map(c => (c && typeof c === "object") ? c.rank : c).filter(r2 => r2 != null && r2 < 21);
     if (ranks.length === 0) return null;
     const avg = Math.round(ranks.reduce((a,b) => a+b,0)/ranks.length*10)/10;
     const top3 = ranks.filter(r2 => r2 <= 3).length;
@@ -25063,7 +25559,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
       if (kw === "center" || !kwData?.scans?.length) return;
       const lastScan = kwData.scans[kwData.scans.length-1];
       const cells = lastScan.cells || [];
-      const ranks = cells.map(c => c.rank).filter(r2 => r2 && r2 < 21);
+      const ranks = cells.map(c => (c && typeof c === "object") ? c.rank : c).filter(r2 => r2 != null && r2 < 21);
       if (ranks.length > 0) positions[kw] = Math.round(ranks.reduce((a,b)=>a+b,0)/ranks.length*10)/10;
     });
     const now = new Date();
@@ -25547,12 +26043,6 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                     disabled: syncingGmb,
                     style:{background:syncStatus==="ok"?"#059669":syncStatus==="error"?"#DC2626":"#4285F4",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,opacity:syncingGmb?0.7:1},
                     children: syncingGmb ? "⏳ Synchronisation..." : syncStatus==="ok" ? "✅ Synchronisé" : syncStatus==="error" ? "❌ Erreur sync" : syncStatus==="no_location" ? "⚠️ Fiche non liée" : "🔄 Sync Google"
-                  }),
-                  // Bouton connecter Google (visible si non connecté)
-                  !isGoogleConnected && n.jsx("a",{
-                    href:`/api/auth/google?clientId=${e.id}`,
-                    style:{background:"#4285F4",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5},
-                    children:"🔗 Connecter Google"
                   }),
                   n.jsx("button",{onClick:openGmbForm,style:{background:editingGmb?"#E5E7EB":"#1E1B30",color:editingGmb?"#374151":"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:editingGmb?"✕ Annuler":"✏️ Saisir manuellement"}),
                 ]},),
