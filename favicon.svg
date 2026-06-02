@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B5BDB"/>
+      <stop offset="35%" stop-color="#6B40D8"/>
+      <stop offset="70%" stop-color="#C03080"/>
+      <stop offset="100%" stop-color="#E85A30"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#g)"/>
+  <text x="16" y="14" font-family="sans-serif" font-weight="900" font-size="11" fill="white" text-anchor="middle" dominant-baseline="middle">BE</text>
+  <text x="16" y="24" font-family="sans-serif" font-weight="900" font-size="9" fill="rgba(255,255,255,0.85)" text-anchor="middle" dominant-baseline="middle">THE ONE</text>
+</svg>
