@@ -24650,24 +24650,70 @@ Rédige la publication GMB optimisée.`;
   };
   const deleteScheduledPost = (id) => i(t.map(cl => cl.id === e.id ? { ...cl, scheduledPosts: scheduledPosts.filter(p=>p.id!==id) } : cl));
 
-  // Calendar state
-  const [calYear, setCalYear] = D.useState(new Date().getFullYear());
-  const [calMonth, setCalMonth] = D.useState(new Date().getMonth()); // 0-indexed
+  // Calendar state — style CalendrierView
+  const calToday = new Date();
+  const [calYear, setCalYear] = D.useState(calToday.getFullYear());
+  const [calMonth, setCalMonth] = D.useState(calToday.getMonth());
   const [calSelectedDay, setCalSelectedDay] = D.useState(null);
+  const [calSelectedPost, setCalSelectedPost] = D.useState(null);
+  const [calAddTitle, setCalAddTitle] = D.useState("");
+  const [calAddType, setCalAddType] = D.useState("Realisation");
+  const [calAddMode, setCalAddMode] = D.useState(false); // "editorial" | "google" | false
+
+  // calPosts: same structure as CalendrierView {dateKey: [{id,type,title,done,fromGoogle,scheduledText}]}
+  const calPostsData = e.calPosts || {};
+  const calDayKey = (y, m, d) => `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+  // Merge scheduledPosts into calendar display
+  const getCalDayPosts = (y, m, d) => {
+    const key = calDayKey(y, m, d);
+    const editorial = (calPostsData[key] || []).map(p2 => ({ ...p2, _src: "cal" }));
+    const gplanned = scheduledPosts.filter(p2 => p2.date === key).map(p2 => ({ id: p2.id, type: "Actualite", title: (p2.text||"").slice(0,50), done: p2.status==="published", _src: "google", _raw: p2 }));
+    const gpublished = publishedPosts.filter(p2 => p2.date === key).map(p2 => ({ id: p2.id, type: p2.type||"Realisation", title: p2.title, done: true, _src: "published", _raw: p2 }));
+    return [...editorial, ...gplanned, ...gpublished];
+  };
+
+  const calFirstDow = new Date(calYear, calMonth, 1).getDay();
+  const calFirstDowMon = (calFirstDow + 6) % 7;
+  const calDaysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const calCells = Array.from({ length: Math.ceil((calFirstDowMon + calDaysInMonth) / 7) * 7 }, (_, i) => {
+    const d = i - calFirstDowMon + 1;
+    return (d >= 1 && d <= calDaysInMonth) ? d : null;
+  });
+
+  const calMonthKey = `${calYear}-${String(calMonth+1).padStart(2,"0")}`;
+  const calMonthKeys = Object.keys(calPostsData).filter(k => k.startsWith(calMonthKey));
+  const calMonthTotal = calMonthKeys.reduce((acc, k) => acc + (calPostsData[k]||[]).length, 0)
+    + scheduledPosts.filter(p2 => p2.date?.startsWith(calMonthKey)).length
+    + publishedPosts.filter(p2 => p2.date?.startsWith(calMonthKey)).length;
+  const calMonthDone = calMonthKeys.reduce((acc, k) => acc + (calPostsData[k]||[]).filter(p2=>p2.done).length, 0)
+    + publishedPosts.filter(p2 => p2.date?.startsWith(calMonthKey)).length;
+
+  const calSavePost = () => {
+    if (!calAddTitle.trim() || calSelectedDay === null) return;
+    const key = calDayKey(calYear, calMonth, calSelectedDay);
+    const newEntry = { id: Date.now(), type: calAddType, title: calAddTitle.trim(), content: "", done: false, fromAudit: false };
+    const updated = t.map(cl => cl.id === e.id ? { ...cl, calPosts: { ...calPostsData, [key]: [...(calPostsData[key]||[]), newEntry] } } : cl);
+    i(updated);
+    setCalAddTitle(""); setCalAddMode(false);
+  };
+
+  const calToggleDone = (key, postId) => {
+    const updated = t.map(cl => cl.id === e.id ? { ...cl, calPosts: { ...calPostsData, [key]: (calPostsData[key]||[]).map(p2 => p2.id===postId ? {...p2, done:!p2.done} : p2) } } : cl);
+    i(updated);
+    if (calSelectedPost?.id === postId) setCalSelectedPost(p2 => ({...p2, done:!p2.done}));
+  };
+
+  const calDeletePost = (key, postId) => {
+    const updated = t.map(cl => cl.id === e.id ? { ...cl, calPosts: { ...calPostsData, [key]: (calPostsData[key]||[]).filter(p2 => p2.id!==postId) } } : cl);
+    i(updated);
+    if (calSelectedPost?.id === postId) setCalSelectedPost(null);
+  };
 
   const allCalPosts = [
     ...publishedPosts.map(p2 => ({ ...p2, _kind: "published" })),
     ...scheduledPosts.map(p2 => ({ ...p2, _kind: "scheduled" })),
   ];
-
-  const getPostsForDay = (y, m, d) => {
-    const key = `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    return allCalPosts.filter(p2 => p2.date === key);
-  };
-
-  const calDaysInMonth = new Date(calYear, calMonth+1, 0).getDate();
-  const calFirstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
-  const calFirstDowMon = (calFirstDow + 6) % 7; // Monday-first
 
   const tabs2 = [
     { id: "generator", label: "✨ Générateur IA" },
@@ -24889,68 +24935,20 @@ Rédige la publication GMB optimisée.`;
                 }),
           ]}),
 
-          // ── CALENDRIER ÉDITORIAL ──
-          subTab === "calendar" && n.jsxs("div", { className: "fade", children: [
-            // Header
-            n.jsxs("div", { style: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }, children:[
-              n.jsxs("div", { children:[
-                n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"#1E1B30", marginBottom:4 }, children:"Calendrier éditorial" }),
-                n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"Posts publiés 📋 et planifiés 📅 en un seul endroit" }),
-              ]}),
-              n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center" }, children:[
-                n.jsx("button", {
-                  onClick:()=>setShowAddPost(true),
-                  style:{ background:"#F3F4F6", color:"#374151", border:"1px solid #E5E7EB", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
-                  children:"+ Journal",
-                }),
-                isGoogleConnected && n.jsx("button", {
-                  onClick:()=>setShowScheduleModal(true),
-                  style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
-                  children:"+ Planifier Google",
-                }),
-              ]}),
-            ]}),
+          // ── CALENDRIER ÉDITORIAL — style CalendrierView ──
+          subTab === "calendar" && n.jsxs("div", { className: "fade", style:{ display:"flex", flexDirection:"column", gap:0, margin:"0 -2px" }, children: [
 
-            // Add form journal
-            showAddPost && n.jsxs("div", { style: { background: "#F9FAFB", border: "1.5px solid #E5E7EB", borderRadius: 14, padding: "18px 22px", marginBottom: 20 }, children: [
-              n.jsx("div", { style: { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 14 }, children: "Nouveau post publié" }),
-              n.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }, children: [
-                n.jsxs("div", { style: { flex: 2, minWidth: 180 }, children: [
-                  n.jsx("label", { style: { fontSize: 11, color: "#6B7280", display: "block", marginBottom: 4, fontWeight: 600 }, children: "Titre / sujet *" }),
-                  n.jsx("input", { type: "text", value: newPost.title, onChange: ev => setNewPost(p2 => ({ ...p2, title: ev.target.value })), placeholder: "Ex : Rénovation salle de bain Dupont", style: { width: "100%", padding: "8px 10px", border: "1.5px solid #D1D5DB", borderRadius: 7, fontSize: 13, boxSizing: "border-box" } }),
-                ]}),
-                n.jsxs("div", { children: [
-                  n.jsx("label", { style: { fontSize: 11, color: "#6B7280", display: "block", marginBottom: 4, fontWeight: 600 }, children: "Type" }),
-                  n.jsx("select", { value: newPost.type, onChange: ev => setNewPost(p2 => ({ ...p2, type: ev.target.value })), style: { padding: "8px 10px", border: "1.5px solid #D1D5DB", borderRadius: 7, fontSize: 13, fontFamily: "inherit" }, children: postTypes.map(pt => n.jsx("option", { value: pt, children: `${typeIcons[pt]} ${pt}` }, pt)) }),
-                ]}),
-                n.jsxs("div", { children: [
-                  n.jsx("label", { style: { fontSize: 11, color: "#6B7280", display: "block", marginBottom: 4, fontWeight: 600 }, children: "Date" }),
-                  n.jsx("input", { type: "date", value: newPost.date, onChange: ev => setNewPost(p2 => ({ ...p2, date: ev.target.value })), style: { padding: "8px 10px", border: "1.5px solid #D1D5DB", borderRadius: 7, fontSize: 13, fontFamily: "inherit" } }),
-                ]}),
-              ]}),
-              n.jsxs("div", { style: { display: "flex", gap: 8 }, children: [
-                n.jsx("button", { onClick: savePublishedPost, style: { background: "#6B40D8", color: "white", border: "none", borderRadius: 7, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "✅ Enregistrer" }),
-                n.jsx("button", { onClick: () => setShowAddPost(false), style: { background: "none", border: "1.5px solid #E5E7EB", borderRadius: 7, padding: "8px 16px", fontSize: 13, cursor: "pointer", color: "#6B7280", fontFamily: "inherit" }, children: "Annuler" }),
-              ]}),
-            ]}),
-
-            // Modale planification
+            // Modale planification Google
             showScheduleModal && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setShowScheduleModal(false),children:
               n.jsxs("div",{style:{background:"white",borderRadius:16,padding:28,maxWidth:540,width:"92%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"},onClick:ev=>ev.stopPropagation(),children:[
                 n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16},children:[
-                  n.jsx("div",{style:{fontSize:15,fontWeight:800,color:"#1E1B30"},children:"📅 Planifier un post Google"}),
+                  n.jsx("div",{style:{fontSize:15,fontWeight:800,color:"#1E1B30"},children:"🚀 Planifier sur Google My Business"}),
                   n.jsx("button",{onClick:()=>setShowScheduleModal(false),style:{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"},children:"✕"}),
                 ]}),
                 n.jsx("textarea",{value:scheduleForm.text,onChange:ev=>setScheduleForm(f=>({...f,text:ev.target.value})),rows:5,placeholder:"Texte du post *",style:{width:"100%",border:"2px solid #D1D5DB",borderRadius:10,padding:"10px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.5,boxSizing:"border-box",marginBottom:12}}),
                 n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16},children:[
-                  n.jsxs("div",{children:[
-                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Date *"}),
-                    n.jsx("input",{type:"date",value:scheduleForm.date,onChange:ev=>setScheduleForm(f=>({...f,date:ev.target.value})),min:new Date().toISOString().slice(0,10),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
-                  ]}),
-                  n.jsxs("div",{children:[
-                    n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Heure"}),
-                    n.jsx("input",{type:"time",value:scheduleForm.time,onChange:ev=>setScheduleForm(f=>({...f,time:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}}),
-                  ]}),
+                  n.jsxs("div",{children:[n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Date *"}),n.jsx("input",{type:"date",value:scheduleForm.date,onChange:ev=>setScheduleForm(f=>({...f,date:ev.target.value})),min:new Date().toISOString().slice(0,10),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}})]}),
+                  n.jsxs("div",{children:[n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#374151",display:"block",marginBottom:4},children:"Heure"}),n.jsx("input",{type:"time",value:scheduleForm.time,onChange:ev=>setScheduleForm(f=>({...f,time:ev.target.value})),style:{width:"100%",padding:"8px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13,fontFamily:"inherit",boxSizing:"border-box"}})]}),
                 ]}),
                 n.jsxs("div",{style:{display:"flex",gap:10,justifyContent:"flex-end"},children:[
                   n.jsx("button",{onClick:()=>setShowScheduleModal(false),style:{padding:"9px 16px",borderRadius:8,border:"1px solid #D1D5DB",background:"white",color:"#374151",fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
@@ -24959,95 +24957,179 @@ Rédige la publication GMB optimisée.`;
               ]})
             }),
 
-            // Navigation mois
-            n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:16 }, children:[
-              n.jsx("button", {
-                onClick:()=>{ if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1); setCalSelectedDay(null); },
-                style:{ background:"none", border:"1px solid #E5E7EB", borderRadius:8, width:34, height:34, cursor:"pointer", fontSize:16 },
-                children:"‹",
-              }),
-              n.jsx("div", { style:{ fontSize:15, fontWeight:800, color:"#1E1B30", minWidth:160, textAlign:"center" }, children:
-                new Date(calYear, calMonth, 1).toLocaleDateString("fr-FR", { month:"long", year:"numeric" }).replace(/^\w/, c=>c.toUpperCase())
-              }),
-              n.jsx("button", {
-                onClick:()=>{ if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1); setCalSelectedDay(null); },
-                style:{ background:"none", border:"1px solid #E5E7EB", borderRadius:8, width:34, height:34, cursor:"pointer", fontSize:16 },
-                children:"›",
-              }),
-            ]}),
-
-            // Grille calendrier
-            n.jsxs("div", { style:{ background:"white", borderRadius:16, border:"1px solid #E5E7EB", overflow:"hidden" }, children:[
-              // Header jours
-              n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", background:"#F9FAFB", borderBottom:"1px solid #E5E7EB" }, children:
-                ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d =>
-                  n.jsx("div", { key:d, style:{ padding:"10px 0", textAlign:"center", fontSize:11, fontWeight:700, color:"#9CA3AF", letterSpacing:".5px" }, children:d })
-                )
-              }),
-              // Cellules
-              n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(7,1fr)" }, children:
-                Array.from({ length: calFirstDowMon + calDaysInMonth }, (_, i) => {
-                  if (i < calFirstDowMon) return n.jsx("div", { key:"empty"+i, style:{ minHeight:80, borderRight:"1px solid #F3F4F6", borderBottom:"1px solid #F3F4F6", background:"#FAFAFA" } });
-                  const day = i - calFirstDowMon + 1;
-                  const posts = getPostsForDay(calYear, calMonth, day);
-                  const today = new Date();
-                  const isToday = today.getFullYear()===calYear && today.getMonth()===calMonth && today.getDate()===day;
-                  const isSelected = calSelectedDay === day;
-                  return n.jsxs("div", {
-                    key:"day"+day,
-                    onClick:()=>setCalSelectedDay(isSelected ? null : day),
-                    style:{ minHeight:80, borderRight:"1px solid #F3F4F6", borderBottom:"1px solid #F3F4F6", padding:"6px 8px", cursor: posts.length > 0 ? "pointer" : "default", background: isSelected ? "#F5F3FF" : isToday ? "#EFF6FF" : "white", transition:"background 0.15s" },
-                    children:[
-                      n.jsx("div", { style:{ fontSize:12, fontWeight: isToday ? 800 : 500, marginBottom:4, width:22, height:22, borderRadius:"50%", background:isToday?"#4F46E5":"transparent", color:isToday?"white":"#374151", display:"flex", alignItems:"center", justifyContent:"center" }, children:day }),
-                      posts.slice(0,2).map((p2,pi) => n.jsx("div", {
-                        key:pi,
-                        style:{ fontSize:10, fontWeight:700, borderRadius:4, padding:"2px 5px", marginBottom:2, background: p2._kind==="scheduled" ? "#F3F0FF" : "#F0FDF4", color: p2._kind==="scheduled" ? "#6B40D8" : "#065F46", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:"100%" },
-                        children: (p2._kind==="scheduled" ? "⏳ " : "✅ ") + (p2.title || p2.text || "").slice(0,20),
-                      })),
-                      posts.length > 2 && n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", fontWeight:600 }, children:`+${posts.length-2}` }),
-                    ],
-                  });
-                })
-              }),
-            ]}),
-
-            // Détail du jour sélectionné
-            calSelectedDay !== null && (() => {
-              const dayPosts = getPostsForDay(calYear, calMonth, calSelectedDay);
-              if (!dayPosts.length) return null;
-              return n.jsxs("div", { style:{ marginTop:16, background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"16px 20px" }, children:[
-                n.jsx("div", { style:{ fontSize:13, fontWeight:800, color:"#1E1B30", marginBottom:12 }, children:
-                  `Posts du ${calSelectedDay} ${new Date(calYear,calMonth,1).toLocaleDateString("fr-FR",{month:"long"})}`
+            // ── BARRE DE NAVIGATION ──
+            n.jsxs("div", {
+              style:{ background:"white", border:"1px solid #E8EDF5", borderRadius:14, padding:"10px 16px", marginBottom:10, display:"flex", alignItems:"center", gap:14, flexShrink:0 },
+              children:[
+                // Navigation mois
+                n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:6 }, children:[
+                  n.jsx("button", {
+                    onClick:()=>{ if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1); setCalSelectedDay(null); setCalSelectedPost(null); },
+                    style:{ width:30,height:30,borderRadius:8,border:"1.5px solid #e2e8f0",background:"white",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" },
+                    children:"‹",
+                  }),
+                  n.jsx("div", { style:{ fontSize:17,fontWeight:800,color:"var(--ink)",minWidth:170,textAlign:"center" }, children:
+                    ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"][calMonth] + " " + calYear
+                  }),
+                  n.jsx("button", {
+                    onClick:()=>{ if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1); setCalSelectedDay(null); setCalSelectedPost(null); },
+                    style:{ width:30,height:30,borderRadius:8,border:"1.5px solid #e2e8f0",background:"white",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" },
+                    children:"›",
+                  }),
+                ]}),
+                // Aujourd'hui
+                n.jsx("button", {
+                  onClick:()=>{ setCalYear(calToday.getFullYear()); setCalMonth(calToday.getMonth()); setCalSelectedDay(calToday.getDate()); setCalSelectedPost(null); },
+                  style:{ padding:"5px 12px",borderRadius:7,border:"1.5px solid #e2e8f0",background:"white",cursor:"pointer",fontFamily:"inherit",fontSize:11.5,color:"var(--ink3)",fontWeight:600 },
+                  children:"Aujourd'hui",
                 }),
-                dayPosts.map((p2,pi) => n.jsxs("div", {
-                  key:pi,
-                  style:{ background: p2._kind==="scheduled" ? "#F5F3FF" : "#F0FDF4", borderRadius:10, padding:"12px 14px", marginBottom:8, display:"flex", alignItems:"flex-start", gap:10 },
-                  children:[
-                    n.jsx("div", { style:{ fontSize:20, flexShrink:0 }, children: typeIcons[p2.type] || (p2._kind==="scheduled"?"📅":"📋") }),
-                    n.jsxs("div", { style:{ flex:1 }, children:[
-                      n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", marginBottom:4 }, children:[
-                        n.jsx("span", { style:{ fontSize:12, fontWeight:700, color:"#1E1B30" }, children: p2.title || (p2.text||"").slice(0,60) }),
-                        n.jsx("span", { style:{ fontSize:10, fontWeight:700, borderRadius:8, padding:"2px 8px", background: p2._kind==="scheduled"?"#EDE9FE":"#D1FAE5", color: p2._kind==="scheduled"?"#6B40D8":"#065F46" }, children: p2._kind==="scheduled"?"⏳ Planifié":"✅ Publié" }),
-                      ]}),
-                      p2.text && n.jsx("div", { style:{ fontSize:12, color:"#6B7280", lineHeight:1.5 }, children: p2.text.slice(0,150)+(p2.text.length>150?"...":"") }),
-                      p2.time && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:4 }, children:`🕐 ${p2.time}` }),
-                    ]}),
-                    p2._kind==="scheduled" && p2.status!=="published" && n.jsx("button",{onClick:()=>deleteScheduledPost(p2.id),style:{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:14},children:"✕"}),
-                    p2._kind==="published" && n.jsx("button",{onClick:()=>deletePost(p2.id),style:{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:14},children:"✕"}),
-                  ],
-                })),
-              ]});
-            })(),
+                // Stats du mois
+                calMonthTotal > 0 && n.jsxs("div", { style:{ marginLeft:"auto",display:"flex",alignItems:"center",gap:18 }, children:[
+                  [
+                    { l:"Planifiés", v:calMonthTotal, c:"var(--indigo2)" },
+                    { l:"Publiés", v:calMonthDone, c:"#059669" },
+                    { l:"Restants", v:calMonthTotal-calMonthDone, c:"#d97706" },
+                  ].map(({ l:lbl, v:val, c:col }) =>
+                    n.jsxs("div", { key:lbl, style:{ textAlign:"center" }, children:[
+                      n.jsx("div", { style:{ fontSize:17, fontWeight:800, color:col }, children:val }),
+                      n.jsx("div", { style:{ fontSize:9.5, color:"var(--ink4)" }, children:lbl }),
+                    ]})
+                  ),
+                ]}),
+                // Boutons action
+                n.jsxs("div", { style:{ display:"flex",gap:6,marginLeft:calMonthTotal>0?0:"auto" }, children:[
+                  isGoogleConnected && n.jsx("button", {
+                    onClick:()=>setShowScheduleModal(true),
+                    style:{ padding:"6px 13px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#4285F4,#34A853)",color:"white",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5 },
+                    children:"🚀 Google",
+                  }),
+                ]}),
+              ],
+            }),
 
-            // Stats du mois
-            allCalPosts.length > 0 && n.jsxs("div", { style:{ display:"flex", gap:10, marginTop:16, flexWrap:"wrap" }, children:[
-              { label:"Posts publiés", value:publishedPosts.length, col:"#059669", bg:"#F0FDF4" },
-              { label:"Planifiés", value:scheduledPosts.length, col:"#6B40D8", bg:"#F5F3FF" },
-              { label:"Ce mois", value:allCalPosts.filter(p2=>p2.date&&p2.date.startsWith(`${calYear}-${String(calMonth+1).padStart(2,"0")}`)).length, col:"#0891b2", bg:"#ECFEFF" },
-            ].map(s=>n.jsxs("div",{key:s.label,style:{background:s.bg,border:`1px solid ${s.col}30`,borderRadius:10,padding:"10px 18px",display:"flex",gap:10,alignItems:"center"},children:[
-              n.jsx("div",{style:{fontSize:22,fontWeight:900,color:s.col},children:s.value}),
-              n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:s.label}),
-            ]}))
+            // ── LAYOUT PRINCIPAL : grille + panneau détail ──
+            n.jsxs("div", { style:{ display:"flex", gap:12, alignItems:"flex-start" }, children:[
+
+              // ── GRILLE CALENDRIER ──
+              n.jsxs("div", { style:{ flex:1, background:"#F4F5FA", borderRadius:14, padding:10, minWidth:0 }, children:[
+                // En-têtes jours
+                n.jsx("div", { style:{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:3 }, children:
+                  ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d =>
+                    n.jsx("div", { key:d, style:{ textAlign:"center",fontSize:10,fontWeight:600,color:"#94A3B8",padding:"5px 0",textTransform:"uppercase",letterSpacing:".4px" }, children:d })
+                  )
+                }),
+                // Cellules
+                n.jsx("div", { style:{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3 }, children:
+                  calCells.map((day, ci) => {
+                    if (!day) return n.jsx("div", { key:"e"+ci, style:{ minHeight:80 } });
+                    const key = calDayKey(calYear, calMonth, day);
+                    const dayPosts = getCalDayPosts(calYear, calMonth, day);
+                    const isToday = day===calToday.getDate() && calMonth===calToday.getMonth() && calYear===calToday.getFullYear();
+                    const isSelected = calSelectedDay===day;
+                    return n.jsxs("div", {
+                      key:"d"+day,
+                      onClick:()=>{ setCalSelectedDay(isSelected?null:day); setCalSelectedPost(null); setCalAddMode(false); setCalAddTitle(""); },
+                      style:{ minHeight:80, border:`1.5px solid ${isSelected?"var(--indigo2)":isToday?"#FBCFE8":"#F4F5FA"}`, borderRadius:10, padding:"6px 7px", background:isSelected?"#f0edff":isToday?"#fff":"#fff", cursor:"pointer", transition:"all .15s" },
+                      children:[
+                        n.jsxs("div", { style:{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3 }, children:[
+                          n.jsx("span", { style:{ fontSize:11.5,fontWeight:isToday?800:600,color:isToday?"var(--indigo2)":"#374151",width:20,height:20,borderRadius:5,background:isToday?"#ffffff":"transparent",display:"flex",alignItems:"center",justifyContent:"center" }, children:day }),
+                          dayPosts.length > 0 && n.jsxs("span", { style:{ fontSize:9,color:"var(--indigo2)",fontWeight:700,background:"#F4F5FA",borderRadius:4,padding:"1px 4px" }, children:[ dayPosts.filter(p2=>p2.done).length, "/", dayPosts.length ] }),
+                        ]}),
+                        dayPosts.slice(0,3).map((p2, pi) => {
+                          const vtEntry = vt.find(v2=>v2.id===p2.type) || vt[0];
+                          const isGoogle = p2._src==="google";
+                          const isDone = p2.done;
+                          return n.jsxs("div", {
+                            key:pi,
+                            onClick:ev=>{ ev.stopPropagation(); setCalSelectedDay(day); setCalSelectedPost(p2); setCalAddMode(false); },
+                            style:{ display:"flex",alignItems:"center",gap:3,padding:"2px 5px",borderRadius:4,background:isDone?"#f0fdf4":isGoogle?"#F0F4FF":vtEntry.bg||"#f5f3ff",marginBottom:2,cursor:"pointer" },
+                            children:[
+                              n.jsx("div", { style:{ width:5,height:5,borderRadius:2,background:isDone?"#22C55E":isGoogle?"#4285F4":vtEntry.color,flexShrink:0 } }),
+                              n.jsx("span", { style:{ fontSize:10,fontWeight:600,color:isDone?"#15803d":isGoogle?"#1D4ED8":vtEntry.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textDecoration:isDone?"line-through":"none" }, children: (isGoogle?"🚀 ":"") + (p2.title||"").slice(0,18) }),
+                            ],
+                          }, pi);
+                        }),
+                        dayPosts.length > 3 && n.jsx("div", { style:{ fontSize:9.5,color:"var(--indigo2)",fontWeight:700,marginTop:2,paddingLeft:4 }, children:`+${dayPosts.length-3} de plus` }),
+                      ],
+                    }, "d"+day);
+                  })
+                }),
+              ]}),
+
+              // ── PANNEAU DÉTAIL / AJOUT ──
+              calSelectedDay !== null && n.jsxs("div", {
+                style:{ width:260,flexShrink:0,background:"white",border:"1px solid #E8EDF5",borderRadius:14,overflow:"hidden" },
+                children:[
+                  // En-tête jour sélectionné
+                  n.jsxs("div", { style:{ background:"var(--indigo2)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center" }, children:[
+                    n.jsxs("div", { children:[
+                      n.jsx("div", { style:{ fontSize:22,fontWeight:900,color:"white",lineHeight:1 }, children:calSelectedDay }),
+                      n.jsx("div", { style:{ fontSize:11,color:"rgba(255,255,255,.8)",fontWeight:600 }, children:
+                        ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"][calMonth] + " " + calYear
+                      }),
+                    ]}),
+                    n.jsx("button", { onClick:()=>{ setCalSelectedDay(null); setCalSelectedPost(null); setCalAddMode(false); }, style:{ background:"rgba(255,255,255,.2)",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",color:"white",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center" }, children:"✕" }),
+                  ]}),
+
+                  // Liste posts du jour
+                  n.jsxs("div", { style:{ padding:"10px 14px",maxHeight:340,overflowY:"auto" }, children:[
+                    (() => {
+                      const dayPosts = getCalDayPosts(calYear, calMonth, calSelectedDay);
+                      if (dayPosts.length === 0 && !calAddMode) return n.jsx("div", { style:{ textAlign:"center",padding:"20px 0",color:"#9CA3AF",fontSize:12 }, children:"Aucun post · cliquez + pour ajouter" });
+                      return dayPosts.map((p2, pi) => {
+                        const vtEntry = vt.find(v2=>v2.id===p2.type)||vt[0];
+                        const isGoogle = p2._src==="google";
+                        const isSelected2 = calSelectedPost?.id === p2.id;
+                        const key = calDayKey(calYear, calMonth, calSelectedDay);
+                        return n.jsxs("div", {
+                          key:pi,
+                          onClick:()=>setCalSelectedPost(isSelected2?null:p2),
+                          style:{ background:isSelected2?"#f0edff":"#FAFAFA",border:`1.5px solid ${isSelected2?"var(--indigo2)":"#F0F0F0"}`,borderRadius:9,padding:"8px 10px",marginBottom:6,cursor:"pointer",transition:"all .15s" },
+                          children:[
+                            n.jsxs("div", { style:{ display:"flex",alignItems:"center",gap:7,marginBottom:isSelected2?6:0 }, children:[
+                              n.jsx("div", { style:{ width:8,height:8,borderRadius:3,background:isGoogle?"#4285F4":vtEntry.color,flexShrink:0 } }),
+                              n.jsx("span", { style:{ flex:1,fontSize:12,fontWeight:700,color:"#1E1B30",textDecoration:p2.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }, children:(isGoogle?"🚀 ":"")+(p2.title||"") }),
+                              n.jsx("span", { style:{ fontSize:10,background:p2.done?"#D1FAE5":"#F0F0F0",color:p2.done?"#065F46":"#9CA3AF",borderRadius:4,padding:"1px 6px",fontWeight:700 }, children:p2.done?"✓ Fait":"À faire" }),
+                            ]}),
+                            isSelected2 && n.jsxs("div", { style:{ display:"flex",gap:5,flexWrap:"wrap" }, children:[
+                              !isGoogle && p2._src==="cal" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();calToggleDone(key,p2.id);}, style:{ flex:1,padding:"5px",borderRadius:6,border:"none",background:p2.done?"#FEF3C7":"#D1FAE5",color:p2.done?"#92400E":"#065F46",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:p2.done?"↩ Remettre en cours":"✓ Marquer fait" }),
+                              !isGoogle && p2._src==="cal" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();calDeletePost(key,p2.id);}, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"🗑" }),
+                              isGoogle && p2._src==="google" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();deleteScheduledPost(p2.id);}, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"Supprimer" }),
+                              isGoogle && p2._src==="published" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();deletePost(p2.id);}, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"Supprimer" }),
+                            ]}),
+                          ],
+                        }, pi);
+                      });
+                    })(),
+
+                    // Formulaire d'ajout inline
+                    calAddMode === "editorial" && n.jsxs("div", { style:{ background:"#F5F3FF",borderRadius:10,padding:"10px 12px",marginTop:8,border:"1.5px solid var(--indigo2)" }, children:[
+                      n.jsx("input", { autoFocus:true, placeholder:"Titre du post…", value:calAddTitle, onChange:ev=>setCalAddTitle(ev.target.value), onKeyDown:ev=>{ if(ev.key==="Enter") calSavePost(); if(ev.key==="Escape"){setCalAddMode(false);setCalAddTitle("");} }, style:{ width:"100%",border:"1.5px solid #C4B5FD",borderRadius:7,padding:"7px 10px",fontSize:12,fontFamily:"inherit",marginBottom:8,boxSizing:"border-box" } }),
+                      n.jsx("select", { value:calAddType, onChange:ev=>setCalAddType(ev.target.value), style:{ width:"100%",border:"1.5px solid #C4B5FD",borderRadius:7,padding:"6px 8px",fontSize:12,fontFamily:"inherit",marginBottom:8,boxSizing:"border-box" },
+                        children: vt.map(v2 => n.jsx("option",{value:v2.id,children:v2.label},v2.id))
+                      }),
+                      n.jsxs("div", { style:{ display:"flex",gap:6 }, children:[
+                        n.jsx("button", { onClick:calSavePost, style:{ flex:1,padding:"6px",borderRadius:6,border:"none",background:"var(--indigo2)",color:"white",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"✓ Ajouter" }),
+                        n.jsx("button", { onClick:()=>{setCalAddMode(false);setCalAddTitle("");}, style:{ padding:"6px 10px",borderRadius:6,border:"1px solid #E5E7EB",background:"white",color:"#6B7280",fontSize:12,cursor:"pointer",fontFamily:"inherit" }, children:"✕" }),
+                      ]}),
+                    ]}),
+                  ]}),
+
+                  // Footer boutons d'ajout
+                  !calAddMode && n.jsxs("div", { style:{ padding:"10px 14px",borderTop:"1px solid #F0F0F0",display:"flex",gap:6 }, children:[
+                    n.jsx("button", { onClick:()=>{ setCalAddMode("editorial"); setCalAddTitle(""); }, style:{ flex:1,padding:"7px",borderRadius:8,border:"1.5px solid var(--indigo2)",background:"white",color:"var(--indigo2)",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"+ Post éditorial" }),
+                    isGoogleConnected && n.jsx("button", { onClick:()=>{ setScheduleForm(f=>({...f,date:calDayKey(calYear,calMonth,calSelectedDay)})); setShowScheduleModal(true); }, style:{ flex:1,padding:"7px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#4285F4,#34A853)",color:"white",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"🚀 Google" }),
+                  ]}),
+                ],
+              }),
+            ]}),
+
+            // Légende des types (en bas)
+            n.jsx("div", { style:{ display:"flex",gap:12,marginTop:10,flexWrap:"wrap",padding:"8px 0" }, children:
+              vt.map(v2 => n.jsxs("div", { key:v2.id, style:{ display:"flex",alignItems:"center",gap:5 }, children:[
+                n.jsx("div", { style:{ width:8,height:8,borderRadius:2,background:v2.color } }),
+                n.jsx("span", { style:{ fontSize:11,color:"var(--ink3)",fontWeight:500 }, children:v2.label }),
+              ]}))
             }),
           ]}),
 
