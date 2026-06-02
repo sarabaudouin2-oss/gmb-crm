@@ -7058,651 +7058,208 @@ function NotificationsPage({
   setNotifDelay: r,
   getLvl: o,
   calcScore: s,
+  reviewAlerts = [],
+  ficheAlerts = [],
+  onDismissReview,
+  onDismissFiche,
 }) {
-  const l = Date.now(),
-    a = 864e5,
-    [d, p] = D.useState("all"),
-    b = [];
-  e.forEach((h) => {
-    var f, c, u, m, C, B;
-    try {
-      const k = s({ ...(h.scores || {}), ...(h.manualOverrides || {}) }),
-        R = ((f = h.data) == null ? void 0 : f.extracted) || {},
-        N = (((c = h.avisData) == null ? void 0 : c.recentAvis) || []).filter(
-          (y) => !y.reponse,
-        ).length,
-        E = h.date ? Math.floor((l - new Date(h.date).getTime()) / a) : 999,
-        M = h.calPosts || [],
-        T = M.filter((y) => y.done).sort(
-          (y, O) => new Date(O.date || 0) - new Date(y.date || 0),
-        )[0],
-        _ =
-          T != null && T.date
-            ? Math.floor((l - new Date(T.date).getTime()) / a)
-            : null,
-        U = parseFloat(
-          ((u = h.avisData) == null ? void 0 : u.note) || R.rating || 0,
-        ),
-        V = parseInt(
-          ((m = h.avisData) == null ? void 0 : m.totalAvis) ||
-            R.reviewCount ||
-            0,
-        ),
-        G = parseInt(((C = h.avisData) == null ? void 0 : C.responseRate) || 0);
-      if (
-        (k < 50 &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "score",
-            prio: "critical",
-            icon: "📉",
-            label: `Score critique — ${k}/100`,
-            detail: "La fiche nécessite une intervention urgente",
-            action: "Lancer un audit",
-          }),
-        N > 0 &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "avis",
-            prio: "high",
-            icon: "💬",
-            label: `${N} avis sans réponse`,
-            detail: "Répond vite pour maintenir ton taux",
-            action: "Onglet Avis",
-          }),
-        G > 0 &&
-          G < 80 &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "taux",
-            prio: "high",
-            icon: "⭐",
-            label: `Taux de réponse ${G}% — sous les 80%`,
-            detail: "Google pénalise les fiches peu réactives",
-            action: "Répondre aux avis",
-          }),
-        U > 0 &&
-          U < 4 &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "note",
-            prio: U < 3 ? "critical" : "high",
-            icon: "⚠️",
-            label: `Note ${U}/5 — à améliorer`,
-            detail: "Déclenche une campagne de collecte d'avis positifs",
-            action: "Stratégie avis",
-          }),
-        E >= i &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "audit",
-            prio: E > 90 ? "critical" : "medium",
-            icon: "🔄",
-            label: `Audit en retard — ${E}j sans mise à jour`,
-            detail: `Dernier audit : ${new Date(h.date).toLocaleDateString("fr-FR")}`,
-            action: "Mettre à jour",
-          }),
-        _ !== null && _ > 14
-          ? b.push({
-              clientId: h.id,
-              client: h,
-              type: "post",
-              prio: _ > 30 ? "high" : "medium",
-              icon: "📝",
-              label: `Dernier post il y a ${_} jours`,
-              detail: "1 post/semaine = critère GMB pour le TOP 3",
-              action: "Onglet Posts",
-            })
-          : _ === null &&
-            M.length > 0 &&
-            b.push({
-              clientId: h.id,
-              client: h,
-              type: "post",
-              prio: "medium",
-              icon: "📝",
-              label: "Aucun post publié encore",
-              detail: "Publie le premier post pour activer la fiche",
-              action: "Onglet Posts",
-            }),
-        V > 0 &&
-          V < 20 &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "avis_count",
-            prio: "medium",
-            icon: "🌟",
-            label: `Seulement ${V} avis Google`,
-            detail: "Objectif minimum : 20 avis pour apparaître en TOP 3",
-            action: "Stratégie avis",
-          }),
-        ((B = h.history) == null ? void 0 : B.length) > 0)
-      ) {
-        const y = s(h.history[h.history.length - 1].scores || {});
-        k < y - 5 &&
-          b.push({
-            clientId: h.id,
-            client: h,
-            type: "regression",
-            prio: "high",
-            icon: "📊",
-            label: `Score en baisse — ${y} → ${k} pts`,
-            detail: "Identifier ce qui a changé ce mois-ci",
-            action: "Voir le rapport",
-          });
+  const today = new Date().toISOString().slice(0,10);
+  const todayLabel = new Date().toLocaleDateString("fr-FR", { day:"numeric", month:"long" });
+
+  // ── 1. Alertes publications ──
+  const postAlerts = [];
+  e.forEach(cl => {
+    // Posts planifiés en retard (scheduledPosts)
+    (cl.scheduledPosts || []).forEach(p => {
+      if (p.date && p.date <= today && p.status !== "published") {
+        postAlerts.push({ clientId: cl.id, client: cl, postId: p.id, title: p.text?.slice(0,60) || "Post sans titre", date: p.date, type: "scheduled", overdue: p.date < today });
       }
-    } catch (k) {
-      console.warn("Alert error", h == null ? void 0 : h.name, k);
-    }
+    });
+    // Posts cal non faits dont la date est passée ou aujourd'hui
+    const calObj = cl.calPosts || {};
+    Object.entries(calObj).forEach(([dateKey, posts]) => {
+      if (dateKey <= today) {
+        (Array.isArray(posts) ? posts : []).filter(p => !p.done).forEach(p => {
+          postAlerts.push({ clientId: cl.id, client: cl, postId: p.id, title: p.title || p.type || "Post éditorial", date: dateKey, type: "editorial", overdue: dateKey < today });
+        });
+      }
+    });
   });
-  const x = { critical: 0, high: 1, medium: 2 };
-  b.sort((h, f) => (x[h.prio] || 3) - (x[f.prio] || 3));
-  const j = {
-      critical: {
-        bg: "#FEF2F2",
-        border: "#FECACA",
-        dot: "#DC2626",
-        badge: "#DC2626",
-        label: "Critique",
-      },
-      high: {
-        bg: "#FFF7ED",
-        border: "#FED7AA",
-        dot: "#EA580C",
-        badge: "#EA580C",
-        label: "Urgent",
-      },
-      medium: {
-        bg: "#F4F5FA",
-        border: "#E5E7EB",
-        dot: "#6B7280",
-        badge: "#6B40D8",
-        label: "À planifier",
-      },
-    },
-    I = {
-      critical: b.filter((h) => h.prio === "critical").length,
-      high: b.filter((h) => h.prio === "high").length,
-      medium: b.filter((h) => h.prio === "medium").length,
-    },
-    z = d === "all" ? b : b.filter((h) => h.prio === d),
-    g = {};
-  return (
-    z.forEach((h) => {
-      (g[h.clientId] || (g[h.clientId] = { client: h.client, alerts: [] }),
-        g[h.clientId].alerts.push(h));
-    }),
-    n.jsxs("div", {
-      style: {
-        padding: "28px 32px",
-        background: "#F4F5FA",
-        minHeight: "100%",
-        overflowY: "auto",
-      },
-      className: "fade",
-      children: [
-        n.jsxs("div", {
-          style: {
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 12,
-          },
-          children: [
-            n.jsxs("div", {
-              children: [
-                n.jsx("div", {
-                  style: {
-                    fontSize: 22,
-                    fontWeight: 900,
-                    color: "#1E1B30",
-                    letterSpacing: "-.02em",
-                    marginBottom: 4,
-                  },
-                  children: "◆ Rappels & Alertes",
-                }),
-                n.jsxs("div", {
-                  style: { fontSize: 13, color: "#6B7280" },
-                  children: [
-                    b.length,
-                    " alerte",
-                    b.length > 1 ? "s" : "",
-                    " sur ",
-                    e.length,
-                    " client",
-                    e.length > 1 ? "s" : "",
-                  ],
-                }),
-              ],
-            }),
-            n.jsxs("div", {
-              style: { display: "flex", alignItems: "center", gap: 8 },
-              children: [
-                n.jsx("span", {
-                  style: { fontSize: 12, color: "#6B7280", fontWeight: 500 },
-                  children: "Audit après",
-                }),
-                [14, 30, 60, 90].map((h) =>
-                  n.jsxs(
-                    "button",
-                    {
-                      onClick: () => r(h),
-                      style: {
-                        padding: "5px 11px",
-                        borderRadius: 7,
-                        border: "none",
-                        background: i === h ? "#6B40D8" : "white",
-                        color: i === h ? "white" : "#6B7280",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                        fontSize: 12,
-                        border: `1px solid ${i === h ? "#6B40D8" : "#E5E7EB"}`,
-                      },
-                      children: [h, "j"],
-                    },
-                    h,
-                  ),
-                ),
-              ],
-            }),
-          ],
-        }),
-        n.jsx("div", {
-          style: {
-            display: "grid",
-            gridTemplateColumns: "repeat(4,1fr)",
-            gap: 10,
-            marginBottom: 20,
-          },
-          children: [
-            {
-              l: "Clients suivis",
-              v: e.length,
-              c: "#6B40D8",
-              icon: "👥",
-              f: null,
-            },
-            {
-              l: "Critiques",
-              v: I.critical,
-              c: I.critical ? "#DC2626" : "#059669",
-              icon: "🔴",
-              f: "critical",
-            },
-            {
-              l: "Urgentes",
-              v: I.high,
-              c: I.high ? "#EA580C" : "#059669",
-              icon: "🟠",
-              f: "high",
-            },
-            {
-              l: "À planifier",
-              v: I.medium,
-              c: I.medium ? "#6B40D8" : "#059669",
-              icon: "🟡",
-              f: "medium",
-            },
-          ].map(({ l: h, v: f, c, icon: u, f: m }) =>
-            n.jsxs(
-              "div",
-              {
-                onClick: () => m && p(d === m ? "all" : m),
-                style: {
-                  background: d === m ? "#1E1B30" : "white",
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  border: `1px solid ${d === m ? "#1E1B30" : "#E5E7EB"}`,
-                  borderTop: `3px solid ${c}`,
-                  textAlign: "center",
-                  cursor: m ? "pointer" : "default",
-                  transition: "all .15s",
-                },
-                children: [
-                  n.jsx("div", {
-                    style: { fontSize: 20, marginBottom: 6 },
-                    children: u,
-                  }),
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 26,
-                      fontWeight: 900,
-                      color: d === m ? "white" : c,
-                      lineHeight: 1,
-                    },
-                    children: f,
-                  }),
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 11,
-                      color: d === m ? "rgba(255,255,255,.6)" : "#6B7280",
-                      marginTop: 4,
-                    },
-                    children: h,
-                  }),
+  postAlerts.sort((a,b) => a.date < b.date ? 1 : -1);
+
+  // ── 2. Alertes clients (score, audit, etc.) ──
+  const clientAlerts = [];
+  e.forEach(cl => {
+    try {
+      const score = s({ ...(cl.scores||{}), ...(cl.manualOverrides||{}) });
+      const lastDate = cl.history?.length > 0 ? cl.history[cl.history.length-1].date : cl.date;
+      const staleDays = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : 999;
+      const rating = parseFloat(cl.avisData?.note || cl.data?.extracted?.rating || 0);
+      const reviewCount = parseInt(cl.avisData?.totalAvis || cl.data?.extracted?.reviewCount || 0);
+
+      if (score < 50) clientAlerts.push({ clientId: cl.id, client: cl, prio: "critical", icon: "📉", label: `Score critique — ${score}/100`, detail: "Intervention urgente requise", action: "audit" });
+      if (staleDays >= i) clientAlerts.push({ clientId: cl.id, client: cl, prio: staleDays > 90 ? "critical" : "medium", icon: "🔄", label: `Audit en retard — ${staleDays}j`, detail: `Dernier : ${new Date(lastDate).toLocaleDateString("fr-FR")}`, action: "audit" });
+      if (rating > 0 && rating < 4) clientAlerts.push({ clientId: cl.id, client: cl, prio: rating < 3 ? "critical" : "high", icon: "⚠️", label: `Note ${rating}/5 — à améliorer`, detail: "Déclencher une campagne avis", action: "avis" });
+      if (reviewCount > 0 && reviewCount < 20) clientAlerts.push({ clientId: cl.id, client: cl, prio: "medium", icon: "🌟", label: `Seulement ${reviewCount} avis Google`, detail: "Objectif minimum : 20 avis pour TOP 3", action: "avis" });
+      if (cl.history?.length > 0) {
+        const prevScore = s(cl.history[cl.history.length-1].scores || {});
+        if (score < prevScore - 5) clientAlerts.push({ clientId: cl.id, client: cl, prio: "high", icon: "📊", label: `Score en baisse — ${prevScore} → ${score} pts`, detail: "Identifier ce qui a changé", action: "audit" });
+      }
+    } catch(_) {}
+  });
+  clientAlerts.sort((a,b) => { const x={critical:0,high:1,medium:2}; return (x[a.prio]||3)-(x[b.prio]||3); });
+
+  const prioStyle = {
+    critical: { bg:"#FEF2F2", border:"#FECACA", dot:"#DC2626", tag:"Critique", tagBg:"#DC2626" },
+    high:     { bg:"#FFF7ED", border:"#FED7AA", dot:"#EA580C", tag:"Urgent",   tagBg:"#EA580C" },
+    medium:   { bg:"#F4F5FA", border:"#E5E7EB", dot:"#6B7280", tag:"Info",     tagBg:"#6B40D8" },
+  };
+
+  const totalCount = reviewAlerts.length + ficheAlerts.length + postAlerts.length + clientAlerts.filter(a=>a.prio==="critical"||a.prio==="high").length;
+
+  return n.jsxs("div", {
+    style: { padding:"28px 32px", background:"#F4F5FA", minHeight:"100%", overflowY:"auto" },
+    className: "fade",
+    children: [
+      // Header
+      n.jsxs("div", { style:{ marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }, children:[
+        n.jsxs("div", { children:[
+          n.jsxs("div", { style:{ fontSize:22, fontWeight:900, color:"#1E1B30", letterSpacing:"-.02em" }, children:[
+            "🔔 Rappels & Alertes",
+            totalCount > 0 && n.jsx("span", { style:{ marginLeft:10, background:"#DC2626", color:"white", borderRadius:20, padding:"2px 10px", fontSize:13, fontWeight:700 }, children: totalCount }),
+          ]}),
+          n.jsx("div", { style:{ fontSize:13, color:"#6B7280", marginTop:4 }, children: `Aujourd'hui — ${todayLabel}` }),
+        ]}),
+        // Délai audit
+        n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8, background:"white", border:"1.5px solid #E5E7EB", borderRadius:10, padding:"8px 14px" }, children:[
+          n.jsx("span", { style:{ fontSize:12, color:"#6B7280" }, children:"⏱ Rappel audit tous les" }),
+          n.jsx("input", { type:"number", min:7, max:365, value:i, onChange:ev=>r(parseInt(ev.target.value)||30), style:{ width:48, border:"1.5px solid #D1D5DB", borderRadius:6, padding:"3px 6px", fontSize:12, fontFamily:"inherit", textAlign:"center" } }),
+          n.jsx("span", { style:{ fontSize:12, color:"#6B7280" }, children:"jours" }),
+        ]}),
+      ]}),
+
+      // ── Section 1 : Nouveaux avis ──
+      n.jsxs("div", { style:{ marginBottom:24 }, children:[
+        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
+          "⭐ Nouveaux avis",
+          n.jsx("span", { style:{ background: reviewAlerts.length>0?"#DC2626":"#E5E7EB", color: reviewAlerts.length>0?"white":"#9CA3AF", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: reviewAlerts.length }),
+        ]}),
+        reviewAlerts.length === 0
+          ? n.jsx("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:"16px 20px", fontSize:13, color:"#9CA3AF", textAlign:"center" }, children:"✅ Aucun nouvel avis — tout est à jour" })
+          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
+              reviewAlerts.map(al => n.jsxs("div", {
+                key: al.clientId,
+                style:{ background:"#F0FDF4", border:"1.5px solid #BBF7D0", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 },
+                children:[
+                  n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
+                    n.jsx("div", { style:{ fontSize:28 }, children: al.reviews?.some(r=>r.rating<=2) ? "⚠️" : "⭐" }),
+                    n.jsxs("div", { children:[
+                      n.jsxs("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30" }, children:[
+                        al.clientName,
+                        n.jsx("span", { style:{ marginLeft:8, background:"#DC2626", color:"white", borderRadius:10, padding:"1px 7px", fontSize:11, fontWeight:700 }, children: `${al.count} nouveau${al.count>1?"x":""}` }),
+                        al.reviews?.some(r=>r.rating<=2) && n.jsx("span", { style:{ marginLeft:6, background:"#FEE2E2", color:"#DC2626", borderRadius:8, padding:"1px 6px", fontSize:11, fontWeight:700 }, children:"⚠️ Avis négatif" }),
+                      ]}),
+                      n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"Cliquez pour voir et répondre" }),
+                    ]}),
+                  ]}),
+                  n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
+                    n.jsx("button", { onClick:()=>t("client", al.client), style:{ background:"#059669", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Répondre →" }),
+                    n.jsx("button", { onClick:()=>onDismissReview?.(al.clientId), style:{ background:"none", border:"1px solid #D1D5DB", borderRadius:8, padding:"7px 10px", fontSize:12, cursor:"pointer", color:"#6B7280", fontFamily:"inherit" }, children:"✕" }),
+                  ]}),
                 ],
-              },
-              h,
-            ),
-          ),
-        }),
-        b.length > 0 &&
-          n.jsxs("div", {
-            style: {
-              display: "flex",
-              gap: 6,
-              marginBottom: 16,
-              flexWrap: "wrap",
-            },
-            children: [
-              n.jsxs("button", {
-                onClick: () => p("all"),
-                style: {
-                  padding: "5px 12px",
-                  borderRadius: 7,
-                  border: `1px solid ${d === "all" ? "#6B40D8" : "#E5E7EB"}`,
-                  background: d === "all" ? "#6B40D8" : "white",
-                  color: d === "all" ? "white" : "#6B7280",
-                  fontFamily: "inherit",
-                  fontWeight: 600,
-                  fontSize: 12,
-                  cursor: "pointer",
-                },
-                children: ["Tout (", b.length, ")"],
-              }),
-              ["critical", "high", "medium"].map((h) => {
-                const f = I[h];
-                if (!f) return null;
-                const c = j[h];
-                return n.jsxs(
-                  "button",
-                  {
-                    onClick: () => p(d === h ? "all" : h),
-                    style: {
-                      padding: "5px 12px",
-                      borderRadius: 7,
-                      border: `1px solid ${d === h ? c.badge : "#E5E7EB"}`,
-                      background: d === h ? c.badge : "white",
-                      color: d === h ? "white" : "#6B7280",
-                      fontFamily: "inherit",
-                      fontWeight: 600,
-                      fontSize: 12,
-                      cursor: "pointer",
-                    },
-                    children: [c.label, " (", f, ")"],
-                  },
-                  h,
-                );
-              }),
-            ],
-          }),
-        z.length === 0
-          ? n.jsxs("div", {
-              style: {
-                background: "white",
-                borderRadius: 14,
-                textAlign: "center",
-                padding: "60px 24px",
-                border: "1px solid #E5E7EB",
-              },
-              children: [
-                n.jsx("div", {
-                  style: { fontSize: 40, marginBottom: 12 },
-                  children: "✅",
-                }),
-                n.jsx("div", {
-                  style: {
-                    fontSize: 18,
-                    fontWeight: 800,
-                    color: "#1E1B30",
-                    marginBottom: 6,
-                  },
-                  children:
-                    b.length === 0
-                      ? "Tout est à jour !"
-                      : "Aucune alerte dans cette catégorie",
-                }),
-                n.jsx("div", {
-                  style: { fontSize: 13, color: "#6B7280" },
-                  children:
-                    b.length === 0
-                      ? "Aucune alerte pour l'instant. Tes clients sont bien suivis."
-                      : "Sélectionne une autre catégorie pour voir les alertes.",
-                }),
-              ],
-            })
-          : n.jsx("div", {
-              style: { display: "flex", flexDirection: "column", gap: 8 },
-              children: Object.values(g).map(({ client: h, alerts: f }) => {
-                const c = s({
-                    ...(h.scores || {}),
-                    ...(h.manualOverrides || {}),
-                  }),
-                  u = o(c),
-                  m = f.some((k) => k.prio === "critical"),
-                  C = f.some((k) => k.prio === "high"),
-                  B = m ? "#DC2626" : C ? "#EA580C" : "#6B40D8";
-                return n.jsxs(
-                  "div",
-                  {
-                    style: {
-                      background: "white",
-                      borderRadius: 14,
-                      border: "1px solid #E5E7EB",
-                      borderLeft: `4px solid ${B}`,
-                      overflow: "hidden",
-                    },
-                    children: [
-                      n.jsxs("div", {
-                        onClick: () => t("client", h),
-                        style: {
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          padding: "14px 18px",
-                          cursor: "pointer",
-                          borderBottom: "1px solid #F3F4F6",
-                        },
-                        onMouseEnter: (k) =>
-                          (k.currentTarget.style.background = "#FAFAFA"),
-                        onMouseLeave: (k) =>
-                          (k.currentTarget.style.background = "transparent"),
-                        children: [
-                          n.jsx("div", {
-                            style: {
-                              width: 36,
-                              height: 36,
-                              borderRadius: 9,
-                              background: (h.color || "#6B40D8") + "18",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 18,
-                              flexShrink: 0,
-                            },
-                            children: h.icon || "📍",
-                          }),
-                          n.jsxs("div", {
-                            style: { flex: 1, minWidth: 0 },
-                            children: [
-                              n.jsx("div", {
-                                style: {
-                                  fontWeight: 700,
-                                  fontSize: 14,
-                                  color: "#1E1B30",
-                                },
-                                children: h.name,
-                              }),
-                              n.jsxs("div", {
-                                style: { fontSize: 12, color: "#6B7280" },
-                                children: [
-                                  h.category || "",
-                                  h.city ? ` · ${h.city}` : "",
-                                ],
-                              }),
-                            ],
-                          }),
-                          n.jsxs("div", {
-                            style: {
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              flexShrink: 0,
-                            },
-                            children: [
-                              n.jsxs("div", {
-                                style: {
-                                  textAlign: "center",
-                                  background: u.bg,
-                                  borderRadius: 8,
-                                  padding: "4px 12px",
-                                  border: `1px solid ${u.border}`,
-                                },
-                                children: [
-                                  n.jsx("div", {
-                                    style: {
-                                      fontSize: 16,
-                                      fontWeight: 900,
-                                      color: u.color,
-                                      lineHeight: 1,
-                                    },
-                                    children: c,
-                                  }),
-                                  n.jsx("div", {
-                                    style: { fontSize: 9, color: "#9CA3AF" },
-                                    children: "score",
-                                  }),
-                                ],
-                              }),
-                              n.jsxs("div", {
-                                style: { display: "flex", gap: 4 },
-                                children: [
-                                  m &&
-                                    n.jsx("span", {
-                                      style: {
-                                        fontSize: 11,
-                                        background: "#FEF2F2",
-                                        color: "#DC2626",
-                                        border: "1px solid #FECACA",
-                                        borderRadius: 6,
-                                        padding: "2px 7px",
-                                        fontWeight: 700,
-                                      },
-                                      children: "Critique",
-                                    }),
-                                  !m &&
-                                    C &&
-                                    n.jsx("span", {
-                                      style: {
-                                        fontSize: 11,
-                                        background: "#FFF7ED",
-                                        color: "#EA580C",
-                                        border: "1px solid #FED7AA",
-                                        borderRadius: 6,
-                                        padding: "2px 7px",
-                                        fontWeight: 700,
-                                      },
-                                      children: "Urgent",
-                                    }),
-                                ],
-                              }),
-                              n.jsx("span", {
-                                style: {
-                                  fontSize: 12,
-                                  color: "#6B40D8",
-                                  fontWeight: 600,
-                                },
-                                children: "Ouvrir →",
-                              }),
-                            ],
-                          }),
-                        ],
-                      }),
-                      n.jsx("div", {
-                        style: {
-                          padding: "10px 18px 12px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                        },
-                        children: f.map((k, R) => {
-                          const N = j[k.prio];
-                          return n.jsxs(
-                            "div",
-                            {
-                              style: {
-                                display: "flex",
-                                alignItems: "flex-start",
-                                gap: 10,
-                                padding: "8px 12px",
-                                background: N.bg,
-                                borderRadius: 9,
-                                border: `1px solid ${N.border}`,
-                              },
-                              children: [
-                                n.jsx("span", {
-                                  style: {
-                                    fontSize: 15,
-                                    flexShrink: 0,
-                                    marginTop: 1,
-                                  },
-                                  children: k.icon,
-                                }),
-                                n.jsxs("div", {
-                                  style: { flex: 1, minWidth: 0 },
-                                  children: [
-                                    n.jsx("div", {
-                                      style: {
-                                        fontSize: 12.5,
-                                        fontWeight: 700,
-                                        color: "#1E1B30",
-                                      },
-                                      children: k.label,
-                                    }),
-                                    n.jsx("div", {
-                                      style: {
-                                        fontSize: 11.5,
-                                        color: "#6B7280",
-                                        marginTop: 2,
-                                      },
-                                      children: k.detail,
-                                    }),
-                                  ],
-                                }),
-                                n.jsxs("div", {
-                                  style: {
-                                    fontSize: 11,
-                                    color: N.badge,
-                                    fontWeight: 700,
-                                    flexShrink: 0,
-                                    whiteSpace: "nowrap",
-                                  },
-                                  children: [k.action, " →"],
-                                }),
-                              ],
-                            },
-                            R,
-                          );
-                        }),
-                      }),
-                    ],
-                  },
-                  h.id,
-                );
-              }),
+              }))
             }),
-      ],
-    })
-  );
+      ]}),
+
+      // ── Section 2 : Modifications de fiche ──
+      ficheAlerts.length > 0 && n.jsxs("div", { style:{ marginBottom:24 }, children:[
+        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
+          "⚠️ Fiches modifiées par Google",
+          n.jsx("span", { style:{ background:"#EA580C", color:"white", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: ficheAlerts.length }),
+        ]}),
+        n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
+          ficheAlerts.map(al => n.jsxs("div", {
+            key: al.clientId,
+            style:{ background:"#FFF7ED", border:"1.5px solid #FED7AA", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 },
+            children:[
+              n.jsxs("div", { children:[
+                n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30" }, children: "⚠️ " + al.clientName }),
+                n.jsx("div", { style:{ fontSize:12, color:"#B45309", marginTop:2 }, children: al.changes?.join(" · ") }),
+              ]}),
+              n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
+                n.jsx("button", { onClick:()=>t("client", al.client), style:{ background:"#EA580C", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Voir →" }),
+                n.jsx("button", { onClick:()=>onDismissFiche?.(al.clientId), style:{ background:"none", border:"1px solid #D1D5DB", borderRadius:8, padding:"7px 10px", fontSize:12, cursor:"pointer", color:"#6B7280", fontFamily:"inherit" }, children:"✕" }),
+              ]}),
+            ],
+          }))
+        }),
+      ]}),
+
+      // ── Section 3 : Publications à poster ──
+      n.jsxs("div", { style:{ marginBottom:24 }, children:[
+        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
+          "📅 Publications à poster",
+          n.jsx("span", { style:{ background: postAlerts.length>0?"#6B40D8":"#E5E7EB", color: postAlerts.length>0?"white":"#9CA3AF", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: postAlerts.length }),
+        ]}),
+        postAlerts.length === 0
+          ? n.jsx("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:"16px 20px", fontSize:13, color:"#9CA3AF", textAlign:"center" }, children:"✅ Aucune publication en attente aujourd'hui" })
+          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
+              postAlerts.slice(0, 10).map((al, idx) => n.jsxs("div", {
+                key: al.clientId + "_" + al.postId + "_" + idx,
+                style:{ background:"white", border:`1.5px solid ${al.overdue?"#FECACA":"#DDD6FE"}`, borderRadius:12, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 },
+                children:[
+                  n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
+                    n.jsx("div", { style:{ fontSize:22 }, children: al.overdue ? "🔴" : "📝" }),
+                    n.jsxs("div", { children:[
+                      n.jsxs("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:[
+                        al.client.name,
+                        n.jsx("span", { style:{ marginLeft:8, background: al.overdue?"#FEE2E2":"#EDE9FE", color: al.overdue?"#DC2626":"#6B40D8", borderRadius:8, padding:"1px 7px", fontSize:11, fontWeight:700 }, children: al.overdue ? "En retard" : "Aujourd'hui" }),
+                      ]}),
+                      n.jsx("div", { style:{ fontSize:12, color:"#6B7280", marginTop:1 }, children: al.title.length > 60 ? al.title.slice(0,60)+"…" : al.title }),
+                      n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:1 }, children: new Date(al.date).toLocaleDateString("fr-FR", { day:"numeric", month:"long" }) + " · " + (al.type === "scheduled" ? "Post planifié" : "Calendrier éditorial") }),
+                    ]}),
+                  ]}),
+                  n.jsx("button", { onClick:()=>t("client", al.client), style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }, children:"Publier →" }),
+                ],
+              }))
+            }),
+      ]}),
+
+      // ── Section 4 : Alertes clients ──
+      n.jsxs("div", { children:[
+        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
+          "👥 Alertes clients",
+          n.jsx("span", { style:{ background: clientAlerts.length>0?"#6B7280":"#E5E7EB", color: clientAlerts.length>0?"white":"#9CA3AF", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: clientAlerts.length }),
+        ]}),
+        clientAlerts.length === 0
+          ? n.jsx("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:"16px 20px", fontSize:13, color:"#9CA3AF", textAlign:"center" }, children:"✅ Tous les clients sont bien suivis" })
+          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
+              clientAlerts.map((al, idx) => {
+                const ps = prioStyle[al.prio] || prioStyle.medium;
+                return n.jsxs("div", {
+                  key: al.clientId + "_" + idx,
+                  style:{ background:ps.bg, border:`1.5px solid ${ps.border}`, borderRadius:12, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, cursor:"pointer" },
+                  onClick:()=>t("client", al.client),
+                  children:[
+                    n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
+                      n.jsx("div", { style:{ fontSize:20 }, children: al.icon }),
+                      n.jsxs("div", { children:[
+                        n.jsxs("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:[
+                          al.client.name,
+                          n.jsx("span", { style:{ marginLeft:8, background:ps.tagBg, color:"white", borderRadius:8, padding:"1px 7px", fontSize:10, fontWeight:700 }, children: ps.tag }),
+                        ]}),
+                        n.jsx("div", { style:{ fontSize:12, color:"#374151", marginTop:1 }, children: al.label }),
+                        n.jsx("div", { style:{ fontSize:11, color:"#6B7280", marginTop:1 }, children: al.detail }),
+                      ]}),
+                    ]}),
+                    n.jsx("span", { style:{ fontSize:12, color:ps.dot, fontWeight:600 }, children:"→" }),
+                  ],
+                });
+              })
+            }),
+      ]}),
+    ],
+  });
 }
 class ErrorBoundary extends fu.Component {
   constructor(t) {
@@ -7910,9 +7467,10 @@ function App() {
       if (revAlerts.length > 0) setReviewAlerts(revAlerts);
       if (locationAlerts.length > 0) setFicheAlerts(locationAlerts);
     };
-    // Vérifie 3 secondes après le login (laisser l'app s'initialiser)
+    // Vérifie 3 secondes après le login, puis toutes les 15 min
     const timer = setTimeout(checkAllReviews, 3000);
-    return () => clearTimeout(timer);
+    const interval = setInterval(checkAllReviews, 15 * 60 * 1000);
+    return () => { clearTimeout(timer); clearInterval(interval); };
   }, []);
 
   const R = () => {
@@ -7934,31 +7492,28 @@ function App() {
       })
       .sort((T, _) => _.points - T.points)
       .slice(0, 8),
-    M = b
-      .filter((T) => {
-        var V;
-        const _ =
-          ((V = T.history) == null ? void 0 : V.length) > 0
-            ? T.history[T.history.length - 1].date
-            : T.date;
-        return (
-          Math.floor(
-            (Date.now() - new Date(_).getTime()) / (1e3 * 60 * 60 * 24),
-          ) >= f
-        );
-      })
-      .map((T) => {
-        var V;
-        const _ =
-            ((V = T.history) == null ? void 0 : V.length) > 0
-              ? T.history[T.history.length - 1].date
-              : T.date,
-          U = Math.floor(
-            (Date.now() - new Date(_).getTime()) / (1e3 * 60 * 60 * 24),
-          );
-        return { ...T, _staleDays: U };
-      })
-      .sort((T, _) => _._staleDays - T._staleDays).length,
+    M = (() => {
+      // Compter : alertes live (avis + fiche) + posts en retard + audits en retard
+      const today = new Date().toISOString().slice(0,10);
+      let count = reviewAlerts.length + ficheAlerts.length;
+      b.forEach(cl => {
+        // Posts planifiés en retard (scheduledPosts dont date ≤ today et status !== published)
+        const overduePosts = (cl.scheduledPosts || []).filter(p => p.date && p.date <= today && p.status !== "published").length;
+        count += overduePosts;
+        // Posts cal non faits en retard
+        const calObj = cl.calPosts || {};
+        Object.entries(calObj).forEach(([dateKey, posts]) => {
+          if (dateKey <= today) {
+            count += (Array.isArray(posts) ? posts : []).filter(p => !p.done).length;
+          }
+        });
+        // Audit en retard
+        const lastDate = cl.history?.length > 0 ? cl.history[cl.history.length-1].date : cl.date;
+        const staleDays = lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : 999;
+        if (staleDays >= f) count++;
+      });
+      return count;
+    })(),
     P = b.reduce((T, _) => {
       const U = (_.category || "Autre").split(",")[0].trim();
       return (
@@ -8089,6 +7644,10 @@ function App() {
                               setNotifDelay: c,
                               getLvl: getLvl,
                               calcScore: calcScore,
+                              reviewAlerts,
+                              ficheAlerts,
+                              onDismissReview: (id) => setReviewAlerts(prev => prev.filter(a => a.clientId !== id)),
+                              onDismissFiche: (id) => setFicheAlerts(prev => prev.filter(a => a.clientId !== id)),
                             })
                           : l === "mon_espace"
                             ? n.jsx(MonEspacePage, {
