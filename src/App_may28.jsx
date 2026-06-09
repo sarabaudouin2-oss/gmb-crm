@@ -11216,7 +11216,6 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                           h(y.target.value));
                       },
                       placeholder: "AIzaSy...",
-                      placeholder: "sk-ant-api03-…",
                       style: {
                         margin: 0,
                         fontFamily: "monospace",
