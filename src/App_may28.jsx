@@ -6582,7 +6582,9 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
       }
     }),
     o = (x) => {
-      (r(x), localStorage.setItem("bto_paiements", JSON.stringify(x)));
+      r(x);
+      localStorage.setItem("bto_paiements", JSON.stringify(x));
+      supaSet("bto_paiements", JSON.stringify(x));
     },
     s = Array.from({ length: 12 }, (x, j) => {
       const I = new Date();
@@ -9731,7 +9733,9 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
     [contratSearch, setContratSearch] = D.useState(""),
     [clientSigs, setClientSigs] = D.useState({}),
     N = (y) => {
-      (m(y), localStorage.setItem("bto_contracts", JSON.stringify(y)));
+      m(y);
+      localStorage.setItem("bto_contracts", JSON.stringify(y));
+      supaSet("bto_contracts", JSON.stringify(y));
     },
     E = (y) =>
       u[y] || {
@@ -10124,11 +10128,9 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                                       1,
                                       parseInt(y.target.value) || 1,
                                     );
-                                    (j(O),
-                                      localStorage.setItem(
-                                        "gmb_monthly_obj",
-                                        O,
-                                      ));
+                                    j(O);
+                                    localStorage.setItem("gmb_monthly_obj", O);
+                                    supaSet("gmb_monthly_obj", String(O));
                                   },
                                 }),
                                 n.jsx("button", {
@@ -11310,7 +11312,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                       style: { width: 70, margin: 0 },
                       onChange: (y) => {
                         const O = Math.max(1, parseInt(y.target.value) || 1);
-                        (j(O), localStorage.setItem("gmb_monthly_obj", O));
+                        j(O); localStorage.setItem("gmb_monthly_obj", O); supaSet("gmb_monthly_obj", String(O));
                       },
                     }),
                     n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"audits/mois" }),
@@ -27674,9 +27676,9 @@ function TemplatesTab({
     O = r.filter((L) => !o[L.id]).slice(0, 5);
   Math.ceil((new Date() - new Date(e.date)) / (7 * 24 * 3600 * 1e3)) + 1;
   const F = () => {
-      (localStorage.setItem("ag_name", j),
-        localStorage.setItem("ag_email", z),
-        localStorage.setItem("ag_phone", h));
+      localStorage.setItem("ag_name", j); supaSet("ag_name", j);
+      localStorage.setItem("ag_email", z); supaSet("ag_email", z);
+      localStorage.setItem("ag_phone", h); supaSet("ag_phone", h);
       const L = a.map(($) => ($.id === e.id ? { ...$, weeklyNotes: b } : $));
       (d(L), (e.weeklyNotes = b));
     },
