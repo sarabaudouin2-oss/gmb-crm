@@ -6690,16 +6690,21 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
       setSuppModal({ x, j, I });
     },
     // Filtrer les clients actifs pour le mois sélectionné (selon date de signature)
+    // Setup = paiement unique → apparaît seulement le mois de signature
     q = e.filter((x) => {
       const ct = t(x.id);
-      if (!ct.dateSignature) return true;
-      const sigMonth = ct.dateSignature.slice(0, 7);
+      const sigMonth = ct.dateSignature ? ct.dateSignature.slice(0, 7) : null;
+      if (ct.typeContrat === "setup") {
+        // Setup : uniquement visible le mois où le contrat a été signé
+        return sigMonth ? sigMonth === l : true;
+      }
+      if (!sigMonth) return true;
       return l >= sigMonth;
     }),
     p = q
       .filter((x) => i[`${x.id}_${l}`] === "paye")
-      .reduce((x, j) => x + parseFloat(t(j.id).montant || (t(j.id).typeContrat === "leader_annuel" ? 119 : 139)), 0),
-    b = q.reduce((x, j) => x + parseFloat(t(j.id).montant || (t(j.id).typeContrat === "leader_annuel" ? 119 : 139)), 0);
+      .reduce((x, j) => x + parseFloat(t(j.id).montant || (t(j.id).typeContrat === "setup" ? 299 : t(j.id).typeContrat === "leader_annuel" ? 119 : 139)), 0),
+    b = q.reduce((x, j) => x + parseFloat(t(j.id).montant || (t(j.id).typeContrat === "setup" ? 299 : t(j.id).typeContrat === "leader_annuel" ? 119 : 139)), 0);
   return n.jsxs("div", {
     children: [
       n.jsxs("div", {
@@ -25788,9 +25793,9 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
   // ── Report HTML ──
   const buildReportHtml = () => {
-    const agencyName = localStorage.getItem("agencyName") || "BeTheOne";
-    const agencyEmail = localStorage.getItem("agencyEmail") || "";
-    const agencyPhone = localStorage.getItem("agencyPhone") || "";
+    const agencyName = localStorage.getItem("ag_name") || localStorage.getItem("agencyName") || "Be The One";
+    const agencyEmail = localStorage.getItem("ag_email") || localStorage.getItem("agencyEmail") || "contact@agence-betheone.fr";
+    const agencyPhone = localStorage.getItem("ag_phone") || localStorage.getItem("agencyPhone") || "06 51 17 69 10";
     const clientName = extracted.name || e.name || "Client";
     const monthLabel = new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
     const sc = scCol(currentScore);
