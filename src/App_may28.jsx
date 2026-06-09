@@ -2101,7 +2101,7 @@ Votre projet ? Contactez [NOM] pour en discuter.`,
       return [];
     }
   },
-  qc = (e) => localStorage.setItem(PROSPECTS_KEY, JSON.stringify(e)),
+  qc = (e) => { localStorage.setItem(PROSPECTS_KEY, JSON.stringify(e)); supaSet(PROSPECTS_KEY, JSON.stringify(e)); },
   rn = [
     {
       id: "prospect",
@@ -7939,7 +7939,8 @@ function App() {
         }
         // Charger les contracts
         const KEYS_TO_SYNC = ["bto_contracts","bto_paiements","gmb_monthly_obj",
-          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","bto_apikey","bto_sara_notes"];
+          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","bto_apikey","bto_sara_notes",
+          "betheone_prospects_v1"];
         for (const key of KEYS_TO_SYNC) {
           const val = await supaGet(key);
           if (val !== null && val !== undefined) localStorage.setItem(key, val);
@@ -7951,9 +7952,9 @@ function App() {
     syncFromSupabase();
   }, []);
 
-  // ── Sync settings quand ils changent ──
+  // ── Sync settings quand clients changent ──
   D.useEffect(() => {
-    ["bto_contracts","bto_paiements"].forEach(key => {
+    ["bto_contracts","bto_paiements","betheone_prospects_v1"].forEach(key => {
       const val = localStorage.getItem(key);
       if (val) supaSet(key, val);
     });
@@ -11243,20 +11244,27 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
             n.jsxs("div", {
               style: { background:"white", borderRadius:14, padding:"22px 24px", border:"1px solid #E5E7EB", borderTop:"3px solid #6B40D8" },
               children: [
-                n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30", marginBottom:6 }, children:"💾 Sauvegarde & Restauration" }),
-                n.jsx("div", { style:{ fontSize:12, color:"#6B7280", marginBottom:16 }, children:"Exportez vos données pour les sauvegarder ou les transférer sur un autre navigateur (Safari ↔ Chrome)." }),
+                n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30", marginBottom:4 }, children:"💾 Sauvegarde & Restauration" }),
+                n.jsxs("div", { style:{ fontSize:12, color:"#6B7280", marginBottom:8 }, children:[
+                  "Vos données sont sauvegardées en ",n.jsx("strong",{children:"double sécurité"}),
+                  " : localStorage (navigateur) + Supabase (cloud). En cas de doute, faites un export JSON.",
+                ]}),
+                n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:8, padding:"8px 12px", marginBottom:14, fontSize:12, color:"#065F46" }, children:[
+                  n.jsx("span",{style:{fontSize:14},children:"✅"}),
+                  n.jsxs("span",{children:[n.jsx("strong",{children:"Données protégées : "}),"clients, contrats, paiements, prospects, paramètres → sauvegardés dans le cloud Supabase."]}),
+                ]}),
                 n.jsxs("div", { style:{ display:"flex", gap:10, flexWrap:"wrap" }, children:[
                   /* EXPORT */
                   n.jsx("button", {
                     onClick: () => {
-                      const backup = {
-                        version: "bto-v1",
-                        date: new Date().toISOString(),
-                        gmb_crm_v10: localStorage.getItem("gmb_crm_v10"),
-                        betheone_prospects_v1: localStorage.getItem("betheone_prospects_v1"),
-                        bto_apikey: localStorage.getItem("bto_apikey"),
-                        bto_google_key: localStorage.getItem("bto_google_key"),
-                      };
+                      const keys = [
+                        "gmb_crm_v10","betheone_prospects_v1",
+                        "bto_contracts","bto_paiements","gmb_monthly_obj",
+                        "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic",
+                        "bto_apikey","bto_google_key","bto_sara_notes",
+                      ];
+                      const backup = { version: "bto-v1", date: new Date().toISOString() };
+                      keys.forEach(k => { const v = localStorage.getItem(k); if (v) backup[k] = v; });
                       const blob = new Blob([JSON.stringify(backup, null, 2)], { type:"application/json" });
                       const url = URL.createObjectURL(blob);
                       const a2 = document.createElement("a");
@@ -11281,11 +11289,14 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                             try {
                               const data = JSON.parse(e2.target.result);
                               if (!data.version || data.version !== "bto-v1") { alert("Fichier invalide — ce n'est pas une sauvegarde BeTheOne."); return; }
-                              if (data.gmb_crm_v10) localStorage.setItem("gmb_crm_v10", data.gmb_crm_v10);
-                              if (data.betheone_prospects_v1) localStorage.setItem("betheone_prospects_v1", data.betheone_prospects_v1);
-                              if (data.bto_apikey) localStorage.setItem("bto_apikey", data.bto_apikey);
-                              if (data.bto_google_key) localStorage.setItem("bto_google_key", data.bto_google_key);
-                              alert("✅ Données restaurées ! La page va se recharger.");
+                              const restoreKeys = [
+                                "gmb_crm_v10","betheone_prospects_v1",
+                                "bto_contracts","bto_paiements","gmb_monthly_obj",
+                                "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic",
+                                "bto_apikey","bto_google_key","bto_sara_notes",
+                              ];
+                              restoreKeys.forEach(k => { if (data[k]) { localStorage.setItem(k, data[k]); supaSet(k, data[k]); } });
+                              alert("✅ Données restaurées et synchronisées ! La page va se recharger.");
                               window.location.reload();
                             } catch(err) { alert("Erreur de lecture du fichier."); }
                           };
@@ -11295,7 +11306,10 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                     ],
                   }),
                 ]}),
-                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:10 }, children:"💡 Exporter → copier → autre navigateur → Importer" }),
+                n.jsxs("div", { style:{ fontSize:11, color:"#6B7280", marginTop:10, lineHeight:1.6 }, children:[
+                  n.jsx("span",{style:{color:"#6B40D8",fontWeight:700},children:"💡 Conseil : "}),
+                  "Faites un export JSON 1× par semaine et gardez-le sur votre ordinateur ou Google Drive. C'est votre filet de sécurité ultime.",
+                ]}),
               ],
             }),
             /* Objectif mensuel */
