@@ -48,8 +48,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Aucun fichier reçu" });
     }
 
-    // Upload vers Vercel Blob
     const safeName = `gmb-posts/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    // Les photos GMB doivent être accessibles publiquement — Google les récupère via l'URL
     const blob = await put(safeName, fileBuffer, {
       access: "public",
       contentType: fileMime,

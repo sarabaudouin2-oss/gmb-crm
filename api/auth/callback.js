@@ -29,15 +29,15 @@ export default async function handler(req, res) {
       );
     }
 
-    // Redirige vers l'app avec les tokens dans le hash (jamais dans l'URL visible)
+    // Rediriger vers la page de sélection de fiche (côté serveur, pas React)
     const params = new URLSearchParams({
       clientId: state || "",
       access_token: tokens.access_token || "",
       refresh_token: tokens.refresh_token || "",
-      expires_in: tokens.expires_in || 3600,
+      expires_in: String(tokens.expires_in || 3600),
     });
 
-    res.redirect(`${base}/#gmb-auth?${params.toString()}`);
+    res.redirect(`${base}/api/auth/select-fiche?${params.toString()}`);
   } catch (e) {
     res.redirect(
       `${base}/#gmb-auth-error?msg=${encodeURIComponent(e.message)}`

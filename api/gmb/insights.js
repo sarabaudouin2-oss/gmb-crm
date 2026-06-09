@@ -72,6 +72,21 @@ export default async function handler(req, res) {
       avgRating = infoData.rating ?? null;
     } catch (_) {}
 
+    // Nombre de photos (optionnel, activé via ?photos=1)
+    let totalPhotos = 0;
+    if (req.query.photos === "1") {
+      try {
+        const rPhotos = await fetch(
+          `https://mybusiness.googleapis.com/v4/${location_name}/media?pageSize=100`,
+          { headers: { Authorization: `Bearer ${access_token}` } }
+        );
+        if (rPhotos.ok) {
+          const pd = await rPhotos.json();
+          totalPhotos = (pd.mediaItems || []).length;
+        }
+      } catch (_) {}
+    }
+
     // Formatage final des stats
     res.json({
       vuesRecherche: (results.BUSINESS_IMPRESSIONS_DESKTOP_SEARCH || 0) + (results.BUSINESS_IMPRESSIONS_MOBILE_SEARCH || 0),
@@ -79,6 +94,8 @@ export default async function handler(req, res) {
       appels: results.CALL_CLICKS || 0,
       clicsWeb: results.WEBSITE_CLICKS || 0,
       itineraires: results.BUSINESS_DIRECTION_REQUESTS || 0,
+      vuesPhotos: 0, // La Business Profile Performance API ne fournit pas cette métrique — valeur manuelle
+      totalPhotos,
       reviewCount,
       avgRating,
       raw: results,

@@ -337,6 +337,46 @@ const CATS = [
     Math.round(
       (ALL_CRITERIA.reduce((t, i) => (e[i.id] === !0 ? t + i.points : t), 0) / Ef) * 100,
     ),
+  /* Dérive les critères des 3 piliers à partir des données toujours à jour
+     du Résumé (e.data.extracted), pour ne jamais afficher de chiffres figés
+     issus d'un ancien audit (qui peut être incomplet/obsolète après une
+     mise à jour de fiche). Les manualOverrides restent prioritaires. */
+  deriveGmbScores = (e) => {
+    const ext = (e.data && e.data.extracted) || {};
+    const perf = e.perf || {};
+    const derived = {
+      category_primary:   !!(e.category || ext.category),
+      category_secondary: !!(ext.secondaryCategories && Object.keys(ext.secondaryCategories).length > 0),
+      desc_length:        !!((ext.description||"").length > 200),
+      desc_keywords:      !!((ext.description||"").length > 100),
+      services_listed:    !!((ext.services && Object.keys(ext.services).length > 0) || (e.manualServices||[]).length > 0),
+      products_listed:    !!((ext.products && Object.keys(ext.products).length > 0) || (e.manualProducts||[]).length > 0),
+      attributes:         !!(ext.attributes && Object.keys(ext.attributes).length > 0),
+      business_name:      !!(e.name || ext.name),
+      address:            !!(e.address || ext.address),
+      service_area:       !!((e.manualZones||[]).length > 0 || ext.serviceArea),
+      phone:              !!(e.phone || ext.phone),
+      hours_regular:      !!(ext.hours || ext.hoursRegular),
+      hours_special:      !!(ext.hoursSpecial),
+      rating:             !!((parseFloat(ext.rating)||0) >= 4.0),
+      review_count:       !!((parseInt(ext.reviewCount)||parseInt(perf.avisGoogleNb)||0) >= 10),
+      response_rate:      !!((parseFloat(perf.tauxReponse)||0) >= 50),
+      response_quality:   !!(perf.tauxReponse),
+      recent_reviews:     !!((parseInt(ext.reviewCount)||0) > 5),
+      photo_count:        !!((parseInt(ext.photoCount)||parseInt(ext.photos)||0) >= 5),
+      photo_cover:        !!(ext.photoCount || ext.photos),
+      photo_logo:         !!(ext.photoCount || ext.photos),
+      photo_interior:     !!((parseInt(ext.photoCount)||parseInt(ext.photos)||0) >= 10),
+      photo_team:         !!((parseInt(ext.photoCount)||parseInt(ext.photos)||0) >= 15),
+      photo_recent:       !!(ext.photoCount || ext.photos),
+      posts_frequency:    !!((parseInt(ext.postsCount)||0) >= 2),
+      posts_cta:          !!(ext.postsCount),
+      posts_offers:       !!(ext.postsCount),
+    };
+    /* Les corrections manuelles de l'utilisateur restent prioritaires,
+       mais on ne garde plus jamais les anciens scores d'audit figés. */
+    return { ...derived, ...(e.manualOverrides || {}) };
+  },
   xn = [
     {
       cat: "Réalisation",
@@ -1267,6 +1307,7 @@ Entrée libre — venez nombreux.
     ],
   },
   STORAGE_KEY = "gmb_crm_v10",
+  BTO_TOKEN = "bto_sync_2026_secure",
   loadClients = () => {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -1274,7 +1315,27 @@ Entrée libre — venez nombreux.
       return [];
     }
   },
-  saveClients = (e) => localStorage.setItem(STORAGE_KEY, JSON.stringify(e));
+  saveClients = (e) => {
+    // 1. Sauvegarde locale immédiate
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(e));
+    // 2. Sync Supabase en arrière-plan
+    supaSet(STORAGE_KEY, JSON.stringify(e));
+  },
+  supaSet = (key, value) => {
+    fetch(`${SUPA_URL}/rest/v1/app_storage`, {
+      method: "POST",
+      headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
+    }).catch(() => {});
+  },
+  supaGet = async (key) => {
+    try {
+      const r = await fetch(`${SUPA_URL}/rest/v1/app_storage?key=eq.${key}&limit=1`,
+        { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } });
+      const rows = await r.json();
+      return rows && rows.length > 0 ? rows[0].value : null;
+    } catch { return null; }
+  };
 async function callAI(e, t, i = 0) {
   var p;
   const r = t;
@@ -1378,12 +1439,17 @@ async function callAI(e, t, i = 0) {
     "La réponse IA n'est pas du JSON valide après 3 tentatives. Réessayez dans quelques secondes.",
   );
 }
-async function $c(e, t, i) {
+async function $c(e, t, i, zones = []) {
+  const zonesSection = zones.length > 0
+    ? `\nZONES DESSERVIES DÉCLARÉES (${zones.length}) :\n${zones.map((z,idx) => `${idx+1}. ${z}`).join('\n')}\n→ Utilise ces zones EXACTES dans les zoneRankings, les mots-clés locaux et les posts. Chaque zone doit apparaître dans au moins un mot-clé et une recommandation.\n→ Le "service_area" doit être TRUE si ces zones sont présentes.\n`
+    : `\nAucune zone desservie déclarée — génère des suggestions de zones réalistes basées sur la ville et le secteur d'activité.\n`;
+
   return callAI(
     `Analyse cette fiche Google Business Profile. Utilise les vraies données extraites. AUCUN emoji dans les posts, Q&R, services, produits.
 
 FICHE :
 """${t}"""
+${zonesSection}
 
 RÈGLES D'ANALYSE SECTORIELLES (Google GBP Best Practices Playbooks 2026) :
 Identifie le secteur d'activité et applique les règles spécifiques :
@@ -1458,6 +1524,21 @@ Actions STRICTEMENT INTERDITES dans la roadmap (ne jamais mentionner) :
 - Publicité Google Ads ou Meta Ads
 - Toute action hors de la plateforme Google Business Profile
 
+CADENCE MENSUELLE — ALIGNEMENT SUR LE FORFAIT "LEADER LOCAL" (139€/mois) :
+Le client est accompagné via un abonnement mensuel qui inclut déjà, chaque mois : 4 posts Google, 10 photos,
+réponse aux avis récents sous 24h + traitement des anciens avis en attente, optimisation continue de la fiche,
+veille concurrentielle locale, suivi du positionnement des mots-clés, un rapport mensuel PDF et un accès WhatsApp
+prioritaire (réponse sous 3h). La roadmap doit donc être calibrée sur ce rythme réel et non le dépasser inutilement :
+- Ne jamais demander plus de 4 posts/mois ni plus de 10 photos/mois dans les actions (ce sont déjà les volumes livrés
+  dans le cadre de l'abonnement) — préciser plutôt LE TYPE et LE SUJET des posts/photos à prioriser ce mois-ci
+  (ex: "1 post Offre + 1 post Réalisation + 2 posts Conseil ciblant [mot-clé local]", "10 photos : 4 réalisations
+  récentes, 3 équipe, 3 lieux/zone desservie") plutôt que d'augmenter la cadence
+- Pour les avis, formuler les actions en cohérence avec l'engagement "réponse sous 24h" déjà en place
+  (ex: "Traiter les X avis en attente identifiés ce mois", "Relancer une campagne de collecte d'avis via QR code")
+- Pour le positionnement, s'appuyer sur le suivi mensuel des mots-clés déjà inclus dans le forfait
+- Chaque action de la roadmap doit rester réalisable DANS le volume déjà prévu par l'abonnement — la progression
+  vers le TOP 3 se fait par la PRIORISATION et la QUALITÉ du contenu mensuel, pas par une charge de travail accrue
+
 CRITÈRES NOUVEAUX À ÉVALUER (Google Playbooks 2026) :
 - "chat_link" : true si WhatsApp, SMS Chat ou numéro de messagerie présent (67% préfèrent les messages aux appels)
 - "social_links" : true si au moins un réseau social est lié à la fiche (Facebook, Instagram, YouTube, X)
@@ -1470,10 +1551,13 @@ RÈGLES ABSOLUES POUR LES MOTS-CLÉS (PRIORITÉ CRITIQUE — NE JAMAIS ENFREINDR
 - Le nom de la fiche fourni est le NOM EXACT sur Google Maps — utilise-le tel quel pour identifier l'établissement
 - Si le nom de la fiche contient déjà la ville (ex: "Aasgard Vannes"), cette ville est la ville de référence
 - Extrait la VRAIE VILLE de l'adresse de la fiche (pas le nom de l'enseigne, pas une autre ville)
-- CHAQUE mot-clé primary ET secondary DOIT obligatoirement contenir le NOM DE CETTE VILLE RÉELLE
-  → Ex si ville = "Vannes" : "plombier Vannes", "réparation fuite Vannes", "urgence plomberie Vannes"
-  → Ex si ville = "Lorient" : "plombier Lorient", "dépannage plomberie Lorient"
-- INTERDIT : mot-clé sans ville (ex: "plombier", "restaurant gastronomique", "salle de sport")
+- RÈGLE DES MOTS-CLÉS — 2 types distincts :
+  → Mots-clés SEO (primary/secondary/longTail) : DOIVENT contenir la ville RÉELLE pour le référencement
+    Ex si ville = "Vannes" : "plombier Vannes", "réparation fuite Vannes", "urgence plomberie Vannes"
+  → Mots-clés carte/scan (kw dans zoneRankings) : SANS ville — la position GPS du scan remplace la ville
+    Ex : "plombier", "réparation fuite", "urgence plomberie" (Google sait déjà où chercher)
+- INTERDIT dans primary/secondary : mot-clé sans ville (ex: "plombier" seul)
+- INTERDIT dans les kw de scan : ajouter la ville (le scanner géolocalisé la gère nativement)
 - INTERDIT : utiliser la ville d'une autre enseigne ou filiale du même groupe
 - INTERDIT : inventer une ville ou utiliser une ville approximative
 - Si l'enseigne existe dans plusieurs villes (ex: "Aasgard Vannes" et "Aasgard Lorient"), n'utilise QUE la ville de CETTE fiche spécifique
@@ -1513,7 +1597,7 @@ Varie les types sur 12 semaines : 3 Realisation, 2 Conseil, 2 Offre, 2 Temoignag
 Chaque post doit mentionner la ville réelle, le secteur d'activité réel, et des termes métier concrets et authentiques.
 
 JSON complet :
-{"scores":{"business_name":true,"category_primary":false,"category_secondary":false,"address":true,"service_area":false,"phone":true,"website":false,"hours_regular":false,"hours_special":false,"desc_length":false,"desc_keywords":false,"attributes":false,"products_services":false,"photo_count":false,"photo_cover":false,"photo_logo":false,"photo_interior":false,"photo_team":false,"photo_recent":false,"rating":true,"review_count":false,"response_rate":false,"response_quality":false,"recent_reviews":false,"posts_frequency":false,"posts_cta":false,"posts_offers":false},"pillars":{"pertinence":{"score":42,"label":"Moyen","details":"Explication concrète basée sur la fiche"},"proximite":{"score":65,"label":"Bon","details":"Explication proximité"},"prominence":{"score":38,"label":"Faible","details":"Explication proéminence"},"avis":{"score":55,"label":"Moyen","details":"Explication avis"},"completion":{"score":70,"label":"Bon","details":"Explication complétion"}},"extracted":{"name":"NOM RÉEL","category":"CATÉGORIE","address":"ADRESSE","phone":"TEL","website":"SITE","rating":"NOTE/5","reviewCount":"NB","photoCount":"NB","postsCount":"NB","city":"VILLE","sector":"SECTEUR","secondaryCategories":{"present":["catégorie secondaire réelle si présente"],"suggested":["suggestion 1","suggestion 2","suggestion 3"]},"services":{"present":[{"name":"Service réel","description":"Description"}],"suggested":[{"name":"Service suggéré","description":"Pourquoi l ajouter"}]},"products":{"present":[{"name":"Produit réel","description":"Description","price":"Prix"}],"suggested":[{"name":"Produit suggéré","description":"Pourquoi l ajouter","price":""}]}},"competitorRanking":{"estimatedPosition":"3-5","marketShareEstimate":"15%","rankingFactors":[{"factor":"Note","ourValue":"4.2","avgCompetitor":"4.6","gap":"-0.4","impact":"Fort"},{"factor":"Avis","ourValue":"28","avgCompetitor":"45","gap":"-17","impact":"Fort"},{"factor":"Photos","ourValue":"12","avgCompetitor":"30","gap":"-18","impact":"Moyen"},{"factor":"Posts","ourValue":"Non","avgCompetitor":"Oui","gap":"Absent","impact":"Fort"}],"rankingOpportunity":"Comment passer TOP 3 concrètement"},"insights":{"summary":"Synthèse 2-3 phrases concrètes","strengths":["force 1","force 2","force 3"],"weaknesses":["faiblesse 1","faiblesse 2","faiblesse 3"],"quickWins":["action 1","action 2","action 3"]},"keywords":{"primary":[{"kw":"[MÉTIER] [VRAIE VILLE — OBLIGATOIRE, ex: plombier Vannes]","volume":"500–1k","position":6,"positionLabel":"TOP 6","evolution":"+2","evolutionDir":"up","competition":"Forte","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":13,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":16,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 4]","rank":20,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"reco":"Publiez un post mentionnant "Ville Centre" + 2 avis de cette zone"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"reco":"Créez du contenu ciblé + citations locales"}]},{"kw":"[SERVICE PRINCIPAL] [VRAIE VILLE — ex: urgence plomberie Vannes]","volume":"200–500","position":8,"positionLabel":"TOP 8","evolution":"+3","evolutionDir":"up","competition":"Moyenne","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":12,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":18,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"reco":"Ajouter ce mot-clé dans la description et les posts"}]},{"kw":"[MÉTIER] [VRAIE COMMUNE PROCHE — ex: plombier Séné]","volume":"<50","position":3,"positionLabel":"🏆 TOP 3","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Maintenir","action":"Maintenir — posts + avis réguliers","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"label":"🏆 TOP 3"},{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":7,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE VOISINE]","rank":14,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"reco":"Maintenir avec 2 posts/mois mentionnant cette zone"}]}],"secondary":[{"kw":"[SERVICE SECONDAIRE] [VRAIE VILLE — ex: détartrage chauffe-eau Vannes]","volume":"50–200","position":15,"positionLabel":"TOP 15","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"Post dédié + intégrer dans description","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"reco":"Un post ciblé suffirait à passer TOP 10"}]},{"kw":"[SERVICE 2] [VRAIE VILLE]","volume":"50–100","position":11,"positionLabel":"TOP 11","evolution":"0","evolutionDir":"stable","competition":"Faible","priority":"Rapide","action":"Ajouter dans les services GMB + 1 post","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"reco":"Ajouter ce service dans la fiche + photos"}]},{"kw":"[SERVICE 3] [VRAIE VILLE]","volume":"<50","position":5,"positionLabel":"TOP 5","evolution":"+2","evolutionDir":"up","competition":"Très faible","priority":"Maintenir","action":"Maintenir la fréquence de posts","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"label":"Bonne visib."}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"reco":"Continuer les posts réguliers"}]},{"kw":"[SERVICE 4] [VRAIE VILLE]","volume":"100–200","position":19,"positionLabel":"TOP 19","evolution":"-1","evolutionDir":"down","competition":"Moyenne","priority":"Urgent","action":"Optimiser description + créer contenu dédié","trend":"↓","zoneRankings":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"label":"Non visible"},{"zone":"[NOM RÉEL COMMUNE PROCHE]","rank":24,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"reco":"Ajouter mot-clé dans description + 2 posts urgents"}]},{"kw":"[SERVICE 5] [VRAIE VILLE]","volume":"50–100","position":8,"positionLabel":"TOP 8","evolution":"+4","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"1 post + répondre aux avis mentionnant ce service","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"reco":"Post + photo de réalisation spécifique"}]}],"longTail":["[requête longue traîne AVEC VRAIE VILLE 1]","[requête longue traîne AVEC VRAIE VILLE 2]","[requête longue traîne AVEC VRAIE VILLE 3]","[requête longue traîne AVEC VRAIE VILLE 4]","[requête longue traîne AVEC VRAIE VILLE 5]","[requête longue traîne AVEC VRAIE VILLE 6]","[requête longue traîne AVEC VRAIE VILLE 7]","[requête longue traîne AVEC VRAIE VILLE 8]"],"geoZones":["[VRAIE VILLE]","[VRAIE COMMUNE 1]","[VRAIE COMMUNE 2]","[VRAIE COMMUNE 3]","[VRAIE COMMUNE 4]","[VRAIE ZONE ÉLARGIE]"]},"competitors":[{"name":"Nom réel concurrent 1","rating":"4.8","reviews":87,"photos":45,"posts":true,"responseRate":"90%","mainKeywords":["kw1 ville","kw2 ville","kw3"],"topPosition":2,"strengths":["Force principale","Deuxième force"],"weaknesses":["Faiblesse identifiée"],"threat":"Haute","monthlyEstimatedVisits":"300-500"},{"name":"Nom réel concurrent 2","rating":"4.6","reviews":52,"photos":30,"posts":true,"responseRate":"70%","mainKeywords":["kw1 ville","kw2"],"topPosition":4,"strengths":["Force principale"],"weaknesses":["Faiblesse identifiée","2e faiblesse"],"threat":"Haute","monthlyEstimatedVisits":"200-300"},{"name":"Nom réel concurrent 3","rating":"4.4","reviews":34,"photos":18,"posts":false,"responseRate":"40%","mainKeywords":["kw1","kw2 ville"],"topPosition":6,"strengths":["Force principale"],"weaknesses":["Peu de posts","Peu d'avis"],"threat":"Moyenne","monthlyEstimatedVisits":"100-200"},{"name":"Nom réel concurrent 4","rating":"4.2","reviews":21,"photos":12,"posts":false,"responseRate":"20%","mainKeywords":["kw1"],"topPosition":9,"strengths":["Force principale"],"weaknesses":["Fiche peu optimisée"],"threat":"Faible","monthlyEstimatedVisits":"50-100"},{"name":"Nom réel concurrent 5","rating":"3.9","reviews":15,"photos":8,"posts":false,"responseRate":"10%","mainKeywords":["kw1"],"topPosition":11,"strengths":["Ancienneté"],"weaknesses":["Note basse","Peu actif"],"threat":"Faible","monthlyEstimatedVisits":"<50"}],"competitorSummary":"Analyse marché 2-3 phrases concrètes sur la densité concurrentielle","competitorOpportunities":["opportunité concrète 1","opportunité concrète 2","opportunité concrète 3"],"reviews":{"analysis":"Analyse 3 phrases","score":"note","totalReviews":"nb","responseRate":"%","positiveThemes":["thème 1","thème 2","thème 3"],"negativeThemes":["point 1","point 2"],"sentimentScore":75,"responseTemplates":[{"type":"Avis positif 5 étoiles","template":"Bonjour [Prénom], merci..."},{"type":"Avis négatif","template":"Bonjour [Prénom], nous sommes navrés..."},{"type":"Avis neutre","template":"Bonjour [Prénom], merci pour ce retour..."}],"acquisitionTips":["conseil 1","conseil 2","conseil 3","conseil 4"]},"postIdeas":[{"week":1,"type":"Realisation","title":"Titre accrocheur sans emoji — 8-10 mots max","content":"Accroche percutante sur un fait concret ou un problème du métier.
+{"scores":{"business_name":true,"category_primary":false,"category_secondary":false,"address":true,"service_area":false,"phone":true,"website":false,"hours_regular":false,"hours_special":false,"desc_length":false,"desc_keywords":false,"attributes":false,"services_listed":false,"products_listed":false,"photo_count":false,"photo_cover":false,"photo_logo":false,"photo_interior":false,"photo_team":false,"photo_recent":false,"rating":true,"review_count":false,"response_rate":false,"response_quality":false,"recent_reviews":false,"posts_frequency":false,"posts_cta":false,"posts_offers":false},"pillars":{"pertinence":{"score":42,"label":"Moyen","details":"Explication concrète basée sur la fiche"},"proximite":{"score":65,"label":"Bon","details":"Explication proximité"},"prominence":{"score":38,"label":"Faible","details":"Explication proéminence"},"avis":{"score":55,"label":"Moyen","details":"Explication avis"},"completion":{"score":70,"label":"Bon","details":"Explication complétion"}},"extracted":{"name":"NOM RÉEL","category":"CATÉGORIE","address":"ADRESSE","phone":"TEL","website":"SITE","rating":"NOTE/5","reviewCount":"NB","photoCount":"NB","postsCount":"NB","city":"VILLE","sector":"SECTEUR","secondaryCategories":{"present":["catégorie secondaire réelle si présente"],"suggested":["suggestion 1","suggestion 2","suggestion 3"]},"services":{"present":[{"name":"Service réel","description":"Description"}],"suggested":[{"name":"Service suggéré","description":"Pourquoi l ajouter"}]},"products":{"present":[{"name":"Produit réel","description":"Description","price":"Prix"}],"suggested":[{"name":"Produit suggéré","description":"Pourquoi l ajouter","price":""}]}},"competitorRanking":{"estimatedPosition":"3-5","marketShareEstimate":"15%","rankingFactors":[{"factor":"Note","ourValue":"4.2","avgCompetitor":"4.6","gap":"-0.4","impact":"Fort"},{"factor":"Avis","ourValue":"28","avgCompetitor":"45","gap":"-17","impact":"Fort"},{"factor":"Photos","ourValue":"12","avgCompetitor":"30","gap":"-18","impact":"Moyen"},{"factor":"Posts","ourValue":"Non","avgCompetitor":"Oui","gap":"Absent","impact":"Fort"}],"rankingOpportunity":"Comment passer TOP 3 concrètement"},"insights":{"summary":"Synthèse 2-3 phrases concrètes","strengths":["force 1","force 2","force 3"],"weaknesses":["faiblesse 1","faiblesse 2","faiblesse 3"],"quickWins":["action 1","action 2","action 3"]},"keywords":{"primary":[{"kw":"[MÉTIER] [VRAIE VILLE — OBLIGATOIRE, ex: plombier Vannes]","volume":"500–1k","position":6,"positionLabel":"TOP 6","evolution":"+2","evolutionDir":"up","competition":"Forte","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":13,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":16,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 4]","rank":20,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"reco":"Publiez un post mentionnant "Ville Centre" + 2 avis de cette zone"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"reco":"Créez du contenu ciblé + citations locales"}]},{"kw":"[SERVICE PRINCIPAL] [VRAIE VILLE — ex: urgence plomberie Vannes]","volume":"200–500","position":8,"positionLabel":"TOP 8","evolution":"+3","evolutionDir":"up","competition":"Moyenne","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":12,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":18,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"reco":"Ajouter ce mot-clé dans la description et les posts"}]},{"kw":"[MÉTIER] [VRAIE COMMUNE PROCHE — ex: plombier Séné]","volume":"<50","position":3,"positionLabel":"🏆 TOP 3","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Maintenir","action":"Maintenir — posts + avis réguliers","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"label":"🏆 TOP 3"},{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":7,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE VOISINE]","rank":14,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"reco":"Maintenir avec 2 posts/mois mentionnant cette zone"}]}],"secondary":[{"kw":"[SERVICE SECONDAIRE] [VRAIE VILLE — ex: détartrage chauffe-eau Vannes]","volume":"50–200","position":15,"positionLabel":"TOP 15","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"Post dédié + intégrer dans description","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"reco":"Un post ciblé suffirait à passer TOP 10"}]},{"kw":"[SERVICE 2] [VRAIE VILLE]","volume":"50–100","position":11,"positionLabel":"TOP 11","evolution":"0","evolutionDir":"stable","competition":"Faible","priority":"Rapide","action":"Ajouter dans les services GMB + 1 post","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"reco":"Ajouter ce service dans la fiche + photos"}]},{"kw":"[SERVICE 3] [VRAIE VILLE]","volume":"<50","position":5,"positionLabel":"TOP 5","evolution":"+2","evolutionDir":"up","competition":"Très faible","priority":"Maintenir","action":"Maintenir la fréquence de posts","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"label":"Bonne visib."}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"reco":"Continuer les posts réguliers"}]},{"kw":"[SERVICE 4] [VRAIE VILLE]","volume":"100–200","position":19,"positionLabel":"TOP 19","evolution":"-1","evolutionDir":"down","competition":"Moyenne","priority":"Urgent","action":"Optimiser description + créer contenu dédié","trend":"↓","zoneRankings":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"label":"Non visible"},{"zone":"[NOM RÉEL COMMUNE PROCHE]","rank":24,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"reco":"Ajouter mot-clé dans description + 2 posts urgents"}]},{"kw":"[SERVICE 5] [VRAIE VILLE]","volume":"50–100","position":8,"positionLabel":"TOP 8","evolution":"+4","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"1 post + répondre aux avis mentionnant ce service","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"reco":"Post + photo de réalisation spécifique"}]}],"longTail":["[requête longue traîne AVEC VRAIE VILLE 1]","[requête longue traîne AVEC VRAIE VILLE 2]","[requête longue traîne AVEC VRAIE VILLE 3]","[requête longue traîne AVEC VRAIE VILLE 4]","[requête longue traîne AVEC VRAIE VILLE 5]","[requête longue traîne AVEC VRAIE VILLE 6]","[requête longue traîne AVEC VRAIE VILLE 7]","[requête longue traîne AVEC VRAIE VILLE 8]"],"geoZones":["[VRAIE VILLE]","[VRAIE COMMUNE 1]","[VRAIE COMMUNE 2]","[VRAIE COMMUNE 3]","[VRAIE COMMUNE 4]","[VRAIE ZONE ÉLARGIE]"]},"competitors":[{"name":"Nom réel concurrent 1","rating":"4.8","reviews":87,"photos":45,"posts":true,"responseRate":"90%","mainKeywords":["kw1 ville","kw2 ville","kw3"],"topPosition":2,"strengths":["Force principale","Deuxième force"],"weaknesses":["Faiblesse identifiée"],"threat":"Haute","monthlyEstimatedVisits":"300-500"},{"name":"Nom réel concurrent 2","rating":"4.6","reviews":52,"photos":30,"posts":true,"responseRate":"70%","mainKeywords":["kw1 ville","kw2"],"topPosition":4,"strengths":["Force principale"],"weaknesses":["Faiblesse identifiée","2e faiblesse"],"threat":"Haute","monthlyEstimatedVisits":"200-300"},{"name":"Nom réel concurrent 3","rating":"4.4","reviews":34,"photos":18,"posts":false,"responseRate":"40%","mainKeywords":["kw1","kw2 ville"],"topPosition":6,"strengths":["Force principale"],"weaknesses":["Peu de posts","Peu d'avis"],"threat":"Moyenne","monthlyEstimatedVisits":"100-200"},{"name":"Nom réel concurrent 4","rating":"4.2","reviews":21,"photos":12,"posts":false,"responseRate":"20%","mainKeywords":["kw1"],"topPosition":9,"strengths":["Force principale"],"weaknesses":["Fiche peu optimisée"],"threat":"Faible","monthlyEstimatedVisits":"50-100"},{"name":"Nom réel concurrent 5","rating":"3.9","reviews":15,"photos":8,"posts":false,"responseRate":"10%","mainKeywords":["kw1"],"topPosition":11,"strengths":["Ancienneté"],"weaknesses":["Note basse","Peu actif"],"threat":"Faible","monthlyEstimatedVisits":"<50"}],"competitorSummary":"Analyse marché 2-3 phrases concrètes sur la densité concurrentielle","competitorOpportunities":["opportunité concrète 1","opportunité concrète 2","opportunité concrète 3"],"reviews":{"analysis":"Analyse 3 phrases","score":"note","totalReviews":"nb","responseRate":"%","positiveThemes":["thème 1","thème 2","thème 3"],"negativeThemes":["point 1","point 2"],"sentimentScore":75,"responseTemplates":[{"type":"Avis positif 5 étoiles","template":"Bonjour [Prénom], merci..."},{"type":"Avis négatif","template":"Bonjour [Prénom], nous sommes navrés..."},{"type":"Avis neutre","template":"Bonjour [Prénom], merci pour ce retour..."}],"acquisitionTips":["conseil 1","conseil 2","conseil 3","conseil 4"]},"postIdeas":[{"week":1,"type":"Realisation","title":"Titre accrocheur sans emoji — 8-10 mots max","content":"Accroche percutante sur un fait concret ou un problème du métier.
 
 Paragraphe 1 : développement avec le vocabulaire du terrain, les détails que seul un expert connaît. Situations vécues, techniques réelles, matériaux utilisés. 3-4 phrases qui décrivent l'enjeu et la solution apportée.
 
@@ -1552,7 +1636,7 @@ function formatDate(e, t) {
       const z = `${I.getFullYear()}-${String(I.getMonth() + 1).padStart(2, "0")}-${String(I.getDate()).padStart(2, "0")}`;
       (i[z] || (i[z] = []),
         i[z].push({
-          id: Date.now() + d,
+          id: Date.now() * 100 + d,
           type: a.type,
           title: a.title,
           content: a.content || "",
@@ -2141,7 +2225,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
       const v = {
         ...C,
         id: Date.now(),
-        status: "nouveau",
+        status: "prospect",
         emails: [],
         dateAdded: new Date().toISOString(),
       };
@@ -2152,6 +2236,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
           category: "",
           phone: "",
           email: "",
+          website: "",
           note: "",
           reviewCount: "",
         }),
@@ -2217,7 +2302,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
             website: se,
             note: ce,
             reviewCount: Ee,
-            status: "nouveau",
+            status: "prospect",
             icon: "🏢",
             emails: [],
             notes: "",
@@ -2289,12 +2374,12 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
                 children: [
                   n.jsx("div", {
                     style: {
-                      fontSize: 20,
+                      fontSize: 28,
                       fontWeight: 900,
                       color: "#1E1B30",
                       letterSpacing: "-.02em",
                     },
-                    children: "◉ Prospection",
+                    children: "Prospection",
                   }),
                   n.jsxs("div", {
                     style: { fontSize: 12.5, color: "#6B7280", marginTop: 2 },
@@ -2419,7 +2504,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
                     n.jsx("br", {}),
                     n.jsx("strong", {
                       children:
-                        "Nom · Ville · Catégorie · Téléphone · Email · Note Google · Nb avis",
+                        "Colonnes attendues : Nom · Adresse complète · Téléphone · Email · Site web · Note Google · Nb avis · (vide) · (vide) · Catégorie · Ville",
                     }),
                   ],
                 }),
@@ -4403,7 +4488,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
           n.jsx("div", {
             style: {
               ...ke,
-              fontSize: 30,
+              fontSize: 28,
               color: "var(--ink)",
               letterSpacing: "-.02em",
               marginBottom: 4,
@@ -6186,7 +6271,309 @@ function SectorBenchmarkData() {
     ],
   });
 }
-function ContratTab({ clients: e, getContract: t }) {
+const SUPA_URL = 'https://ewjvavdduntffveopfes.supabase.co';
+
+function NotificationBell() {
+  const [notifs, setNotifs] = D.useState([]);
+  const [open, setOpen] = D.useState(false);
+  const [loading, setLoading] = D.useState(false);
+  const lastSeenKey = 'bto_notifs_seen';
+
+  const fetchNotifs = async () => {
+    setLoading(true);
+    try {
+      // Contrats signés (7 derniers jours)
+      const since = new Date(Date.now() - 7*24*3600*1000).toISOString();
+      const [r1, r2] = await Promise.all([
+        fetch(`${SUPA_URL}/rest/v1/signing_requests?status=eq.signed&created_at=gte.${since}&order=created_at.desc&limit=10`,
+          { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }),
+        fetch(`${SUPA_URL}/rest/v1/onboarding?submitted_at=gte.${since}&order=submitted_at.desc&limit=10`,
+          { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }),
+      ]);
+      const sigs = await r1.json();
+      const onbs = await r2.json();
+      const lastSeen = localStorage.getItem(lastSeenKey) || '2000-01-01';
+      const all = [
+        ...(Array.isArray(sigs) ? sigs : []).map(s => ({
+          id: `sig_${s.token}`, type:'signature', client: s.client_name||'—', label: s.label||'',
+          at: s.signed_at || s.created_at, isNew: (s.signed_at||s.created_at||'') > lastSeen,
+        })),
+        ...(Array.isArray(onbs) ? onbs : []).map(o => ({
+          id: `onb_${o.token}`, type:'onboarding', client: o.client_name||'—', label: o.contract_label||'',
+          at: o.submitted_at, isNew: (o.submitted_at||'') > lastSeen,
+        })),
+      ].sort((a,b) => (b.at||'').localeCompare(a.at||''));
+      setNotifs(all);
+    } catch(e) {}
+    setLoading(false);
+  };
+
+  D.useEffect(() => { fetchNotifs(); }, []);
+
+  const unread = notifs.filter(n => n.isNew).length;
+
+  const markSeen = () => {
+    localStorage.setItem(lastSeenKey, new Date().toISOString());
+    setNotifs(prev => prev.map(n => ({...n, isNew: false})));
+  };
+
+  const formatDate = (at) => {
+    if (!at) return '—';
+    const d = new Date(at);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 3600000) return `Il y a ${Math.round(diff/60000)} min`;
+    if (diff < 86400000) return `Il y a ${Math.round(diff/3600000)}h`;
+    return d.toLocaleDateString('fr-FR', {day:'numeric',month:'short'});
+  };
+
+  return n.jsxs('div', { style:{position:'relative'}, children:[
+    // Bouton cloche
+    n.jsxs('button', {
+      onClick: () => { setOpen(v => !v); if (!open) markSeen(); },
+      style:{position:'relative', background:'none', border:'none', cursor:'pointer', padding:'6px 8px', borderRadius:10, color: open ? '#6B40D8' : '#64748B', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s'},
+      children:[
+        '🔔',
+        unread > 0 && n.jsx('span', {
+          style:{position:'absolute', top:2, right:2, background:'#dc2626', color:'white', borderRadius:'50%', width:16, height:16, fontSize:9, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1},
+          children: unread > 9 ? '9+' : unread,
+        }),
+      ],
+    }),
+    // Dropdown
+    open && n.jsxs('div', {
+      style:{position:'absolute', top:'calc(100% + 8px)', right:0, width:320, background:'white', borderRadius:14, boxShadow:'0 8px 32px rgba(0,0,0,.14)', border:'1px solid #E5E7EB', zIndex:9999, overflow:'hidden'},
+      children:[
+        n.jsxs('div', { style:{padding:'12px 16px', borderBottom:'1px solid #F3F4F6', display:'flex', justifyContent:'space-between', alignItems:'center'}, children:[
+          n.jsx('div', { style:{fontWeight:700, fontSize:13, color:'#1E1B30'}, children:'🔔 Notifications' }),
+          n.jsx('button', { onClick:fetchNotifs, style:{background:'none',border:'none',cursor:'pointer',fontSize:11,color:'#6B40D8',fontWeight:600,fontFamily:'inherit'}, children: loading ? '...' : '↻ Actualiser' }),
+        ]}),
+        notifs.length === 0
+          ? n.jsx('div', { style:{padding:'24px 16px',textAlign:'center',fontSize:12,color:'#9CA3AF'}, children: loading ? 'Chargement…' : 'Aucune notification récente' })
+          : n.jsx('div', { style:{maxHeight:320, overflowY:'auto'}, children:
+              notifs.map(notif => n.jsxs('div', {
+                key: notif.id,
+                style:{padding:'10px 16px', borderBottom:'1px solid #F9FAFB', background: notif.isNew ? '#FFF7ED' : 'white', display:'flex', gap:10, alignItems:'flex-start'},
+                children:[
+                  n.jsx('span', { style:{fontSize:18, flexShrink:0, marginTop:1}, children: notif.type === 'signature' ? '✅' : '📋' }),
+                  n.jsxs('div', { style:{flex:1, minWidth:0}, children:[
+                    n.jsx('div', { style:{fontSize:12.5, fontWeight:700, color:'#1E1B30', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}, children: notif.client }),
+                    n.jsx('div', { style:{fontSize:11.5, color:'#6B7280', marginTop:2}, children: notif.type === 'signature' ? `Contrat signé · ${notif.label}` : `Onboarding rempli · ${notif.label}` }),
+                  ]}),
+                  n.jsx('div', { style:{fontSize:10.5, color:'#9CA3AF', flexShrink:0, marginTop:2}, children: formatDate(notif.at) }),
+                ],
+              }, notif.id)
+            ),
+          }),
+        n.jsx('div', { style:{padding:'8px 16px', borderTop:'1px solid #F3F4F6', textAlign:'center'},
+          children: n.jsx('button', { onClick:()=>setOpen(false), style:{background:'none',border:'none',cursor:'pointer',fontSize:11,color:'#9CA3AF',fontFamily:'inherit'}, children:'Fermer' })
+        }),
+      ],
+    }),
+    // Overlay pour fermer
+    open && n.jsx('div', { onClick:()=>setOpen(false), style:{position:'fixed',inset:0,zIndex:9998}, }),
+  ]});
+}
+const SUPA_KEY = 'sb_publishable_er0AesWrKEXgILfKWivDVw_SRWgRK9R';
+
+async function fetchOnboarding(token) {
+  const res = await fetch(
+    `${SUPA_URL}/rest/v1/onboarding?token=eq.${token}&order=submitted_at.desc&limit=1`,
+    { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }
+  );
+  const rows = await res.json();
+  return rows && rows.length > 0 ? rows[0] : null;
+}
+
+async function fetchSignature(token) {
+  // Chercher d'abord dans signing_requests (statut mis à jour à la signature)
+  try {
+    const r1 = await fetch(
+      `${SUPA_URL}/rest/v1/signing_requests?token=eq.${token}&status=eq.signed&limit=1`,
+      { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }
+    );
+    const rows1 = await r1.json();
+    if (rows1 && rows1.length > 0) {
+      const row = rows1[0];
+      // contract_url = champ dédié OU le lien de signature lui-même
+      if (!row.contract_url && row.link) row.contract_url = row.link;
+      return row;
+    }
+  } catch {}
+  // Fallback : table signatures
+  try {
+    const r2 = await fetch(
+      `${SUPA_URL}/rest/v1/signatures?token=eq.${token}&order=signed_at.desc&limit=1`,
+      { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }
+    );
+    const rows2 = await r2.json();
+    return rows2 && rows2.length > 0 ? rows2[0] : null;
+  } catch { return null; }
+}
+
+function OnboardingPanel({ clientId, onSigLoaded, getContract, upd }) {
+  const [ob, setOb] = D.useState(null);
+  const [sig, setSig] = D.useState(null);
+  const [noteOnb, setNoteOnb] = D.useState(() => {
+    try { return JSON.parse(localStorage.getItem("bto_contracts")||"{}")[clientId]?.noteOnboarding || ""; } catch { return ""; }
+  });
+  const saveNote = (val) => {
+    setNoteOnb(val);
+    try {
+      const c = JSON.parse(localStorage.getItem("bto_contracts")||"{}");
+      c[clientId] = {...(c[clientId]||{}), noteOnboarding: val};
+      localStorage.setItem("bto_contracts", JSON.stringify(c));
+      supaSet("bto_contracts", JSON.stringify(c));
+    } catch {}
+  };
+  const [loading, setLoading] = D.useState(false);
+  const [open, setOpen] = D.useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      // Chercher le token depuis Supabase (fonctionne sur tous les navigateurs)
+      let token = null;
+      try {
+        const r = await fetch(`${SUPA_URL}/rest/v1/signing_requests?client_id=eq.${clientId}&order=created_at.desc&limit=1`,
+          { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } });
+        const rows = await r.json();
+        if (rows && rows.length > 0) token = rows[0].token;
+      } catch {}
+      // Fallback localStorage si Supabase vide
+      if (!token) {
+        const reqs = JSON.parse(localStorage.getItem('bto_sign_reqs') || '{}');
+        token = reqs[clientId]?.token || null;
+      }
+      if (!token) { setOb('no_token'); setLoading(false); return; }
+      const [data, sigData] = await Promise.all([fetchOnboarding(token), fetchSignature(token)]);
+      setOb(data || 'none');
+      setSig(sigData || null);
+      if (onSigLoaded) onSigLoaded(clientId, sigData || null);
+    } catch { setOb('error'); }
+    setLoading(false);
+  };
+
+  D.useEffect(() => { load(); }, [clientId]);
+
+  const labels = {
+    etablissement:'Établissement', adresse:'Adresse', telephone:'Téléphone', website:'Site web',
+    activite:'Activité', lien_google:'Lien Google', ville_principale:'Ville principale',
+    rayon_km:'Rayon (km)', villes_secondaires:'Villes secondaires', service_1:'Service n°1',
+    service_2:'Service n°2', service_3:'Service n°3', lundi:'Lundi', mardi:'Mardi',
+    mercredi:'Mercredi', jeudi:'Jeudi', vendredi:'Vendredi', samedi:'Samedi', dimanche:'Dimanche',
+    fermetures:'Fermetures', presentation:'Présentation', facebook:'Facebook', instagram:'Instagram',
+    linkedin:'LinkedIn', tiktok:'TikTok', youtube:'YouTube', repondre_avis:'Réponse aux avis',
+    signature_avis:'Signature avis', consignes_avis:'Consignes avis', avis_actuel:'Avis actuellement',
+    strategie_avis:'Stratégie avis', promo:'Promotion', nouveaute:'Nouveauté',
+    produit_phare:'Produit phare', evenement:'Événement', photos_dispo:'Photos disponibles',
+    photos_notes:'Notes photos', invitation_envoyee:'Invitation GBP', contact_nom:'Contact',
+    contact_poste:'Poste', contact_email:'Email', contact_whatsapp:'WhatsApp',
+    disponibilite:'Disponibilité', infos_complementaires:'Infos complémentaires',
+  };
+
+  const groups = [
+    { title:'📍 Établissement', keys:['etablissement','adresse','telephone','website','activite','lien_google'] },
+    { title:'🗺️ Zone desservie', keys:['ville_principale','rayon_km','villes_secondaires'] },
+    { title:'🏆 Services', keys:['service_1','service_2','service_3'] },
+    { title:'🕐 Horaires', keys:['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche','fermetures'] },
+    { title:'⭐ Avis', keys:['repondre_avis','signature_avis','consignes_avis','avis_actuel','strategie_avis'] },
+    { title:'🎯 Offres', keys:['promo','nouveaute','produit_phare','evenement'] },
+    { title:'📱 Réseaux', keys:['facebook','instagram','linkedin','tiktok','youtube'] },
+    { title:'👤 Contact', keys:['contact_nom','contact_poste','contact_email','contact_whatsapp','disponibilite'] },
+    { title:'💬 Présentation', keys:['presentation','infos_complementaires'] },
+  ];
+
+  if (loading) return n.jsx('div', { style:{padding:'10px 18px',fontSize:12,color:'#9CA3AF',borderTop:'1px solid #F3F4F6'}, children:'⏳ Chargement…' });
+  if (ob === 'error') return n.jsx('div', { style:{padding:'10px 18px',fontSize:12,color:'#dc2626',borderTop:'1px solid #F3F4F6'}, children:'⚠️ Erreur Supabase.' });
+
+  if (!ob || ob === 'no_token') return n.jsxs('div', {
+    style:{padding:'10px 18px',borderTop:'1px solid #F3F4F6',display:'flex',alignItems:'center',gap:8},
+    children:[
+      n.jsx('span',{style:{fontSize:11,color:'#9CA3AF'},children:'📨 Aucun lien de signature envoyé — cliquez "Envoyer pour signature" pour démarrer'}),
+    ],
+  });
+
+  if (!sig && ob === 'none') return n.jsxs('div', {
+    style:{padding:'10px 18px',borderTop:'1px solid #F3F4F6',display:'flex',alignItems:'center',gap:8},
+    children:[
+      n.jsx('span',{style:{fontSize:11,color:'#9CA3AF'},children:'⏳ Lien envoyé — en attente de la signature et de l\'onboarding client'}),
+    ],
+  });
+
+  const d = ob && ob !== 'none' ? (ob.data || {}) : {};
+  const submittedAt = ob && ob.submitted_at ? new Date(ob.submitted_at).toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'}) : null;
+  const signedAt = sig && sig.signed_at && sig.signed_at !== 'null' ? new Date(sig.signed_at).toLocaleDateString('fr-FR', {day:'numeric',month:'long',year:'numeric'}) : null;
+
+  return n.jsxs('div', {
+    style:{ borderTop:'1px solid #E5E7EB' },
+    children:[
+      /* Bandeau statut compact */
+      n.jsxs('div', {
+        style:{ padding:'8px 18px', background: sig ? '#F0FDF4' : '#F8F9FB', borderBottom:'1px solid #E5E7EB', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap' },
+        children:[
+          n.jsxs('div', { style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}, children:[
+            sig
+              ? n.jsxs('span', { style:{fontSize:11,fontWeight:700,color:'#059669'}, children:['✅ Signé', sig.signer_name ? ` · ${sig.signer_name}` : '', signedAt ? ` · ${signedAt}` : ''] })
+              : n.jsx('span', { style:{fontSize:11,color:'#9CA3AF'}, children:'⏳ En attente de signature' }),
+            submittedAt && n.jsx('span', { style:{fontSize:11,color:'#6B40D8',fontWeight:600}, children:`· 📋 Onboarding reçu le ${submittedAt}` }),
+          ]}),
+          n.jsxs('div', { style:{display:'flex',gap:6}, children:[
+            sig?.contract_url && n.jsx('a', {
+              href: sig.link || sig.contract_url, target:'_blank', rel:'noreferrer',
+              style:{fontSize:11,fontWeight:700,color:'#059669',padding:'3px 8px',borderRadius:6,border:'1px solid #86EFAC',background:'white',textDecoration:'none'},
+              children:'👁️ Contrat',
+            }),
+            n.jsx('button', {
+              onClick: () => setOpen(v => !v),
+              style:{fontSize:11,fontWeight:600,color:'#6B7280',padding:'3px 8px',borderRadius:6,border:'1px solid #E5E7EB',background:'white',cursor:'pointer',fontFamily:'inherit'},
+              children: open ? '▲ Masquer' : `▼ ${submittedAt ? 'Onboarding' : 'Détails'}`,
+            }),
+          ]}),
+        ],
+      }),
+      open && n.jsxs('div', {
+        style:{ padding:'0 18px 16px', display:'flex', flexDirection:'column', gap:14 },
+        children: [
+        /* Note privée */
+        n.jsxs('div', { style:{background:'#FFFBEB',borderRadius:10,border:'1px solid #FDE68A',padding:'12px 14px'}, children:[
+          n.jsx('div',{style:{fontSize:10,fontWeight:700,color:'#92400E',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6},children:'📝 Note privée (visible uniquement par vous)'}),
+          n.jsx('textarea',{
+            value:noteOnb, rows:3,
+            onChange:ev=>saveNote(ev.target.value),
+            placeholder:'Infos manquantes, corrections à faire, points à vérifier avec le client…',
+            style:{width:'100%',border:'1px solid #FCD34D',borderRadius:8,padding:'8px 10px',fontSize:12.5,fontFamily:'inherit',resize:'vertical',background:'white',color:'#1E1B30',boxSizing:'border-box'},
+          }),
+        ]}),
+        ...groups.map(g => {
+          const rows = g.keys.filter(k => d[k] && d[k].trim && d[k].trim() !== '');
+          if (!rows.length) return null;
+          return n.jsxs('div', { key:g.title, children:[
+            n.jsx('div', { style:{fontSize:10,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:6}, children:g.title }),
+            n.jsx('div', { style:{background:'#F8F9FB',borderRadius:10,border:'1px solid #E5E7EB',overflow:'hidden'}, children:
+              rows.map((k,i) => n.jsxs('div', {
+                key:k,
+                style:{display:'flex',gap:12,padding:'8px 12px',borderTop:i>0?'1px solid #F3F4F6':'none',alignItems:'flex-start'},
+                children:[
+                  n.jsx('div', { style:{width:130,flexShrink:0,fontSize:11,fontWeight:700,color:'#6B7280'}, children:labels[k]||k }),
+                  n.jsx('div', { style:{fontSize:12,color:'#1E1B30',flex:1,lineHeight:1.5}, children:d[k] }),
+                ],
+              }))
+            }),
+          ]});
+        }).filter(Boolean),
+        ],
+      }),
+    ],
+  });
+}
+
+function ContratTab({ clients: e, getContract: t, upd: ed }) {
+  const [hOpen, setHOpen] = D.useState(null);
+  const [suppModal, setSuppModal] = D.useState(null);
+  const [suppLabel, setSuppLabel] = D.useState("");
+  const [suppAmount, setSuppAmount] = D.useState("");
+  const [parrainageRemise, setParrainageRemise] = D.useState("none");
   const [i, r] = D.useState(() => {
       try {
         return JSON.parse(localStorage.getItem("bto_paiements") || "{}");
@@ -6211,45 +6598,108 @@ function ContratTab({ clients: e, getContract: t }) {
       );
     }),
     [l, a] = D.useState(s[0].value),
-    d = (x, j, I) => {
+    d = (x, j, I, supp, parrainage, win) => {
       const [z, g] = I.split("-"),
         h = new Date(parseInt(z), parseInt(g) - 1).toLocaleDateString("fr-FR", {
           month: "long",
           year: "numeric",
         }),
         f = `BTO-${z}${g}-${String(e.indexOf(x) + 1).padStart(3, "0")}`,
-        c = localStorage.getItem("ag_name") || "BeTheOne",
+        c = localStorage.getItem("ag_name") || "Be The One",
+        agSiret = localStorage.getItem("ag_siret") || "105 096 291 00015",
+        agAddr  = localStorage.getItem("ag_address") || "6 Keryvarho, 56450 Le Hézo",
+        agEmail = localStorage.getItem("ag_email") || "contact@agence-betheone.fr",
+        agPhone = localStorage.getItem("ag_phone") || "06 51 17 69 10",
+        agIban  = localStorage.getItem("ag_iban")  || "",
+        agBic   = localStorage.getItem("ag_bic")   || "",
+        contractLabels = { setup: "Setup Local", leader: "Leader Local — 6 mois", leader_annuel: "Leader Local — Annuel" },
+        contractLabel = contractLabels[j.typeContrat] || "Prestation GMB",
+        isSetupInvoice = j.typeContrat === "setup",
+        defaultAmount = isSetupInvoice ? 299 : j.typeContrat === "leader_annuel" ? 119 : 139,
+        baseAmount = Math.round(parseFloat(j.montant || defaultAmount)),
+        prestaItemsSetup = ["Audit complet de la fiche Google Business Profile","Analyse des 3 concurrents principaux","Optimisation SEO + définition des mots-clés locaux","Configuration complète de la fiche (catégories, description, horaires, attributs)","2 posts de lancement + 5 photos fournies par le client","Rapport de recommandations stratégiques"],
+        prestaItemsLeader = ["Gestion mensuelle Google Business Profile","Optimisation locale","Publications Google","Gestion des avis","Suivi du positionnement","Reporting mensuel"],
+        prestaItems = isSetupInvoice ? prestaItemsSetup : prestaItemsLeader,
+        prestaList = `<ul style="margin:6px 0 0;padding-left:18px;color:#6B7280;font-size:12px;line-height:1.8">${prestaItems.map((pi) => `<li>${pi}</li>`).join("")}</ul>`,
+        items = [{ label: contractLabel, desc: `${x.name} · ${h}${prestaList}`, amount: baseAmount }];
+      if (supp && supp.amount) items.push({ label: supp.label || "Supplément", desc: `Prestation complémentaire · ${x.name} · ${h}`, amount: Math.round(supp.amount) });
+      if (!isSetupInvoice && parrainage === "filleul1") items.push({ label: "Remise parrainage — 1 filleul", desc: `Réduction 50% · Programme de parrainage Be The One`, amount: -Math.round(baseAmount * 0.5), discount: true });
+      if (!isSetupInvoice && parrainage === "filleul2") items.push({ label: "Remise parrainage — 1 mois offert", desc: `Mois offert · Programme de parrainage Be The One`, amount: -baseAmount, discount: true });
+      if (!isSetupInvoice && parrainage === "filleul3") items.push({ label: "Remise parrainage — 1 mois offert (filleul suppl.)", desc: `Mois offert par filleul supplémentaire · Programme de parrainage Be The One`, amount: -baseAmount, discount: true });
+      const total = items.reduce((s, it) => s + it.amount, 0),
+        rows = items.map((it) => `<tr style="${it.discount ? 'color:#059669' : ''}"><td><strong>${it.label}</strong><br/><small style="color:${it.discount ? '#059669' : '#6B7280'}">${it.desc}</small></td><td style="white-space:nowrap;${it.discount ? 'color:#059669;font-weight:700' : ''}">${it.amount}&nbsp;€</td><td style="white-space:nowrap">—</td><td style="white-space:nowrap;${it.discount ? 'color:#059669;font-weight:700' : ''}">${it.amount}&nbsp;€</td></tr>`).join(""),
         u = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Facture ${f}</title>
-    <style>body{font-family:system-ui,sans-serif;padding:40px;max-width:700px;margin:0 auto;color:#111}
-    .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:3px solid #3B5BDB;padding-bottom:20px}
-    .logo{font-size:22px;font-weight:900;color:#3B5BDB}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0}
-    .box{background:#F4F5FA;border-radius:10px;padding:16px;border:1px solid #E5E7EB}.box h3{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin:0 0 8px}
-    .box p{margin:3px 0;font-size:13px}table{width:100%;border-collapse:collapse;margin:20px 0}
-    th{background:#F4F5FA;padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6B7280;border-bottom:1px solid #E5E7EB}
-    td{padding:12px 14px;border-bottom:1px solid #F3F4F6;font-size:13px}
-    .tot{font-weight:700;font-size:15px;border-top:2px solid #111!important;border-bottom:none!important}
-    .footer{margin-top:32px;padding-top:16px;border-top:1px solid #E5E7EB;font-size:11px;color:#9CA3AF;text-align:center}</style></head>
-    <body><div class="hdr"><div><div class="logo">${c}</div><div style="font-size:11px;color:#6B7280">Agence GMB · Vannes</div></div>
-    <div style="text-align:right"><div style="font-size:11px;color:#6B7280">Date d'émission</div><div style="font-weight:600">${new Date().toLocaleDateString("fr-FR")}</div>
-    <div style="font-size:11px;color:#6B7280;margin-top:6px">N°</div><div style="font-weight:700;color:#3B5BDB">${f}</div></div></div>
-    <div style="font-size:26px;font-weight:900;margin-bottom:4px">Facture</div><div style="font-size:13px;color:#6B7280">Période : ${h}</div>
-    <div class="grid"><div class="box"><h3>Émetteur</h3><p><strong>${c}</strong></p><p>${localStorage.getItem("ag_email") || ""}</p><p>${localStorage.getItem("ag_phone") || ""}</p></div>
-    <div class="box"><h3>Client</h3><p><strong>${x.name}</strong></p><p>${j.interlocuteur || ""}</p><p>${j.email || ""}</p></div></div>
+    <style>@page{size:A4;margin:12mm}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{font-family:system-ui,sans-serif;padding:0;margin:0;color:#1E1B30;background:#fff;font-size:12.5px;line-height:1.45}
+    .rp-top-bar{height:4px;background:linear-gradient(90deg,#6B40D8,#C03080,#E85A30)}
+    .wrap{padding:18px 30px;max-width:700px;margin:0 auto}
+    .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #E5E7EB}
+    .logo-badge{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px;flex-shrink:0}
+    .ag-name{font-size:14px;font-weight:800;color:#1E1B30}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0}
+    .box{background:#F4F5FA;border-radius:10px;padding:12px 14px;border:1px solid #E5E7EB}
+    .box h3{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B40D8;margin:0 0 6px}
+    .box p{margin:2px 0;font-size:12px;color:#374151}
+    .rp-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B40D8;margin:16px 0 8px;display:flex;align-items:center;gap:10px}
+    .rp-section:after{content:"";flex:1;height:2px;background:linear-gradient(90deg,#6B40D8,#C03080,#E85A30);opacity:.25;border-radius:2px}
+    table{width:100%;border-collapse:collapse;margin:4px 0 12px}
+    th{background:#F9FAFB;padding:7px 12px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;border-bottom:1px solid #E5E7EB}
+    td{padding:8px 12px;border-bottom:1px solid #F3F4F6;font-size:12px;vertical-align:top}
+    td ul{margin:4px 0 0;padding-left:16px;color:#6B7280;font-size:10.5px;line-height:1.5}
+    .tot td{font-weight:800;font-size:13px;border-top:2px solid #1E1B30;border-bottom:none;color:#1E1B30}
+    .terms{background:#F4F5FA;border:1px solid #E5E7EB;border-radius:10px;padding:10px 14px;font-size:11.5px;color:#374151}
+    .mention{font-size:10.5px;color:#6B7280;background:#F4F5FA;padding:8px 12px;border-radius:8px;margin:10px 0}
+    .footer{margin-top:16px;padding-top:10px;border-top:1px solid #E5E7EB;font-size:10px;color:#9CA3AF;text-align:center}</style></head>
+    <body><div class="rp-top-bar"></div><div class="wrap">
+    <div class="hdr"><div style="display:flex;align-items:center;gap:10px">
+      <div class="logo-badge">B</div>
+      <div><div class="ag-name">${c}</div><div style="font-size:10px;color:#6B7280">${agAddr}</div><div style="font-size:10px;color:#6B7280">SIRET : ${agSiret}</div></div></div>
+    <div style="text-align:right"><div style="font-size:10px;color:#6B7280">Date d'émission</div><div style="font-weight:600;font-size:12px">${new Date().toLocaleDateString("fr-FR")}</div>
+    <div style="font-size:10px;color:#6B7280;margin-top:4px">N°</div><div style="font-weight:800;color:#6B40D8;font-size:12px">${f}</div></div></div>
+    <div style="font-size:21px;font-weight:900;margin-bottom:2px">Facture</div><div style="font-size:11.5px;color:#6B7280">Période : ${h}</div>
+    <div class="grid">
+      <div class="box"><h3>Émetteur</h3><p><strong>${c}</strong></p><p>${agAddr}</p><p>${agEmail}</p><p>${agPhone}</p><p style="color:#9CA3AF;font-size:10px">SIRET : ${agSiret}</p></div>
+      <div class="box"><h3>Client</h3><p><strong>${x.name}</strong></p>${j.interlocuteur ? `<p>${j.interlocuteur}</p>` : ""}${j.email ? `<p>${j.email}</p>` : ""}${j.telephone ? `<p>${j.telephone}</p>` : ""}${j.adresseClient ? `<p>${j.adresseClient}</p>` : ""}</div>
+    </div>
+    <div class="rp-section">Détail de la prestation</div>
     <table><thead><tr><th>Description</th><th>Montant HT</th><th>TVA</th><th>TTC</th></tr></thead>
-    <tbody><tr><td>Optimisation Google Business Profile<br/><small style="color:#6B7280">${x.name} · ${h}</small></td>
-    <td>${parseFloat(j.montant || 99).toFixed(2)} €</td><td>0 %</td><td>${parseFloat(j.montant || 99).toFixed(2)} €</td></tr></tbody>
-    <tfoot><tr class="tot"><td colspan="3">Total TTC</td><td>${parseFloat(j.montant || 99).toFixed(2)} €</td></tr></tfoot></table>
-    <p style="font-size:12px;color:#6B7280;background:#F4F5FA;padding:10px;border-radius:8px">Auto-entrepreneur — TVA non applicable, art. 293 B du CGI</p>
-    <div class="footer">Merci pour votre confiance · ${c}</div></body></html>`,
-        m = window.open("", "_blank");
+    <tbody>${rows}</tbody>
+    <tfoot><tr class="tot"><td colspan="3">Total TTC</td><td style="white-space:nowrap">${total}&nbsp;€</td></tr></tfoot></table>
+    <p class="mention">Auto-entrepreneur — TVA non applicable, art. 293 B du CGI</p>
+    <div class="rp-section">Conditions de règlement</div>
+    <div class="terms">${isSetupInvoice ? "Paiement unique à réception de facture. Prestation démarrée après réception du règlement." : "Abonnement mensuel — paiement à réception de facture, sous 10 jours."}</div>
+    ${agIban ? `<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:11pt"><p style="margin:0 0 4px"><strong>Coordonnées bancaires (virement)</strong></p><p style="margin:2px 0">Titulaire : Sara Baudouin — Be The One</p><p style="margin:2px 0">IBAN : ${agIban}</p>${agBic ? `<p style="margin:2px 0">BIC : ${agBic}</p>` : ""}</div>` : ""}
+    <div class="footer">Merci pour votre confiance · ${c} · ${agEmail}</div></div></body></html>`,
+        m = win || window.open("", "_blank");
       (m.document.write(u),
         m.document.close(),
         setTimeout(() => m.print(), 500));
+      if (ed) {
+        const rec = { number: f, period: I, periodLabel: h, amount: total, date: new Date().toISOString(), supplement: supp || null };
+        const hist = [...(x.factures || []).filter((rr) => rr.number !== f), rec].sort((a, b) => (a.period < b.period ? 1 : -1));
+        ed(e.map((c) => (c.id === x.id ? { ...c, factures: hist } : c)));
+      }
     },
-    p = e
+    askSupp = (x, j, I) => {
+      // Ouvre une fenêtre modale dans l'app (plus fiable que prompt() : pas de
+      // blocage de popup, retour visuel clair, et on sait si la facture a été générée).
+      setSuppLabel("");
+      setSuppAmount("");
+      setSuppModal({ x, j, I });
+    },
+    // Filtrer les clients actifs pour le mois sélectionné (selon date de signature)
+    q = e.filter((x) => {
+      const ct = t(x.id);
+      if (!ct.dateSignature) return true;
+      const sigMonth = ct.dateSignature.slice(0, 7);
+      return l >= sigMonth;
+    }),
+    p = q
       .filter((x) => i[`${x.id}_${l}`] === "paye")
-      .reduce((x, j) => x + parseFloat(t(j.id).montant || 99), 0),
-    b = e.reduce((x, j) => x + parseFloat(t(j.id).montant || 99), 0);
+      .reduce((x, j) => x + parseFloat(t(j.id).montant || (t(j.id).typeContrat === "leader_annuel" ? 119 : 139)), 0),
+    b = q.reduce((x, j) => x + parseFloat(t(j.id).montant || (t(j.id).typeContrat === "leader_annuel" ? 119 : 139)), 0);
   return n.jsxs("div", {
     children: [
       n.jsxs("div", {
@@ -6336,7 +6786,8 @@ function ContratTab({ clients: e, getContract: t }) {
               "Actions",
             ].map((x) => n.jsx("div", { children: x }, x)),
           }),
-          e.map((x, j) => {
+          q.length === 0 ? n.jsx("div", { style:{padding:"32px",textAlign:"center",color:"#9CA3AF",fontSize:13}, children:"Aucun client actif pour ce mois" }) :
+          q.map((x, j) => {
             const I = t(x.id),
               z = `${x.id}_${l}`,
               g = i[z] || "attente",
@@ -6368,7 +6819,7 @@ function ContratTab({ clients: e, getContract: t }) {
                   display: "grid",
                   gridTemplateColumns: "2fr 1fr 1fr 1fr 1.2fr",
                   padding: "12px 16px",
-                  borderBottom: j < e.length - 1 ? "1px solid #F3F4F6" : "none",
+                  borderBottom: j < q.length - 1 ? "1px solid #F3F4F6" : "none",
                   alignItems: "center",
                 },
                 children: [
@@ -6394,7 +6845,7 @@ function ContratTab({ clients: e, getContract: t }) {
                   }),
                   n.jsxs("div", {
                     style: { fontSize: 14, fontWeight: 800, color: "#059669" },
-                    children: [parseFloat(I.montant || 99).toFixed(0), " €"],
+                    children: [parseFloat(I.montant || (I.typeContrat === "setup" ? 299 : I.typeContrat === "leader_annuel" ? 119 : 139)).toFixed(0), " €"],
                   }),
                   n.jsx("div", {
                     children: n.jsx("span", {
@@ -6436,7 +6887,7 @@ function ContratTab({ clients: e, getContract: t }) {
                         ),
                       ),
                       n.jsx("button", {
-                        onClick: () => d(x, I, l),
+                        onClick: () => askSupp(x, I, l),
                         style: {
                           padding: "4px 10px",
                           borderRadius: 7,
@@ -6450,6 +6901,22 @@ function ContratTab({ clients: e, getContract: t }) {
                         },
                         children: "PDF",
                       }),
+                      n.jsxs("button", {
+                        onClick: () => setHOpen(hOpen === x.id ? null : x.id),
+                        title: "Historique des factures",
+                        style: {
+                          padding: "4px 9px",
+                          borderRadius: 7,
+                          border: `1.5px solid ${hOpen === x.id ? "#6B40D8" : "#E5E7EB"}`,
+                          background: hOpen === x.id ? "#FDF2F8" : "white",
+                          color: hOpen === x.id ? "#6B40D8" : "#6B7280",
+                          cursor: "pointer",
+                          fontSize: 10.5,
+                          fontFamily: "inherit",
+                          fontWeight: 600,
+                        },
+                        children: ["🕘", (x.factures || []).length ? ` ${x.factures.length}` : ""],
+                      }),
                     ],
                   }),
                 ],
@@ -6457,8 +6924,112 @@ function ContratTab({ clients: e, getContract: t }) {
               x.id,
             );
           }),
+          hOpen && q.find((x) => x.id === hOpen) && (() => {
+            const x = q.find((cl) => cl.id === hOpen);
+            const hist = x.factures || [];
+            return n.jsxs("div", {
+              style: { padding: "12px 16px", background: "#F9FAFB", borderTop: "1px solid #F3F4F6" },
+              children: [
+                n.jsxs("div", { style: { fontSize: 11.5, fontWeight: 700, color: "#6B7280", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }, children: ["🕘 Historique des factures — ", x.name] }),
+                hist.length === 0
+                  ? n.jsx("div", { style: { fontSize: 12.5, color: "#9CA3AF" }, children: "Aucune facture générée pour ce client pour le moment." })
+                  : n.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: hist.map((rec) =>
+                      n.jsxs("div", {
+                        key: rec.number,
+                        style: { display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: "8px 12px" },
+                        children: [
+                          n.jsxs("div", { children: [
+                            n.jsx("div", { style: { fontSize: 12.5, fontWeight: 700, color: "#1E1B30" }, children: rec.number }),
+                            n.jsxs("div", { style: { fontSize: 11, color: "#9CA3AF" }, children: [
+                              rec.periodLabel || rec.period, " · générée le ", new Date(rec.date).toLocaleDateString("fr-FR"), " · ", Math.round(rec.amount), " €",
+                              rec.supplement ? ` · + supplément "${rec.supplement.label}" (${Math.round(rec.supplement.amount)} €)` : "",
+                            ]}),
+                          ]}),
+                          n.jsx("button", {
+                            onClick: () => d(x, t(x.id), rec.period, rec.supplement || null),
+                            style: { padding: "4px 10px", borderRadius: 7, border: "1.5px solid #3B5BDB", background: "white", color: "#3B5BDB", cursor: "pointer", fontSize: 10.5, fontFamily: "inherit", fontWeight: 600 },
+                            children: "🖨️ Réimprimer",
+                          }),
+                        ],
+                      }),
+                    )}),
+              ],
+            });
+          })(),
         ],
       }),
+      suppModal &&
+        n.jsx("div", {
+          onClick: () => setSuppModal(null),
+          style: { position: "fixed", inset: 0, background: "rgba(30,27,48,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+          children: n.jsxs("div", {
+            onClick: (ev) => ev.stopPropagation(),
+            style: { background: "white", borderRadius: 16, padding: "24px", width: 360, maxWidth: "90vw", border: "1px solid #E5E7EB", borderTop: "3px solid #6B40D8" },
+            children: [
+              n.jsx("div", { style: { fontWeight: 700, fontSize: 15, color: "#1E1B30", marginBottom: 6 }, children: "Ajouter un supplément ce mois-ci ?" }),
+              n.jsxs("div", { style: { fontSize: 12.5, color: "#6B7280", marginBottom: 16, lineHeight: 1.6 }, children: [
+                "Pour ", n.jsx("strong", { children: suppModal.x.name }), " — laissez vide si aucun supplément ce mois-ci.",
+              ]}),
+              n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }, children: "Description" }),
+              n.jsx("input", {
+                className: "inp",
+                value: suppLabel,
+                onChange: (ev) => setSuppLabel(ev.target.value),
+                placeholder: "Ex : Shooting photo",
+                style: { width: "100%", marginBottom: 12, fontSize: 13 },
+              }),
+              n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }, children: "Montant en €" }),
+              n.jsx("input", {
+                className: "inp",
+                type: "number",
+                value: suppAmount,
+                onChange: (ev) => setSuppAmount(ev.target.value),
+                placeholder: "Ex : 80",
+                style: { width: "100%", marginBottom: 14, fontSize: 13 },
+              }),
+              suppModal && (t(suppModal.x.id)||{}).typeContrat !== "setup" && n.jsx("div", { style: { height: 1, background: "#F3F4F6", margin: "0 0 14px" } }),
+              suppModal && (t(suppModal.x.id)||{}).typeContrat !== "setup" && n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 4 }, children: "🎁 Remise parrainage (optionnel)" }),
+              suppModal && (t(suppModal.x.id)||{}).typeContrat !== "setup" && n.jsx("select", {
+                className: "inp",
+                value: parrainageRemise,
+                onChange: (ev) => setParrainageRemise(ev.target.value),
+                style: { width: "100%", marginBottom: 18, fontSize: 13 },
+                children: [
+                  n.jsx("option", { value: "none", children: "Aucune remise" }),
+                  n.jsx("option", { value: "filleul1", children: "1 filleul — −50% sur ce mois" }),
+                  n.jsx("option", { value: "filleul2", children: "2 filleuls — 1 mois offert" }),
+                  n.jsx("option", { value: "filleul3", children: "3 filleuls et + — 1 mois offert (par filleul suppl.)" }),
+                ],
+              }),
+              n.jsxs("div", { style: { display: "flex", gap: 10 }, children: [
+                n.jsx("button", {
+                  onClick: () => {
+                    const { x, j, I } = suppModal;
+                    setSuppModal(null);
+                    setParrainageRemise("none");
+                    d(x, j, I, null, "none");
+                  },
+                  style: { flex: 1, padding: "10px", borderRadius: 9, border: "1.5px solid #E5E7EB", background: "white", color: "#374151", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 13 },
+                  children: "Sans supplément",
+                }),
+                n.jsx("button", {
+                  onClick: () => {
+                    const { x, j, I } = suppModal;
+                    const amount = parseFloat((suppAmount || "").replace(",", "."));
+                    let supp = null;
+                    if (!isNaN(amount) && amount > 0) supp = { label: suppLabel.trim() || "Supplément", amount };
+                    const par = parrainageRemise;
+                    setSuppModal(null);
+                    setParrainageRemise("none");
+                    d(x, j, I, supp, par);
+                  },
+                  style: { flex: 1, padding: "10px", borderRadius: 9, border: "none", background: "linear-gradient(135deg,#6B40D8,#C03080,#E85A30)", color: "white", cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13 },
+                  children: "Générer la facture",
+                }),
+              ]}),
+            ],
+          }),
+        }),
     ],
   });
 }
@@ -6469,49 +7040,64 @@ function FactureTab({ clients: e, getContract: t }) {
     s = o ? t(o.id) : {},
     l = () => {
       if (!o) return;
-      const d = localStorage.getItem("ag_name") || "BeTheOne",
+      const d = localStorage.getItem("ag_name") || "Be The One",
+        agEmail2 = localStorage.getItem("ag_email") || "contact@agence-betheone.fr",
+        contractTypeLbls = { setup:"⚡ Setup Local", leader:"Leader Local — 6 mois", leader_annuel:"Leader Local — Annuel" },
+        ctLabel = contractTypeLbls[s.typeContrat] || "Accompagnement GMB",
+        hasAvis = s.typeContrat === "leader" || s.typeContrat === "leader_annuel",
         p = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Onboarding ${o.name}</title>
     <style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#F4F5FA;padding:0;margin:0}
-    .page{max-width:660px;margin:0 auto;padding:32px 16px}
+    .page{max-width:640px;margin:0 auto;padding:32px 16px}
     .hdr{background:linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30);border-radius:14px;padding:24px;color:white;margin-bottom:20px;text-align:center}
     .card{background:white;border-radius:12px;padding:20px;margin-bottom:14px;border:1px solid #E5E7EB}
-    .card h2{font-size:14px;font-weight:700;margin:0 0 14px}
+    .card h2{font-size:14px;font-weight:700;margin:0 0 14px;color:#1E1B30}
     label{display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px}
-    input,textarea,select{width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:13.5px;font-family:inherit;background:#F4F5FA}
+    input,textarea,select{width:100%;padding:9px 12px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:13.5px;font-family:inherit;background:#F9FAFB}
     textarea{min-height:70px;resize:vertical}
-    .btn{width:100%;padding:13px;background:linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30);color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
+    .alert{background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#92400E;margin-bottom:14px;font-weight:600}
+    .btn{width:100%;padding:14px;background:linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30);color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;margin-top:16px}
     .footer{text-align:center;font-size:11px;color:#9CA3AF;margin-top:20px}</style></head>
     <body><div class="page">
-    <div class="hdr"><div style="font-size:20px;font-weight:900">${d}</div><div style="font-size:12px;opacity:.7;margin-top:4px">Formulaire d'onboarding</div><div style="font-size:17px;font-weight:800;margin-top:8px">${o.name}</div></div>
-    <p style="text-align:center;color:#6B7280;font-size:13px;margin-bottom:20px">Merci de remplir ce formulaire pour démarrer votre accompagnement GMB.</p>
+    <div class="hdr">
+      <div style="font-size:20px;font-weight:900">${d}</div>
+      <div style="font-size:12px;opacity:.7;margin-top:4px">Formulaire d'onboarding · ${ctLabel}</div>
+      <div style="font-size:17px;font-weight:800;margin-top:8px">${o.name}</div>
+    </div>
+    <p style="text-align:center;color:#6B7280;font-size:13px;margin-bottom:16px">Merci de remplir ce formulaire pour démarrer votre accompagnement. Toutes les informations sont confidentielles.</p>
+    <div class="alert">📸 <strong>Important :</strong> Les photos de votre établissement doivent être fournies par vos soins. Envoyez-les par email à ${agEmail2} après avoir rempli ce formulaire.</div>
     <div class="card"><h2>📍 Accès Google Business</h2>
-    <label>Email du compte Google (fiche)</label><input type="email" placeholder="email@gmail.com"/>
-    <label>Avez-vous accès à votre fiche ?</label>
+    <label>Email du compte Google associé à la fiche</label><input type="email" placeholder="email@gmail.com"/>
+    <label>Avez-vous accès à votre fiche Google ?</label>
     <select><option>Oui, j'ai accès</option><option>Non, je n'ai pas accès</option><option>Je ne sais pas</option></select>
-    <label>Lien de votre fiche (si connu)</label><input type="url" placeholder="https://maps.google.com/..."/></div>
+    <label>Lien de votre fiche Google (si connu)</label><input type="url" placeholder="https://maps.google.com/..."/></div>
     <div class="card"><h2>🏢 Informations établissement</h2>
     <label>Nom affiché sur Google</label><input type="text" value="${o.name}"/>
     <label>Adresse complète</label><input type="text"/>
-    <label>Téléphone</label><input type="tel"/>
-    <label>Site web</label><input type="url"/>
-    <label>Horaires d'ouverture</label><textarea placeholder="Lundi 9h-18h&#10;Mardi 9h-18h&#10;..."></textarea></div>
+    <label>Téléphone principal</label><input type="tel"/>
+    <label>Site web</label><input type="url" placeholder="https://..."/>
+    <label>Horaires d'ouverture</label><textarea placeholder="Lundi 9h–18h&#10;Mardi 9h–18h&#10;Fermé le week-end…"></textarea></div>
     <div class="card"><h2>📝 Activité & Services</h2>
     <label>Description de votre activité</label><textarea placeholder="Ce que vous faites, votre spécialité, votre zone d'intervention…"></textarea>
-    <label>Services ou produits principaux</label><textarea placeholder="Service 1&#10;Service 2&#10;..."></textarea>
-    <label>Avez-vous des photos à nous fournir ?</label>
-    <select><option>Oui, je vais vous les envoyer</option><option>Non, pas pour l'instant</option></select></div>
-    <div class="card"><h2>⭐ Préférences avis</h2>
+    <label>Services ou produits principaux (un par ligne)</label><textarea placeholder="Service 1&#10;Service 2&#10;Service 3…"></textarea>
+    <label>Vos mots-clés locaux (si vous les connaissez)</label><textarea placeholder="Ex : plombier Vannes, chauffagiste Morbihan…"></textarea></div>
+    ${hasAvis ? `<div class="card"><h2>⭐ Gestion des avis</h2>
     <label>Souhaitez-vous qu'on réponde aux avis en votre nom ?</label>
     <select><option>Oui</option><option>Non</option></select>
     <label>Signature pour les réponses</label><input type="text" placeholder="Ex : L'équipe ${o.name}"/>
-    <label>Consignes (ton, sujets à éviter…)</label><textarea placeholder="Ex : toujours vouvoyer, ne pas mentionner les prix…"></textarea></div>
+    <label>Consignes particulières (ton, sujets à éviter…)</label><textarea placeholder="Ex : toujours vouvoyer, ne pas mentionner les prix…"></textarea></div>` : ""}
     <div class="card"><h2>👤 Interlocuteur principal</h2>
     <label>Prénom et nom</label><input type="text" value="${s.interlocuteur || ""}"/>
-    <label>Poste</label><input type="text" value="${s.poste || ""}"/>
+    <label>Poste / Fonction</label><input type="text" value="${s.poste || ""}"/>
     <label>Email direct</label><input type="email" value="${s.email || ""}"/>
-    <label>Téléphone direct</label><input type="tel" value="${s.telephone || ""}"/></div>
-    <button class="btn" onclick="alert('Merci ! Nous reviendrons vers vous rapidement.')">✓ Envoyer le formulaire</button>
-    <div class="footer">${d} · Vannes · Ce formulaire est confidentiel</div>
+    <label>Téléphone direct</label><input type="tel" value="${s.telephone || ""}"/>
+    <label>Moyen de contact préféré</label>
+    <select><option>Email</option><option>WhatsApp</option><option>Téléphone</option></select></div>
+    ${s.parrain ? `<div class="card" style="border-left:3px solid #6B40D8;background:linear-gradient(135deg,#F8F6FF,#FDF8FF)"><h2>🎁 Parrainage</h2>
+    <p style="font-size:13px;color:#374151;margin:0 0 8px">Vous avez été recommandé par :</p>
+    <p style="font-size:15px;font-weight:700;color:#6B40D8;margin:0 0 12px">${s.parrain}</p>
+    <p style="font-size:12px;color:#6B7280;margin:0">Merci de faire confiance à l'Agence Be The One suite à cette recommandation !</p></div>` : ""}
+    <button class="btn" onclick="this.textContent='✓ Envoyé !';this.style.opacity='.7';alert('Merci ! Renvoyez ce formulaire rempli par email à ${agEmail2}\\n\\nN\\'oubliez pas d\\'envoyer vos photos en pièce jointe.')">✓ Terminer le formulaire</button>
+    <div class="footer">${d} · Ce formulaire est confidentiel · ${agEmail2}</div>
     </div></body></html>`,
         b = new Blob([p], { type: "text/html;charset=utf-8" }),
         x = document.createElement("a");
@@ -6645,38 +7231,9 @@ function FactureTab({ clients: e, getContract: t }) {
               }),
         ],
       }),
-      n.jsxs("div", {
-        style: {
-          background: "#FDF2F8",
-          borderRadius: 12,
-          padding: "14px 16px",
-          border: "1px solid #FBCFE8",
-          fontSize: 12.5,
-          color: "#3B5BDB",
-          lineHeight: 1.7,
-        },
-        children: [
-          n.jsx("div", {
-            style: { fontWeight: 700, marginBottom: 6 },
-            children: "📋 Contenu du formulaire",
-          }),
-          [
-            "Accès Google Business (email, lien fiche)",
-            "Adresse, téléphone, site web, horaires",
-            "Description activité + services",
-            "Préférences réponses aux avis",
-            "Interlocuteur principal",
-          ].map((d, p) =>
-            n.jsxs(
-              "div",
-              {
-                style: { display: "flex", gap: 6, marginBottom: 3 },
-                children: [n.jsx("span", { children: "→" }), d],
-              },
-              p,
-            ),
-          ),
-        ],
+      n.jsx("div", {
+        style: { background:"#F0FDF4", borderRadius:10, padding:"12px 14px", border:"1px solid #BBF7D0", fontSize:12, color:"#065F46" },
+        children: "📸 Les photos doivent être fournies par le client. Le formulaire lui rappelle de les envoyer par email ou WeTransfer.",
       }),
     ],
   });
@@ -6749,7 +7306,7 @@ function ProspectDetailModal({ client: e, clients: t, upd: i }) {
       })
       .reduce((P, T) => P + T.mins, 0),
     N = JSON.parse(localStorage.getItem("bto_contracts") || "{}")[e.id] || {},
-    E = R > 0 ? Math.round(parseFloat(N.montant || 99) / (R / 60)) : 0,
+    E = R > 0 ? Math.round(parseFloat(N.montant || (N.typeContrat === "setup" ? 299 : N.typeContrat === "leader_annuel" ? 119 : 139)) / (R / 60)) : 0,
     M = (P) =>
       P >= 60
         ? `${Math.floor(P / 60)}h${P % 60 ? "" + (P % 60) : ""}`
@@ -6770,7 +7327,7 @@ function ProspectDetailModal({ client: e, clients: t, upd: i }) {
               width: 4,
               height: 28,
               borderRadius: 2,
-              background: "linear-gradient(135deg,#E85A30,#E85A30)",
+              background: "linear-gradient(135deg,var(--indigo2),#C03080)",
               marginRight: 14,
               flexShrink: 0,
             },
@@ -6778,8 +7335,8 @@ function ProspectDetailModal({ client: e, clients: t, upd: i }) {
           n.jsxs("div", {
             children: [
               n.jsx("div", {
-                style: { fontSize: 17, fontWeight: 800, color: "#1E1B30" },
-                children: "⏱ Suivi du temps",
+                style: { fontSize: 16, fontWeight: 800, color: "var(--ink)" },
+                children: "Suivi du temps",
               }),
               n.jsx("div", {
                 style: { fontSize: 12, color: "#6B7280", marginTop: 2 },
@@ -7098,7 +7655,7 @@ function NotificationsPage({
       const reviewCount = parseInt(cl.avisData?.totalAvis || cl.data?.extracted?.reviewCount || 0);
 
       if (score < 50) clientAlerts.push({ clientId: cl.id, client: cl, prio: "critical", icon: "📉", label: `Score critique — ${score}/100`, detail: "Intervention urgente requise", action: "audit" });
-      if (staleDays >= i) clientAlerts.push({ clientId: cl.id, client: cl, prio: staleDays > 90 ? "critical" : "medium", icon: "🔄", label: `Audit en retard — ${staleDays}j`, detail: `Dernier : ${new Date(lastDate).toLocaleDateString("fr-FR")}`, action: "audit" });
+      if (staleDays >= i) clientAlerts.push({ clientId: cl.id, client: cl, prio: staleDays > 90 ? "critical" : "medium", icon: "🔄", label: `Audit en retard — ${staleDays === 999 ? "jamais fait" : staleDays + "j"}`, detail: lastDate ? `Dernier : ${new Date(lastDate).toLocaleDateString("fr-FR")}` : "Aucun audit enregistré", action: "audit" });
       if (rating > 0 && rating < 4) clientAlerts.push({ clientId: cl.id, client: cl, prio: rating < 3 ? "critical" : "high", icon: "⚠️", label: `Note ${rating}/5 — à améliorer`, detail: "Déclencher une campagne avis", action: "avis" });
       if (reviewCount > 0 && reviewCount < 20) clientAlerts.push({ clientId: cl.id, client: cl, prio: "medium", icon: "🌟", label: `Seulement ${reviewCount} avis Google`, detail: "Objectif minimum : 20 avis pour TOP 3", action: "avis" });
       if (cl.history?.length > 0) {
@@ -7117,147 +7674,146 @@ function NotificationsPage({
 
   const totalCount = reviewAlerts.length + ficheAlerts.length + postAlerts.length + clientAlerts.filter(a=>a.prio==="critical"||a.prio==="high").length;
 
+  // Couleurs par section
+  const SEC = {
+    avis:    { color:"#059669", bg:"#ECFDF5", icon:"★", borderColor:"#059669" },
+    fiche:   { color:"#EA580C", bg:"#FFF7ED", icon:"◎", borderColor:"#EA580C" },
+    posts:   { color:"var(--indigo2)", bg:"#F5F3FF", icon:"✦", borderColor:"var(--indigo)" },
+    clients: { color:"#DC2626", bg:"#FEF2F2", icon:"▲", borderColor:"#DC2626" },
+  };
+
   return n.jsxs("div", {
-    style: { padding:"28px 32px", background:"#F4F5FA", minHeight:"100%", overflowY:"auto" },
-    className: "fade",
-    children: [
-      // Header
-      n.jsxs("div", { style:{ marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }, children:[
+    style:{ padding:"28px 32px", background:"#F4F5FA", minHeight:"100%", overflowY:"auto" },
+    className:"fade",
+    children:[
+
+      // ── Header style Dashboard ──
+      n.jsxs("div", { style:{ marginBottom:24, display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }, children:[
         n.jsxs("div", { children:[
-          n.jsxs("div", { style:{ fontSize:22, fontWeight:900, color:"#1E1B30", letterSpacing:"-.02em" }, children:[
-            "🔔 Rappels & Alertes",
-            totalCount > 0 && n.jsx("span", { style:{ marginLeft:10, background:"#DC2626", color:"white", borderRadius:20, padding:"2px 10px", fontSize:13, fontWeight:700 }, children: totalCount }),
+          n.jsxs("div", { style:{ fontSize:28, fontWeight:900, color:"var(--ink)", letterSpacing:"-.02em" }, children:[
+            "Rappels & Alertes",
+            totalCount > 0 && n.jsx("span", { style:{ marginLeft:10, background:"#DC2626", color:"white", borderRadius:20, padding:"2px 10px", fontSize:14, fontWeight:700, verticalAlign:"middle" }, children:totalCount }),
           ]}),
-          n.jsx("div", { style:{ fontSize:13, color:"#6B7280", marginTop:4 }, children: `Aujourd'hui — ${todayLabel}` }),
+          n.jsx("div", { style:{ fontSize:13, color:"var(--ink4)", marginTop:4 }, children:`${todayLabel} · ${e.length} client${e.length>1?"s":""} suivi${e.length>1?"s":""}` }),
         ]}),
-        // Délai audit
-        n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8, background:"white", border:"1.5px solid #E5E7EB", borderRadius:10, padding:"8px 14px" }, children:[
-          n.jsx("span", { style:{ fontSize:12, color:"#6B7280" }, children:"⏱ Rappel audit tous les" }),
-          n.jsx("input", { type:"number", min:7, max:365, value:i, onChange:ev=>r(parseInt(ev.target.value)||30), style:{ width:48, border:"1.5px solid #D1D5DB", borderRadius:6, padding:"3px 6px", fontSize:12, fontFamily:"inherit", textAlign:"center" } }),
-          n.jsx("span", { style:{ fontSize:12, color:"#6B7280" }, children:"jours" }),
+        n.jsxs("div", { className:"card", style:{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px" }, children:[
+          n.jsx("span", { style:{ fontSize:12, color:"var(--ink4)" }, children:"Rappel audit tous les" }),
+          n.jsx("input", { type:"number", min:7, max:365, value:i, onChange:ev=>r(parseInt(ev.target.value)||30), style:{ width:48, border:"1px solid var(--border)", borderRadius:6, padding:"3px 6px", fontSize:12, fontFamily:"inherit", textAlign:"center" } }),
+          n.jsx("span", { style:{ fontSize:12, color:"var(--ink4)" }, children:"jours" }),
         ]}),
       ]}),
 
-      // ── Section 1 : Nouveaux avis ──
-      n.jsxs("div", { style:{ marginBottom:24 }, children:[
-        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
-          "⭐ Nouveaux avis",
-          n.jsx("span", { style:{ background: reviewAlerts.length>0?"#DC2626":"#E5E7EB", color: reviewAlerts.length>0?"white":"#9CA3AF", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: reviewAlerts.length }),
+      // ── Grille 2×2 comme les 3 piliers du Résumé ──
+      n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14 }, children:[
+
+        // Nouveaux avis
+        n.jsxs("div", { className:"card", style:{ borderTop:`3px solid ${SEC.avis.borderColor}` }, children:[
+          n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }, children:[
+            n.jsx("div", { style:{ width:36, height:36, borderRadius:9, background:SEC.avis.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }, children:"⭐" }),
+            n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"var(--ink)" }, children:"Nouveaux avis" }),
+            n.jsx("span", { style:{ marginLeft:"auto", fontSize:20, fontWeight:800, color: reviewAlerts.length>0?SEC.avis.color:"var(--ink4)" }, children: reviewAlerts.length }),
+          ]}),
+          n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginBottom:10 }, children:"Avis reçus depuis le dernier contrôle" }),
+          n.jsx("div", { className:"bar", children: n.jsx("div", { className:"bar-f", style:{ width:`${reviewAlerts.length>0?100:0}%`, background:SEC.avis.color } }) }),
+          reviewAlerts.length > 0 && n.jsx("div", { style:{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }, children:
+            reviewAlerts.map(al => n.jsxs("div", { key:al.clientId, style:{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:SEC.avis.bg, borderRadius:8 }, children:[
+              n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                n.jsx("div", { style:{ fontWeight:600, fontSize:13, color:"var(--ink)" }, children:al.clientName }),
+                al.reviews?.some(r=>r.rating<=2) && n.jsx("div", { style:{ fontSize:11, color:"#DC2626", fontWeight:600 }, children:"Avis négatif détecté" }),
+              ]}),
+              n.jsxs("div", { style:{ display:"flex", gap:5, flexShrink:0 }, children:[
+                n.jsx("button", { onClick:()=>t("client", al.client), className:"btn-sm", style:{ background:SEC.avis.color, color:"white", border:"none" }, children:"Répondre" }),
+                n.jsx("button", { onClick:()=>onDismissReview?.(al.clientId), className:"btn-ghost", children:"✕" }),
+              ]}),
+            ]})
+          )}),
         ]}),
-        reviewAlerts.length === 0
-          ? n.jsx("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:"16px 20px", fontSize:13, color:"#9CA3AF", textAlign:"center" }, children:"✅ Aucun nouvel avis — tout est à jour" })
-          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
-              reviewAlerts.map(al => n.jsxs("div", {
-                key: al.clientId,
-                style:{ background:"#F0FDF4", border:"1.5px solid #BBF7D0", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 },
-                children:[
-                  n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
-                    n.jsx("div", { style:{ fontSize:28 }, children: al.reviews?.some(r=>r.rating<=2) ? "⚠️" : "⭐" }),
-                    n.jsxs("div", { children:[
-                      n.jsxs("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30" }, children:[
-                        al.clientName,
-                        n.jsx("span", { style:{ marginLeft:8, background:"#DC2626", color:"white", borderRadius:10, padding:"1px 7px", fontSize:11, fontWeight:700 }, children: `${al.count} nouveau${al.count>1?"x":""}` }),
-                        al.reviews?.some(r=>r.rating<=2) && n.jsx("span", { style:{ marginLeft:6, background:"#FEE2E2", color:"#DC2626", borderRadius:8, padding:"1px 6px", fontSize:11, fontWeight:700 }, children:"⚠️ Avis négatif" }),
-                      ]}),
-                      n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"Cliquez pour voir et répondre" }),
-                    ]}),
-                  ]}),
-                  n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
-                    n.jsx("button", { onClick:()=>t("client", al.client), style:{ background:"#059669", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Répondre →" }),
-                    n.jsx("button", { onClick:()=>onDismissReview?.(al.clientId), style:{ background:"none", border:"1px solid #D1D5DB", borderRadius:8, padding:"7px 10px", fontSize:12, cursor:"pointer", color:"#6B7280", fontFamily:"inherit" }, children:"✕" }),
-                  ]}),
-                ],
-              }))
-            }),
+
+        // Fiches modifiées
+        n.jsxs("div", { className:"card", style:{ borderTop:`3px solid ${SEC.fiche.borderColor}` }, children:[
+          n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }, children:[
+            n.jsx("div", { style:{ width:36, height:36, borderRadius:9, background:SEC.fiche.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }, children:"🔔" }),
+            n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"var(--ink)" }, children:"Fiches modifiées" }),
+            n.jsx("span", { style:{ marginLeft:"auto", fontSize:20, fontWeight:800, color: ficheAlerts.length>0?SEC.fiche.color:"var(--ink4)" }, children: ficheAlerts.length }),
+          ]}),
+          n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginBottom:10 }, children:"Modifications détectées par Google" }),
+          n.jsx("div", { className:"bar", children: n.jsx("div", { className:"bar-f", style:{ width:`${ficheAlerts.length>0?100:0}%`, background:SEC.fiche.color } }) }),
+          ficheAlerts.length > 0 && n.jsx("div", { style:{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }, children:
+            ficheAlerts.map(al => n.jsxs("div", { key:al.clientId, style:{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:SEC.fiche.bg, borderRadius:8 }, children:[
+              n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                n.jsx("div", { style:{ fontWeight:600, fontSize:13, color:"var(--ink)" }, children:al.clientName }),
+                n.jsx("div", { style:{ fontSize:11, color:SEC.fiche.color, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children: al.changes?.join(" · ") }),
+              ]}),
+              n.jsxs("div", { style:{ display:"flex", gap:5, flexShrink:0 }, children:[
+                n.jsx("button", { onClick:()=>t("client", al.client), className:"btn-sm", style:{ background:SEC.fiche.color, color:"white", border:"none" }, children:"Vérifier" }),
+                n.jsx("button", { onClick:()=>onDismissFiche?.(al.clientId), className:"btn-ghost", children:"✕" }),
+              ]}),
+            ]})
+          )}),
+        ]}),
+
       ]}),
 
-      // ── Section 2 : Modifications de fiche ──
-      ficheAlerts.length > 0 && n.jsxs("div", { style:{ marginBottom:24 }, children:[
-        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
-          "⚠️ Fiches modifiées par Google",
-          n.jsx("span", { style:{ background:"#EA580C", color:"white", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: ficheAlerts.length }),
+      // ── Publications (pleine largeur) ──
+      n.jsxs("div", { className:"card", style:{ borderTop:`3px solid var(--indigo)`, marginBottom:14 }, children:[
+        n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }, children:[
+          n.jsx("div", { style:{ width:36, height:36, borderRadius:9, background:SEC.posts.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }, children:"📅" }),
+          n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"var(--ink)" }, children:"Publications à poster" }),
+          n.jsx("span", { style:{ marginLeft:"auto", fontSize:20, fontWeight:800, color: postAlerts.length>0?"var(--indigo)":"var(--ink4)" }, children: postAlerts.length }),
         ]}),
-        n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
-          ficheAlerts.map(al => n.jsxs("div", {
-            key: al.clientId,
-            style:{ background:"#FFF7ED", border:"1.5px solid #FED7AA", borderRadius:12, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 },
+        n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginBottom:10 }, children:"Posts planifiés en attente · délai dépassé ou à publier aujourd'hui" }),
+        n.jsx("div", { className:"bar", children: n.jsx("div", { className:"bar-f", style:{ width:`${postAlerts.length>0?100:0}%`, background:"var(--indigo)" } }) }),
+        postAlerts.length > 0 && n.jsx("div", { style:{ marginTop:12, display:"flex", flexDirection:"column", gap:6 }, children:
+          postAlerts.slice(0,8).map((al,idx) => n.jsxs("div", {
+            key:idx,
+            style:{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", background:"var(--surface)", border:"1px solid var(--border)", borderRadius:9 },
             children:[
-              n.jsxs("div", { children:[
-                n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30" }, children: "⚠️ " + al.clientName }),
-                n.jsx("div", { style:{ fontSize:12, color:"#B45309", marginTop:2 }, children: al.changes?.join(" · ") }),
+              n.jsx("div", { style:{ width:22, height:22, borderRadius:6, background: al.overdue?"#FEE2E2":"#EDE9FE", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color: al.overdue?"#DC2626":"var(--indigo2)", flexShrink:0 }, children:idx+1 }),
+              n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }, children:[
+                  n.jsx("span", { style:{ fontWeight:600, fontSize:13, color:"var(--ink)" }, children:al.client.name }),
+                  n.jsx("span", { style:{ fontSize:11, color: al.overdue?"#DC2626":"var(--indigo2)", fontWeight:700 }, children: al.overdue?"En retard":"Aujourd'hui" }),
+                ]}),
+                n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children:al.title }),
               ]}),
-              n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
-                n.jsx("button", { onClick:()=>t("client", al.client), style:{ background:"#EA580C", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Voir →" }),
-                n.jsx("button", { onClick:()=>onDismissFiche?.(al.clientId), style:{ background:"none", border:"1px solid #D1D5DB", borderRadius:8, padding:"7px 10px", fontSize:12, cursor:"pointer", color:"#6B7280", fontFamily:"inherit" }, children:"✕" }),
-              ]}),
+              n.jsx("button", { onClick:()=>t("client", al.client), className:"btn-sm", style:{ background:"var(--indigo2)", color:"white", border:"none", flexShrink:0 }, children:"Voir" }),
             ],
           }))
         }),
       ]}),
 
-      // ── Section 3 : Publications à poster ──
-      n.jsxs("div", { style:{ marginBottom:24 }, children:[
-        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
-          "📅 Publications à poster",
-          n.jsx("span", { style:{ background: postAlerts.length>0?"#6B40D8":"#E5E7EB", color: postAlerts.length>0?"white":"#9CA3AF", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: postAlerts.length }),
+      // ── Alertes clients (pleine largeur) ──
+      n.jsxs("div", { className:"card", style:{ borderTop:`3px solid #DC2626` }, children:[
+        n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", marginBottom:12 }, children:[
+          n.jsx("div", { style:{ width:36, height:36, borderRadius:9, background:SEC.clients.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }, children:"👥" }),
+          n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"var(--ink)" }, children:"Alertes clients" }),
+          n.jsx("span", { style:{ marginLeft:"auto", fontSize:20, fontWeight:800, color: clientAlerts.length>0?"#DC2626":"var(--ink4)" }, children: clientAlerts.length }),
         ]}),
-        postAlerts.length === 0
-          ? n.jsx("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:"16px 20px", fontSize:13, color:"#9CA3AF", textAlign:"center" }, children:"✅ Aucune publication en attente aujourd'hui" })
-          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
-              postAlerts.slice(0, 10).map((al, idx) => n.jsxs("div", {
-                key: al.clientId + "_" + al.postId + "_" + idx,
-                style:{ background:"white", border:`1.5px solid ${al.overdue?"#FECACA":"#DDD6FE"}`, borderRadius:12, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 },
-                children:[
-                  n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
-                    n.jsx("div", { style:{ fontSize:22 }, children: al.overdue ? "🔴" : "📝" }),
-                    n.jsxs("div", { children:[
-                      n.jsxs("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:[
-                        al.client.name,
-                        n.jsx("span", { style:{ marginLeft:8, background: al.overdue?"#FEE2E2":"#EDE9FE", color: al.overdue?"#DC2626":"#6B40D8", borderRadius:8, padding:"1px 7px", fontSize:11, fontWeight:700 }, children: al.overdue ? "En retard" : "Aujourd'hui" }),
-                      ]}),
-                      n.jsx("div", { style:{ fontSize:12, color:"#6B7280", marginTop:1 }, children: al.title.length > 60 ? al.title.slice(0,60)+"…" : al.title }),
-                      n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:1 }, children: new Date(al.date).toLocaleDateString("fr-FR", { day:"numeric", month:"long" }) + " · " + (al.type === "scheduled" ? "Post planifié" : "Calendrier éditorial") }),
-                    ]}),
+        n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginBottom:10 }, children:"Score critique, audit en retard, note à améliorer" }),
+        n.jsx("div", { className:"bar", children: n.jsx("div", { className:"bar-f", style:{ width:`${clientAlerts.length>0?Math.min(100, clientAlerts.length*15):0}%`, background:"#DC2626" } }) }),
+        clientAlerts.length > 0 && n.jsx("div", { style:{ marginTop:12, display:"flex", flexDirection:"column", gap:6 }, children:
+          clientAlerts.map((al, idx) => {
+            const ps = prioStyle[al.prio] || prioStyle.medium;
+            return n.jsxs("div", {
+              key:al.clientId+"_"+idx,
+              onClick:()=>t("client", al.client),
+              style:{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", background:"var(--surface)", border:`1px solid var(--border)`, borderRadius:9, cursor:"pointer" },
+              children:[
+                n.jsx("div", { style:{ width:22, height:22, borderRadius:6, background:ps.tagBg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:800, color:"white", flexShrink:0 }, children:idx+1 }),
+                n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                  n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }, children:[
+                    n.jsx("span", { style:{ fontWeight:600, fontSize:13, color:"var(--ink)" }, children:al.client.name }),
+                    n.jsx("span", { style:{ fontSize:10, fontWeight:700, color:ps.dot, background:ps.bg, borderRadius:5, padding:"1px 6px" }, children:ps.tag }),
                   ]}),
-                  n.jsx("button", { onClick:()=>t("client", al.client), style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }, children:"Publier →" }),
-                ],
-              }))
-            }),
+                  n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children:al.label }),
+                ]}),
+                n.jsx("span", { style:{ fontSize:16, color:"var(--ink4)", flexShrink:0 }, children:"›" }),
+              ],
+            });
+          })
+        }),
       ]}),
 
-      // ── Section 4 : Alertes clients ──
-      n.jsxs("div", { children:[
-        n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"#374151", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10, display:"flex", alignItems:"center", gap:8 }, children:[
-          "👥 Alertes clients",
-          n.jsx("span", { style:{ background: clientAlerts.length>0?"#6B7280":"#E5E7EB", color: clientAlerts.length>0?"white":"#9CA3AF", borderRadius:10, padding:"1px 8px", fontSize:11 }, children: clientAlerts.length }),
-        ]}),
-        clientAlerts.length === 0
-          ? n.jsx("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:"16px 20px", fontSize:13, color:"#9CA3AF", textAlign:"center" }, children:"✅ Tous les clients sont bien suivis" })
-          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
-              clientAlerts.map((al, idx) => {
-                const ps = prioStyle[al.prio] || prioStyle.medium;
-                return n.jsxs("div", {
-                  key: al.clientId + "_" + idx,
-                  style:{ background:ps.bg, border:`1.5px solid ${ps.border}`, borderRadius:12, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, cursor:"pointer" },
-                  onClick:()=>t("client", al.client),
-                  children:[
-                    n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
-                      n.jsx("div", { style:{ fontSize:20 }, children: al.icon }),
-                      n.jsxs("div", { children:[
-                        n.jsxs("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:[
-                          al.client.name,
-                          n.jsx("span", { style:{ marginLeft:8, background:ps.tagBg, color:"white", borderRadius:8, padding:"1px 7px", fontSize:10, fontWeight:700 }, children: ps.tag }),
-                        ]}),
-                        n.jsx("div", { style:{ fontSize:12, color:"#374151", marginTop:1 }, children: al.label }),
-                        n.jsx("div", { style:{ fontSize:11, color:"#6B7280", marginTop:1 }, children: al.detail }),
-                      ]}),
-                    ]}),
-                    n.jsx("span", { style:{ fontSize:12, color:ps.dot, fontWeight:600 }, children:"→" }),
-                  ],
-                });
-              })
-            }),
-      ]}),
     ],
   });
 }
@@ -7327,7 +7883,16 @@ class ErrorBoundary extends fu.Component {
   }
 }
 function App() {
-  const [e, t] = D.useState(!1),
+  const [e, t] = D.useState(() => {
+    // Restaure la session (localStorage survit aux redirections OAuth cross-domain)
+    try {
+      const saved = localStorage.getItem("bto_session");
+      if (!saved) return false;
+      const { ts } = JSON.parse(saved);
+      // Session valide 12h max
+      return (Date.now() - ts) < 12 * 3600 * 1000;
+    } catch { return false; }
+  }),
     [i, r] = D.useState(""),
     [o, s] = D.useState(""),
     [l, a] = D.useState("dashboard"),
@@ -7340,6 +7905,7 @@ function App() {
     [g, h] = D.useState(() => localStorage.getItem("bto_google_key") || ""),
     [f, c] = D.useState(30),
     [u, m] = D.useState(!0),
+    [syncStatus, setSyncStatus] = D.useState("idle"), // idle | syncing | synced | error
     C = !1,
     B = (T) => {
       x(T);
@@ -7349,6 +7915,43 @@ function App() {
     k = (T, _ = null) => {
       (a(T), p(_));
     };
+
+  // ── Chargement depuis Supabase au démarrage ──
+  D.useEffect(() => {
+    const syncFromSupabase = async () => {
+      setSyncStatus("syncing");
+      try {
+        // Charger les clients
+        const clientsVal = await supaGet(STORAGE_KEY);
+        if (clientsVal) {
+          const remoteClients = JSON.parse(clientsVal);
+          if (remoteClients.length > 0) {
+            localStorage.setItem(STORAGE_KEY, clientsVal);
+            x(remoteClients);
+          }
+        }
+        // Charger les contracts
+        const KEYS_TO_SYNC = ["bto_contracts","bto_paiements","gmb_monthly_obj",
+          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","bto_apikey"];
+        for (const key of KEYS_TO_SYNC) {
+          const val = await supaGet(key);
+          if (val !== null && val !== undefined) localStorage.setItem(key, val);
+        }
+        setSyncStatus("synced");
+        setTimeout(() => setSyncStatus("idle"), 3000);
+      } catch { setSyncStatus("error"); }
+    };
+    syncFromSupabase();
+  }, []);
+
+  // ── Sync settings quand ils changent ──
+  D.useEffect(() => {
+    ["bto_contracts","bto_paiements"].forEach(key => {
+      const val = localStorage.getItem(key);
+      if (val) supaSet(key, val);
+    });
+  }, [b]);
+
   (D.useEffect(() => {
     "Notification" in window &&
       Notification.permission === "default" &&
@@ -7373,28 +7976,38 @@ function App() {
       return () => clearInterval(_);
     }, [b]));
 
-  // Gestion du retour OAuth Google (#gmb-auth?clientId=...&access_token=...&refresh_token=...)
+  // Gestion du retour OAuth Google (avec ou sans fiche déjà sélectionnée)
   D.useEffect(() => {
     const hash = window.location.hash;
-    if (hash.startsWith("#gmb-auth?")) {
-      const params = new URLSearchParams(hash.replace("#gmb-auth?", ""));
+    const isComplete = hash.startsWith("#gmb-auth-complete?");
+    const isLegacy = hash.startsWith("#gmb-auth?");
+    if (isComplete || isLegacy) {
+      const raw = isComplete ? hash.replace("#gmb-auth-complete?","") : hash.replace("#gmb-auth?","");
+      const params = new URLSearchParams(raw);
       const clientId = parseInt(params.get("clientId"));
       const access_token = params.get("access_token");
       const refresh_token = params.get("refresh_token");
       const expires_in = parseInt(params.get("expires_in") || "3600");
+      const location_name = params.get("location_name") || null;
       if (clientId && access_token) {
         const expires_at = Date.now() + expires_in * 1000;
         x((prev) => {
           const updated = prev.map((cl) =>
             cl.id === clientId
-              ? { ...cl, googleTokens: { access_token, refresh_token, expires_at } }
+              ? {
+                  ...cl,
+                  googleTokens: { access_token, refresh_token, expires_at },
+                  ...(location_name ? { gmbLocationName: location_name } : {}),
+                }
               : cl
           );
           saveClients(updated);
           return updated;
         });
         window.location.hash = "";
-        alert("✅ Google connecté avec succès ! Les stats GMB seront récupérées automatiquement.");
+        if (!location_name) {
+          try { localStorage.setItem("bto_pending_link", String(clientId)); } catch {}
+        }
       }
     } else if (hash.startsWith("#gmb-auth-error")) {
       const msg = new URLSearchParams(hash.replace("#gmb-auth-error?", "")).get("msg") || "Erreur inconnue";
@@ -7406,11 +8019,13 @@ function App() {
   // Alerte modification fiche + nouveaux avis — vérifie tous les clients connectés au démarrage
   const [ficheAlerts, setFicheAlerts] = D.useState([]);
   const [reviewAlerts, setReviewAlerts] = D.useState([]);
+  const clientsRef = D.useRef(b);
+  D.useEffect(() => { clientsRef.current = b; }, [b]);
   D.useEffect(() => {
     const checkAllReviews = async () => {
       const revAlerts = [];
       const locationAlerts = [];
-      for (const cl of b) {
+      for (const cl of clientsRef.current) {
         if (!cl.googleTokens?.access_token || !cl.gmbLocationName) continue;
         try {
           const tokens = cl.googleTokens;
@@ -7473,8 +8088,83 @@ function App() {
     return () => { clearTimeout(timer); clearInterval(interval); };
   }, []);
 
+  // Sync cloud au login : le cloud est la source de vérité
+  D.useEffect(() => {
+    if (!e) return; // Pas encore connecté
+    fetch("/api/data/sync", { headers: { "x-bto-token": BTO_TOKEN } })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!data || !data.exists) {
+          // Rien dans le cloud → uploader les données locales
+          const localClients = loadClients();
+          if (localClients.length > 0) {
+            fetch("/api/data/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "x-bto-token": BTO_TOKEN },
+              body: JSON.stringify(localClients),
+            }).catch(() => {});
+          }
+          return;
+        }
+        const cloudClients = data.clients || [];
+        // Le cloud est la source de vérité → toujours utiliser ses données
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudClients));
+        x(cloudClients);
+      })
+      .catch(() => {}); // Silencieux si offline ou erreur
+  }, [e]); // Se déclenche au login (e passe de false à true)
+
+  // Auto-snapshot mensuel : au login, prend un snapshot pour chaque client sans snapshot ce mois
+  D.useEffect(() => {
+    if (!e || b.length === 0) return;
+    const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    let anyUpdated = false;
+    const updatedClients = b.map(cl => {
+      const snapshots = cl.monthlySnapshots || [];
+      // Déjà un snapshot ce mois → ne rien faire
+      if (snapshots.some(s2 => s2.date && s2.date.startsWith(currentMonth))) return cl;
+      // Calculer le score réel (scores + manualOverrides)
+      const score = calcScore({ ...(cl.scores || {}), ...(cl.manualOverrides || {}) });
+      const ext = (cl.data || {}).extracted || {};
+      // Calculer les positions depuis geoGrid
+      const positions = {};
+      Object.entries(cl.geoGrid || {}).forEach(([kw, kwData]) => {
+        if (kw === "center" || !kwData?.scans?.length) return;
+        const lastScan = kwData.scans[kwData.scans.length - 1];
+        const cells = lastScan.cells || [];
+        const ranks = cells.map(c => (c && typeof c === "object") ? c.rank : c).filter(r2 => r2 != null && r2 < 21);
+        if (ranks.length > 0) positions[kw] = Math.round(ranks.reduce((a2, b2) => a2 + b2, 0) / ranks.length * 10) / 10;
+      });
+      // Compter posts du mois
+      const monthPosts = (cl.publishedPosts || []).filter(p2 => p2.date && p2.date.startsWith(currentMonth)).length;
+      const now = new Date();
+      const snap = {
+        id: Date.now() + cl.id,
+        date: now.toISOString().slice(0, 10),
+        label: now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
+        score,
+        reviewCount: parseInt(ext.reviewCount) || null,
+        photoCount: parseInt(ext.photoCount) || null,
+        postsCount: monthPosts,
+        postsThisMonth: monthPosts,
+        positions,
+        auto: true, // Marqué comme automatique
+      };
+      anyUpdated = true;
+      return { ...cl, monthlySnapshots: [...snapshots, snap] };
+    });
+    if (anyUpdated) {
+      B(updatedClients);
+    }
+  }, [e]); // Déclenché au login
+
   const R = () => {
-    i.trim() === ADMIN_CODE ? (t(!0), s("")) : s("Mot de passe incorrect");
+    if (i.trim() === ADMIN_CODE) {
+      try { localStorage.setItem("bto_session", JSON.stringify({ ts: Date.now() })); } catch {}
+      t(!0); s("");
+    } else {
+      s("Mot de passe incorrect");
+    }
   };
   if (!e) return n.jsx(LoginPage, { code: i, setCode: r, err: o, login: R });
   const N = b
@@ -7636,6 +8326,12 @@ function App() {
                             getLvl: getLvl,
                             calcScore: calcScore,
                           })
+                        : l === "ereputation"
+                        ? n.jsx(EReputationPage, {
+                            clients: b,
+                            upd: B,
+                            go: k,
+                          })
                         : l === "notifications"
                           ? n.jsx(NotificationsPage, {
                               clients: b,
@@ -7656,6 +8352,7 @@ function App() {
                                 getLvl: getLvl,
                                 calcScore: calcScore,
                                 setAuth: t,
+                                upd: B,
                               })
                             : null,
           ]
@@ -7864,7 +8561,7 @@ Réponds en français, de façon concise et actionnable. Si Sara parle d'un clie
                     }),
                     n.jsx("div", {
                       style: { fontSize: 11, color: "rgba(255,255,255,.65)" },
-                      children: "Powered by Claude",
+                      children: "Be The One",
                     }),
                   ],
                 }),
@@ -8314,13 +9011,11 @@ function LoginPage({ code: e, setCode: t, err: i, login: r }) {
                             },
                             children: "Be The One",
                           }),
-                          n.jsx("div", {
-                            style: {
-                              fontSize: 12,
-                              color: "#64748B",
-                              marginTop: 1,
-                            },
-                            children: "Plateforme Google Business Profile",
+                          n.jsxs("div", {
+                            style: { fontSize: 12, color: "#64748B", marginTop: 1, display:"flex", alignItems:"center", gap:5 },
+                            children: [
+                              "Plateforme Google Business Profile",
+                            ],
                           }),
                         ],
                       }),
@@ -8400,76 +9095,6 @@ function LoginPage({ code: e, setCode: t, err: i, login: r }) {
                     },
                     children: "Se connecter →",
                   }),
-                  n.jsxs("div", {
-                    style: {
-                      marginTop: 20,
-                      padding: "12px 14px",
-                      background: "#F4F5FA",
-                      borderRadius: 10,
-                      border: "1px solid #E2E8F0",
-                    },
-                    children: [
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: "#94A3B8",
-                          textTransform: "uppercase",
-                          letterSpacing: "1px",
-                          marginBottom: 8,
-                        },
-                        children: "Accès rapide",
-                      }),
-                      n.jsxs("div", {
-                        style: {
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          cursor: "pointer",
-                        },
-                        onClick: () => t("gmb2024"),
-                        children: [
-                          n.jsxs("div", {
-                            style: {
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                            },
-                            children: [
-                              n.jsx("span", {
-                                style: { fontSize: 15 },
-                                children: "🛡",
-                              }),
-                              n.jsx("span", {
-                                style: {
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: "#1E293B",
-                                },
-                                children: "Admin",
-                              }),
-                            ],
-                          }),
-                          n.jsx("span", {
-                            style: {
-                              fontSize: 12,
-                              color: "#6B40D8",
-                              fontWeight: 700,
-                              background: "white",
-                              padding: "2px 10px",
-                              borderRadius: 20,
-                              border: "1px solid #E2E8F0",
-                            },
-                            children: "gmb2024",
-                          }),
-                        ],
-                      }),
-                      n.jsx("div", {
-                        style: { fontSize: 11, color: "#94A3B8", marginTop: 6 },
-                        children: "💡 Cliquez pour remplir automatiquement",
-                      }),
-                    ],
-                  }),
                 ],
               }),
             ],
@@ -8508,6 +9133,7 @@ function Sidebar({
       { id: "marche", label: "Marché local", icon: "◬" },
       { id: "prospection", label: "Prospection", icon: "◉" },
       { id: "calendrier", label: "Calendrier", icon: "◷" },
+      { id: "ereputation", label: "E-réputation", icon: "✪" },
       { id: "notifications", label: "Rappels", icon: "◆" },
     ],
     [j, I] = D.useState(() => {
@@ -9004,11 +9630,16 @@ function Sidebar({
           padding: "10px 12px",
           borderTop: "1px solid #E5E7EB",
           flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
         },
-        children: n.jsxs("div", {
+        children: [
+          n.jsxs("div", {
           onClick: () => r("mon_espace"),
           style: {
             display: "flex",
+            flex: 1,
             alignItems: "center",
             gap: 9,
             padding: "8px 10px",
@@ -9049,9 +9680,9 @@ function Sidebar({
                     },
                     children: "Sara Baudouin",
                   }),
-                  n.jsx("div", {
-                    style: { fontSize: 10, color: "#9CA3AF" },
-                    children: "Mon espace · BeTheOne",
+                  n.jsxs("div", {
+                    style: { fontSize: 10, color: "#9CA3AF", display:"flex", alignItems:"center", gap:4 },
+                    children: ["Mon espace · BeTheOne", n.jsx("span", { style:{ fontSize:9, background:"#F0FDF4", color:"#059669", borderRadius:4, padding:"1px 5px", fontWeight:700 }, children:"☁ sync" })],
                   }),
                 ],
               }),
@@ -9061,12 +9692,13 @@ function Sidebar({
                 children: "→",
               }),
           ],
-        }),
+          }),
+        ],
       }),
     ],
   });
 }
-function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o }) {
+function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o, upd: ed }) {
   const s = new Date(),
     l = e.map((y) => r({ ...(y.scores || {}), ...(y.manualOverrides || {}) })),
     a = l.length ? Math.round(l.reduce((y, O) => y + O, 0) / l.length) : 0,
@@ -9091,6 +9723,8 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
     }),
     [C, B] = D.useState(null),
     [k, R] = D.useState({}),
+    [contratSearch, setContratSearch] = D.useState(""),
+    [clientSigs, setClientSigs] = D.useState({}),
     N = (y) => {
       (m(y), localStorage.setItem("bto_contracts", JSON.stringify(y)));
     },
@@ -9100,12 +9734,17 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
         poste: "",
         telephone: "",
         email: "",
-        typeContrat: "abonnement",
-        montant: "99",
+        adresseClient: "",
+        siretClient: "",
+        dateDebut: "",
+        typeContrat: "leader",
+        montant: "",
         dateSignature: "",
         dateRenouvellement: "",
         statut: "actif",
+        prestationsCustom: "",
         notes: "",
+        parrain: "",
       },
     M = (y, O) => {
       N({ ...u, [y]: { ...E(y), ...O } });
@@ -9114,13 +9753,12 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
     T = P < 12 ? "Bonjour" : P < 18 ? "Bon après-midi" : "Bonsoir",
     _ = e.reduce((y, O) => {
       const F = E(O.id);
-      return y + parseFloat(F.montant || 99);
+      return y + parseFloat(F.montant || (F.typeContrat === "setup" ? 299 : F.typeContrat === "leader_annuel" ? 119 : 139));
     }, 0),
     U = [
-      { v: "abonnement", l: "Abonnement mensuel" },
-      { v: "pack", l: "Pack 6 mois" },
-      { v: "annuel", l: "Annuel" },
-      { v: "ponctuel", l: "Prestation ponctuelle" },
+      { v: "setup", l: "⚡ Setup Local — 299€" },
+      { v: "leader", l: "Leader Local — 6 mois · 139€/mois" },
+      { v: "leader_annuel", l: "Leader Local — Annuel · 119€/mois" },
     ],
     V = [
       { v: "actif", l: "Actif", c: "#059669" },
@@ -9179,7 +9817,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
               }),
               n.jsx("div", {
                 style: {
-                  fontSize: 24,
+                  fontSize: 28,
                   fontWeight: 900,
                   color: "#1E1B30",
                   letterSpacing: "-.02em",
@@ -9332,7 +9970,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                 children: "📊 CSV",
               }),
               n.jsx("button", {
-                onClick: () => o(!1),
+                onClick: () => { try { localStorage.removeItem("bto_session"); } catch {} o(!1); },
                 style: {
                   fontSize: 12.5,
                   padding: "8px 14px",
@@ -9364,7 +10002,6 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
           n.jsx(G, { id: "tableau_bord", label: "📊 Tableau de bord" }),
           n.jsx(G, { id: "contrats", label: "📋 Contrats" }),
           n.jsx(G, { id: "facturation", label: "💶 Facturation" }),
-          n.jsx(G, { id: "onboarding", label: "🚀 Onboarding" }),
           n.jsx(G, { id: "parametres", label: "⚙️ Paramètres" }),
         ],
       }),
@@ -9701,32 +10338,31 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
           ],
         }),
       f === "contrats" &&
-        n.jsxs("div", {
+        (() => {
+          const filteredContrats = contratSearch.trim()
+            ? e.filter(cl => cl.name.toLowerCase().includes(contratSearch.toLowerCase()) || (E(cl.id).interlocuteur||"").toLowerCase().includes(contratSearch.toLowerCase()))
+            : e;
+          return n.jsxs("div", {
           children: [
             n.jsxs("div", {
-              style: {
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 16,
-              },
+              style: { marginBottom: 14 },
               children: [
                 n.jsxs("div", {
-                  style: { fontSize: 14, fontWeight: 700, color: "#1E1B30" },
+                  style: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 },
                   children: [
-                    "Gestion des contrats — ",
-                    e.length,
-                    " client",
-                    e.length > 1 ? "s" : "",
+                    n.jsxs("div", { style:{ fontSize:14, fontWeight:700, color:"#1E1B30" }, children:["Contrats — ", e.length, " client", e.length>1?"s":""] }),
                   ],
                 }),
-                n.jsx("div", {
-                  style: { fontSize: 12, color: "#6B7280" },
-                  children: "Cliquez sur ✏️ pour modifier les informations",
+                n.jsx("input", {
+                  value: contratSearch,
+                  onChange: ev => setContratSearch(ev.target.value),
+                  placeholder: "🔍 Rechercher un client…",
+                  className: "inp",
+                  style: { margin:0, fontSize:13 },
                 }),
               ],
             }),
-            e.length === 0
+            filteredContrats.length === 0
               ? n.jsxs("div", {
                   style: {
                     textAlign: "center",
@@ -9746,7 +10382,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                 })
               : n.jsx("div", {
                   style: { display: "flex", flexDirection: "column", gap: 10 },
-                  children: e.map((y) => {
+                  children: filteredContrats.map((y) => {
                     const O = E(y.id),
                       F = V.find((S) => S.v === O.statut) || V[0],
                       H = C === y.id;
@@ -9771,6 +10407,12 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                             },
                             children: [
                               n.jsx("div", {
+                                onClick: (ev) => {
+                                  ev.stopPropagation();
+                                  const ic = prompt("Choisir un emoji :", y.icon || "📍");
+                                  if (ic) ed(e.map((cl) => (cl.id === y.id ? { ...cl, icon: ic } : cl)));
+                                },
+                                title: "Cliquer pour changer l'emoji",
                                 style: {
                                   width: 36,
                                   height: 36,
@@ -9781,6 +10423,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                                   justifyContent: "center",
                                   fontSize: 16,
                                   flexShrink: 0,
+                                  cursor: "pointer",
                                 },
                                 children: y.icon || "📍",
                               }),
@@ -9831,23 +10474,322 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                                       },
                                       children: [O.montant, " €/mois"],
                                     }),
+                                  n.jsxs("div",{style:{display:"flex",gap:6,flexWrap:"wrap"},children:[
+                                  !H && false && n.jsx("button",{
+                                    onClick:()=>{
+                                      const ag=localStorage.getItem("ag_name")||"Be The One",agA=localStorage.getItem("ag_address")||"6 Keryvarho, 56450 Le Hézo",agS=localStorage.getItem("ag_siret")||"105 096 291 00015",agE=localStorage.getItem("ag_email")||"contact@agence-betheone.fr",agP=localStorage.getItem("ag_phone")||"06 51 17 69 10";
+                                      const cd={setup:{label:"⚡ Setup Local",price:"299€",type:"Paiement unique",desc:"Configuration complète de la fiche GBP, optimisation SEO locale, audit concurrentiel, 2 posts de lancement et 5 photos.",eng:"Prestation ponctuelle sans abonnement."},leader:{label:"Leader Local — 6 mois",price:"139€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 6 mois minimum. Résiliation avec 30j de préavis par email ou lettre recommandée."},leader_annuel:{label:"Leader Local — Annuel",price:"119€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 12 mois. Résiliation avec 30j de préavis par email ou lettre recommandée."}}[O.typeContrat]||{label:"Prestation GMB",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation",desc:"Accompagnement Google Business Profile.",eng:"Selon devis."};
+                                      const today=new Date().toLocaleDateString("fr-FR");
+                                      const agIban = localStorage.getItem("ag_iban") || "";
+                                      const agBic  = localStorage.getItem("ag_bic")  || "";
+                                      const isAbo = cd.type === "Abonnement mensuel";
+                                      const startDate = O.dateDebut ? new Date(O.dateDebut).toLocaleDateString("fr-FR") : "____/____/______";
+                                      const annexeDetails = {
+                                        setup: `<ul><li>Audit et optimisation initiale de la fiche Google Business Profile</li><li>Analyse des 3 concurrents principaux</li><li>Optimisation SEO + définition des mots-clés locaux</li><li>Configuration complète de la fiche (catégories, description, horaires, attributs)</li><li>Publication de 2 posts de lancement</li><li>Publication de 5 photos fournies par le Client</li><li>Livraison d'un rapport de recommandations stratégiques</li><li>Délai de livraison : 5 à 10 jours ouvrés à compter de la réception des accès et informations</li></ul>`,
+                                        leader: `<ul><li>Optimisation initiale de la fiche incluse (catégories, description, horaires, attributs)</li><li>Publication de <strong>4 Google Posts par mois</strong></li><li>Publication de <strong>10 photos par mois</strong> fournies par le Client</li><li>Réponse aux avis récents sous <strong>24h</strong></li><li>Réponse aux anciens avis non traités</li><li>Optimisation continue de la fiche</li><li>Veille concurrentielle locale mensuelle</li><li>Positionnement des mots-clés locaux</li><li>Rapport mensuel PDF complet</li><li>Accès WhatsApp prioritaire — réponse sous 3h, lun–ven 9h–18h, hors week-ends et jours fériés</li><li>Engagement minimum : <strong>6 mois</strong></li><li>Facturation le 1er de chaque mois</li></ul>`,
+                                        leader_annuel: `<ul><li>Optimisation initiale de la fiche incluse (catégories, description, horaires, attributs)</li><li>Publication de <strong>4 Google Posts par mois</strong></li><li>Publication de <strong>10 photos par mois</strong> fournies par le Client</li><li>Réponse aux avis récents sous <strong>24h</strong></li><li>Réponse aux anciens avis non traités</li><li>Optimisation continue de la fiche</li><li>Veille concurrentielle locale mensuelle</li><li>Positionnement des mots-clés locaux</li><li>Rapport mensuel PDF complet</li><li>Accès WhatsApp prioritaire — réponse sous 3h, lun–ven 9h–18h, hors week-ends et jours fériés</li><li>Engagement : <strong>12 mois</strong></li><li>Facturation le 1er de chaque mois</li></ul>`,
+                                      }[O.typeContrat] || "<ul><li>Selon devis</li></ul>";
+                                      const html=`<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<title>Contrat ${cd.label} — ${y.name}</title>
+<style>
+  @page { margin: 2.2cm 2cm; size: A4; }
+  body { font-family: Georgia, "Times New Roman", serif; font-size: 11pt; color: #111111; line-height: 1.75; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { max-width: 820px; margin: 0 auto; padding: 40px 48px; }
+  .hdr { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2D4BAE; padding-bottom: 22px; margin-bottom: 30px; }
+  .logo { font-family: system-ui, sans-serif; font-size: 24px; font-weight: 900; color: #2D4BAE; letter-spacing: -0.5px; }
+  .logo-sub { font-size: 10pt; color: #555555; margin-top: 3px; font-family: system-ui, sans-serif; }
+  .doc-title { font-family: system-ui, sans-serif; font-size: 22pt; font-weight: 900; color: #111111; margin: 0 0 4px; }
+  .doc-sub { font-family: system-ui, sans-serif; font-size: 11pt; color: #444444; margin-bottom: 24px; }
+  .offer-badge { display: inline-block; font-family: system-ui, sans-serif; font-size: 10pt; font-weight: 700; background: #DBEAFE; color: #1D4ED8; padding: 5px 14px; border-radius: 20px; border: 1px solid #93C5FD; margin-bottom: 6px; }
+  h2 { font-family: system-ui, sans-serif; font-size: 11pt; font-weight: 800; color: #111111; margin: 28px 0 10px; padding: 8px 0 8px 12px; border-left: 4px solid #2D4BAE; background: #F1F5F9; }
+  h3 { font-family: system-ui, sans-serif; font-size: 10.5pt; font-weight: 700; color: #222222; margin: 18px 0 6px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 16px 0 24px; }
+  .box { background: #F8FAFC; border-radius: 10px; padding: 18px 20px; border: 1px solid #CBD5E1; }
+  .box-title { font-family: system-ui, sans-serif; font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #64748B; margin-bottom: 10px; }
+  .box p { margin: 4px 0; font-size: 11pt; color: #111111; }
+  .offer-block { background: #F0F4FF; border: 2px solid #93C5FD; border-radius: 12px; padding: 22px 26px; margin: 16px 0; }
+  .offer-name { font-family: system-ui, sans-serif; font-size: 20pt; font-weight: 900; color: #1E3A8A; }
+  .offer-price { font-family: system-ui, sans-serif; font-size: 32pt; font-weight: 900; color: #111111; line-height: 1.1; margin: 6px 0; }
+  .offer-type { font-family: system-ui, sans-serif; font-size: 10pt; color: #374151; }
+  .rib-block { background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 10px; padding: 14px 18px; margin: 12px 0; font-family: system-ui, sans-serif; }
+  .rib-block p { margin: 3px 0; font-size: 11pt; color: #111111; }
+  p { margin: 8px 0; color: #111111; }
+  ul, ol { margin: 8px 0; padding-left: 20px; }
+  li { margin: 4px 0; color: #111111; }
+  .page-break { page-break-before: always; padding-top: 30px; }
+  .annex-title { font-family: system-ui, sans-serif; font-size: 16pt; font-weight: 900; color: #1E3A8A; margin: 0 0 4px; border-bottom: 3px solid #2D4BAE; padding-bottom: 10px; }
+  .sign-section { page-break-inside: avoid; }
+  .sign-section { page-break-inside: avoid; }
+  .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 40px; page-break-inside: avoid; }
+  .sign-box { border-top: 2px solid #111111; padding-top: 12px; }
+  .sign-name { font-family: system-ui, sans-serif; font-size: 12pt; font-weight: 700; margin-bottom: 56px; color: #111111; }
+  .sign-label { font-family: system-ui, sans-serif; font-size: 9.5pt; color: #444444; }
+  .footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #CBD5E1; font-size: 9pt; color: #555555; text-align: center; font-family: system-ui, sans-serif; }
+</style></head>
+<body><div class="page">
+
+<!-- EN-TÊTE -->
+<div class="hdr">
+  <div>
+    <div class="logo">Be The One</div>
+    <div class="logo-sub">Sara Baudouin — Entreprise individuelle</div>
+    <div class="logo-sub">${agA}</div>
+    <div class="logo-sub">SIRET : ${agS}</div>
+  </div>
+  <div style="text-align:right;font-family:system-ui,sans-serif">
+    <div style="font-size:9pt;color:#555">Date d'émission</div>
+    <div style="font-size:12pt;font-weight:700;color:#111">${today}</div>
+    <div style="margin-top:8px;font-size:9pt;color:#555">Date de démarrage</div>
+    <div style="font-size:12pt;font-weight:700;color:#111">${startDate}</div>
+  </div>
+</div>
+
+<span class="offer-badge">${cd.label}</span>
+<div class="doc-title">Contrat de prestation de services</div>
+<div class="doc-sub">Visibilité locale &amp; Optimisation Google Business Profile</div>
+
+<!-- ART 1 -->
+<h2>Article 1 — Identification des parties</h2>
+<div class="parties">
+  <div class="box">
+    <div class="box-title">Le Prestataire</div>
+    <p><strong>Be The One</strong></p>
+    <p>Sara Baudouin — Entreprise individuelle</p>
+    <p>${agA}</p>
+    <p>${agE}</p>
+    <p>${agP}</p>
+    <p style="color:#555;font-size:9.5pt;margin-top:6px">SIRET : ${agS}</p>
+    <p style="color:#555;font-size:9.5pt">Ci-après dénommé « Le Prestataire »</p>
+  </div>
+  <div class="box">
+    <div class="box-title">Le Client</div>
+    <p><strong>${y.name}</strong></p>
+    ${O.interlocuteur ? `<p>Représenté par : ${O.interlocuteur}${O.poste ? `, ${O.poste}` : ""}</p>` : ""}
+    ${O.adresseClient ? `<p>${O.adresseClient}</p>` : "<p>Adresse : ___________________________</p>"}
+    ${O.siretClient ? `<p>SIRET : ${O.siretClient}</p>` : "<p>SIRET : ___________________________</p>"}
+    ${O.email ? `<p>${O.email}</p>` : ""}
+    ${O.telephone ? `<p>${O.telephone}</p>` : ""}
+    <p style="color:#555;font-size:9.5pt;margin-top:6px">Ci-après dénommé « Le Client »</p>
+  </div>
+</div>
+
+<!-- ART 2 -->
+<h2>Article 2 — Objet du contrat</h2>
+<p>Le présent contrat a pour objet la réalisation de prestations de visibilité locale et d'optimisation de fiche Google Business Profile (GBP) visant à améliorer la présence en ligne du Client sur les moteurs de recherche et services de cartographie Google.</p>
+<p>Les prestations peuvent notamment inclure : audit et optimisation de la fiche Google Business Profile, publication de contenus (posts, photos), gestion des avis clients, suivi des performances, veille concurrentielle et accompagnement stratégique.</p>
+
+<!-- ART 3 -->
+<h2>Article 3 — Prestations souscrites</h2>
+<div class="offer-block">
+  <div class="offer-name">${cd.label}</div>
+  <div class="offer-price">${O.montant ? `${O.montant} €${isAbo ? "/mois" : ""}` : cd.price}</div>
+  <div class="offer-type">${cd.type} · TVA non applicable — art. 293 B du CGI</div>
+</div>
+<p>Le détail précis des prestations incluses et des indicateurs suivis figure en <strong>Annexe 1</strong> du présent contrat.</p>
+
+<!-- ART 4 -->
+<h2>Article 4 — Obligations du Prestataire</h2>
+<p>Le Prestataire s'engage à :</p>
+<ul>
+  <li>réaliser les prestations prévues au contrat avec diligence et professionnalisme ;</li>
+  <li>respecter les recommandations et politiques de Google Business Profile ;</li>
+  <li>informer le Client de toute difficulté rencontrée dans l'exécution des prestations ;</li>
+  <li>assurer la confidentialité des informations transmises par le Client.</li>
+</ul>
+<p>Le Prestataire est soumis à une <strong>obligation de moyens et non de résultat</strong>.</p>
+
+<!-- ART 5 -->
+<h2>Article 5 — Absence de garantie de résultats</h2>
+<p>Le Client reconnaît expressément que les algorithmes Google évoluent régulièrement et indépendamment de la volonté du Prestataire, et que le classement d'une fiche Google dépend de nombreux facteurs externes (concurrence locale, ancienneté, zone géographique).</p>
+<p>Le Prestataire ne garantit aucune position précise dans les résultats Google, aucun volume d'appels déterminé, ni aucun chiffre d'affaires minimum.</p>
+
+<!-- ART 6 -->
+<h2>Article 6 — Obligations du Client</h2>
+<p>Le Client s'engage à fournir des informations exactes et à jour, à transmettre les accès nécessaires (invitation gestionnaire GBP), à fournir les photos de son établissement, à répondre aux demandes d'informations dans un délai raisonnable, et à respecter les échéances de paiement.</p>
+<p>Tout retard ou manquement imputable au Client pourra entraîner un report du planning sans que la responsabilité du Prestataire ne puisse être engagée.</p>
+<p><strong>Gestion des avis :</strong> Le Prestataire ne garantit pas la suppression des avis négatifs publiés par des tiers. Toute demande de suppression d'avis reste soumise à la seule appréciation de Google. Le Prestataire ne peut être tenu responsable du refus de suppression d'un avis par Google, même si cet avis est inexact ou frauduleux.</p>
+
+<!-- ART 7 -->
+<h2>Article 7 — Accès Google Business Profile</h2>
+<p>Le Client conserve la <strong>propriété exclusive</strong> de sa fiche Google Business Profile. Le Prestataire intervient uniquement en qualité de gestionnaire autorisé. À la fin du contrat, tous les accès accordés peuvent être retirés par le Client depuis son interface Google. Aucune propriété sur la fiche n'est revendiquée par le Prestataire. Les modalités d'accès sont précisées en <strong>Annexe 2</strong>.</p>
+
+<!-- ART 8 -->
+<h2>Article 8 — Tarifs et conditions de paiement</h2>
+<p><strong>Montant :</strong> ${O.montant ? `${O.montant} €${isAbo ? " HT/mois" : ""}` : cd.price} — TVA non applicable, article 293 B du CGI.</p>
+<p><strong>Modalités :</strong> ${isAbo ? "Facturation mensuelle, émise le 1er de chaque mois. Paiement attendu sous 10 jours. En cas de retard, pénalités de retard au taux légal en vigueur, majorées d'une indemnité forfaitaire de 40 € pour frais de recouvrement." : "Paiement intégral exigible à la commande, avant démarrage des travaux."}</p>
+${agIban ? `<div class="rib-block"><p><strong>Coordonnées bancaires (virement)</strong></p><p>Titulaire : Sara Baudouin — Be The One</p><p>IBAN : ${agIban}</p>${agBic ? `<p>BIC : ${agBic}</p>` : ""}</div>` : ""}
+
+<!-- ART 9 -->
+<h2>Article 9 — Durée du contrat</h2>
+${isAbo ? `<p>Le présent contrat est conclu pour une <strong>durée initiale de ${O.typeContrat === "leader_annuel" ? "12 mois" : "6 mois"}</strong> à compter du ${startDate}, puis se renouvelle tacitement par périodes d'un mois.</p>` : `<p>Prestation ponctuelle. Le contrat prend fin à la livraison de la prestation, estimée sous 5 à 10 jours ouvrés à compter de la réception des accès et informations nécessaires.</p>`}
+
+<!-- ART 10 -->
+<h2>Article 10 — Résiliation</h2>
+${isAbo ? `<p>Passé la période initiale de ${O.typeContrat === "leader_annuel" ? "12 mois" : "6 mois"}, chaque partie peut résilier le contrat avec un <strong>préavis de 30 jours</strong>, notifié par <strong>email ou lettre recommandée avec accusé de réception</strong>. Toute période mensuelle commencée est due dans son intégralité. Le Prestataire peut résilier sans préavis en cas de manquement grave (défaut de paiement répété, comportement abusif, informations fausses).</p>` : `<p>La prestation étant ponctuelle, la résiliation n'est pas applicable après démarrage des travaux.</p>`}
+
+<!-- ART 11 -->
+<h2>Article 11 — Confidentialité</h2>
+<p>Les deux parties s'engagent à conserver confidentielles toutes les informations échangées dans le cadre de la mission, pendant la durée du contrat et 3 ans après son terme. Cette obligation ne s'applique pas aux informations déjà connues du public.</p>
+
+<!-- ART 12 -->
+<h2>Article 12 — Propriété intellectuelle</h2>
+<p>Les méthodes, outils, rapports et documents développés par le Prestataire restent sa propriété exclusive. Le Client bénéficie d'un droit d'utilisation non exclusif pour la durée du contrat. Les contenus publiés sur la fiche Google (posts, photos) appartiennent au Client une fois publiés.</p>
+
+<!-- ART 13 -->
+<h2>Article 13 — Limitation de responsabilité</h2>
+<p>Le Prestataire ne pourra être tenu responsable :</p>
+<ul>
+  <li>des modifications des algorithmes Google impactant la visibilité ;</li>
+  <li>de la suspension d'une fiche résultant d'informations inexactes fournies par le Client ;</li>
+  <li>des pertes indirectes, pertes d'exploitation ou manques à gagner ;</li>
+  <li>des délais dus à un retard du Client dans la transmission des informations ou accès.</li>
+</ul>
+<p>En tout état de cause, la responsabilité du Prestataire est limitée au <strong>montant total effectivement perçu</strong> au titre du présent contrat.</p>
+
+<!-- ART 14 -->
+<h2>Article 14 — Droit applicable et juridiction</h2>
+<p>Le présent contrat est soumis au <strong>droit français</strong>. En cas de litige, les parties s'engagent à rechercher une solution amiable avant tout recours judiciaire. À défaut d'accord, tout litige sera soumis aux tribunaux compétents du ressort du siège social du Prestataire (Vannes, Morbihan).</p>
+
+<!-- ART 15 - SIGNATURE -->
+<h2>Article 15 — Signatures</h2>
+<p style="color:#444">Fait en deux exemplaires originaux. Chaque partie reconnaît avoir lu, compris et accepté l'ensemble des conditions du présent contrat ainsi que ses annexes. La signature électronique vaut accord contractuel.</p>
+
+<div class="footer">Be The One · Sara Baudouin · Entreprise individuelle · SIRET ${agS} · ${agE} · agence-betheone.fr/cgv</div>
+
+<!-- ===== ANNEXE 1 ===== -->
+<div class="page-break">
+<div class="annex-title">Annexe 1 — Détail des prestations</div>
+<p style="font-family:system-ui,sans-serif;color:#6B7280;font-size:10pt;margin-top:6px">Contrat ${cd.label} · ${y.name} · ${today}</p>
+
+<h3>Prestations incluses dans l'offre ${cd.label}</h3>
+${annexeDetails}
+${O.prestationsCustom ? `<h3>Prestations complémentaires spécifiques</h3><ul>${O.prestationsCustom.split(/\n|·/).map(p=>p.trim()).filter(Boolean).map(p=>`<li>${p}</li>`).join("")}</ul>` : ""}
+
+<h3>Délais et organisation</h3>
+<ul>
+  <li>Démarrage : ${startDate}</li>
+  <li>Les publications sont planifiées et réalisées par le Prestataire sur le compte Google du Client.</li>
+  <li>Les photos à publier doivent être transmises par le Client avant le 25 de chaque mois.</li>
+  <li>${isAbo ? "Un rapport de visibilité est envoyé par email dans les 5 premiers jours du mois suivant." : "Le rapport final est livré dans les 5 jours ouvrés suivant la fin de la prestation."}</li>
+</ul>
+
+<h3>Ce qui n'est pas inclus</h3>
+<ul>
+  <li>La création ou l'achat de photos (fourniture par le Client obligatoire)</li>
+  <li>La gestion des réseaux sociaux (Facebook, Instagram, etc.)</li>
+  <li>La création ou refonte du site web du Client</li>
+  <li>Les prestations SEO relatives au site internet du Client</li>
+  <li>La publicité payante (Google Ads, Facebook Ads, etc.)</li>
+</ul>
+${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
+<p>Les éléments suivants sont intégrés dans le rapport mensuel :</p>
+<ul>
+  <li>Nombre d'appels reçus via la fiche Google</li>
+  <li>Demandes d'itinéraire (clics "Y aller")</li>
+  <li>Visites du profil Google (vues de la fiche)</li>
+  <li>Clics vers le site internet</li>
+  <li>Évolution du nombre et de la note des avis clients</li>
+  <li>Score global de la fiche (audit mensuel)</li>
+</ul>` : ""}
+<div class="footer">Be The One · Sara Baudouin · SIRET ${agS} · ${agE}</div>
+</div>
+
+<!-- ===== ANNEXE 2 ===== -->
+<div class="page-break">
+<div class="annex-title">Annexe 2 — Conditions d'accès</div>
+<p style="font-family:system-ui,sans-serif;color:#6B7280;font-size:10pt;margin-top:6px">Contrat ${cd.label} · ${y.name} · ${today}</p>
+
+<h3>Accès Google Business Profile (obligatoire)</h3>
+<p>Pour réaliser les prestations, le Client doit inviter le Prestataire comme <strong>gestionnaire</strong> de sa fiche Google Business Profile :</p>
+<ol>
+  <li>Se connecter sur <strong>business.google.com</strong></li>
+  <li>Aller dans "Paramètres" → "Gestionnaires"</li>
+  <li>Ajouter l'email : <strong>${agE}</strong></li>
+  <li>Attribuer le rôle : <strong>Gestionnaire</strong></li>
+</ol>
+<p>Le Client reste propriétaire de la fiche et peut retirer cet accès à tout moment.</p>
+
+<h3>Fourniture des photos</h3>
+<p>Les photos sont obligatoirement fournies par le Client. Elles doivent :</p>
+<ul>
+  <li>Être au format JPEG ou PNG, résolution minimale 720 × 720 px</li>
+  <li>Représenter l'établissement, l'équipe, les produits ou services</li>
+  <li>Respecter les règles de contenu Google (pas de logos seuls, pas de texte abusif)</li>
+  <li>Être transmises par email à ${agE} avant le 25 de chaque mois</li>
+</ul>
+<p>En transmettant les photos, le Client certifie détenir tous les droits nécessaires à leur publication.</p>
+
+<div class="footer">${ag} · Sara Baudouin · Entreprise individuelle · SIRET ${agS} · ${agE}</div>
+</div>
+</div></body></html>`;
+                                      const htmlWithBtn = html.replace("</body>", `<div style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;gap:8px">
+  <button onclick="window.print()" style="background:#3B5BDB;color:white;border:none;border-radius:10px;padding:10px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:system-ui,sans-serif;box-shadow:0 4px 16px rgba(59,91,219,.3)">🖨️ Imprimer / PDF</button>
+  <button onclick="window.close()" style="background:#F4F5FA;color:#374151;border:1px solid #E5E7EB;border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;font-family:system-ui,sans-serif">✕ Fermer</button>
+</div></body>`);
+                                      const w2 = window.open("","_blank");
+                                      w2.document.write(htmlWithBtn);
+                                      w2.document.close();
+                                    },
+                                    style:{padding:"6px 12px",borderRadius:8,border:"1px solid #059669",background:"white",color:"#059669",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600},
+                                    children:"📄 Générer le contrat",
+                                  }),
                                   n.jsx("button", {
                                     onClick: () => {
-                                      H ? B(null) : (B(y.id), R(O));
+                                      // Générer le lien de signature
+                                      const agN=localStorage.getItem("ag_name")||"Be The One";
+                                      const agA2=localStorage.getItem("ag_address")||"6 Keryvarho, 56450 Le Hézo";
+                                      const agS2=localStorage.getItem("ag_siret")||"105 096 291 00015";
+                                      const agE2=localStorage.getItem("ag_email")||"contact@agence-betheone.fr";
+                                      const cdMap={setup:{label:"⚡ Setup Local",price:"299€",type:"Paiement unique"},leader:{label:"Leader Local — 6 mois",price:"139€/mois",type:"Abonnement mensuel"},leader_annuel:{label:"Leader Local — Annuel",price:"119€/mois",type:"Abonnement mensuel"}};
+                                      const cd2=cdMap[O.typeContrat]||{label:"Prestation GMB",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation"};
+                                      const token=Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+                                      // Si déjà signé → ouvrir le contrat
+                                      if (clientSigs[y.id]) { if(clientSigs[y.id].contract_url) window.open(clientSigs[y.id].contract_url,"_blank"); return; }
+                                      const agP2=localStorage.getItem("ag_phone")||"06 51 17 69 10";
+                                      const data={ag:agN,agA:agA2,agS:agS2,agE:agE2,agP:agP2,clientName:y.name,label:cd2.label,price:O.montant?`${O.montant}€${cd2.type==="Abonnement mensuel"?"/mois":""}`:cd2.price,type:cd2.type,typeContrat:O.typeContrat||"leader",date:new Date().toLocaleDateString("fr-FR"),startDate:O.dateDebut?new Date(O.dateDebut).toLocaleDateString("fr-FR"):null,montant:O.montant,interlocuteur:O.interlocuteur,poste:O.poste,adresseClient:O.adresseClient,siretClient:O.siretClient,email:O.email,telephone:O.telephone,prestationsCustom:O.prestationsCustom||""};
+                                      // Encoder en base64 safe (gère les accents)
+                                      const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+                                      const link=`https://agence-betheone.fr/signer?t=${token}&d=${encoded}`;
+                                      // Stocker dans Supabase + localStorage (fallback)
+                                      try{const sigReqs=JSON.parse(localStorage.getItem("bto_sign_reqs")||"{}");sigReqs[y.id]={token,link,status:"en_attente",createdAt:new Date().toISOString(),clientName:y.name,label:cd2.label};localStorage.setItem("bto_sign_reqs",JSON.stringify(sigReqs));}catch(e){}
+                                      fetch(`${SUPA_URL}/rest/v1/signing_requests`,{method:"POST",headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({client_id:String(y.id),client_name:y.name,token,link,label:cd2.label,status:"en_attente"})}).catch(()=>{});
+                                      // Copier + afficher dans une modale custom (pas alert)
+                                      const modal=document.createElement("div");
+                                      modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
+                                      modal.innerHTML=`<div style="background:white;border-radius:18px;padding:28px 28px 22px;max-width:480px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.2)"><div style="font-size:22px;margin-bottom:8px">📨</div><div style="font-weight:800;font-size:16px;color:#1E1B30;margin-bottom:4px">Lien de signature généré</div><div style="font-size:13px;color:#6B7280;margin-bottom:16px">Envoyez ce lien à <strong>${y.name}</strong> par email ou WhatsApp.</div><div style="background:#F4F5FA;border-radius:10px;padding:10px 14px;font-size:12px;color:#374151;word-break:break-all;margin-bottom:16px;border:1px solid #E5E7EB">${link}</div><div style="display:flex;gap:8px"><button id="copy-link-btn" style="flex:1;padding:11px;border-radius:10px;border:none;background:#6B40D8;color:white;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">📋 Copier le lien</button><button onclick="this.closest('div[style*=fixed]').remove()" style="padding:11px 16px;border-radius:10px;border:1px solid #E5E7EB;background:white;color:#374151;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">Fermer</button></div></div>`;
+                                      document.body.appendChild(modal);
+                                      modal.querySelector("#copy-link-btn").onclick=()=>{navigator.clipboard.writeText(link).then(()=>{modal.querySelector("#copy-link-btn").textContent="✅ Copié !";}).catch(()=>{});};
+                                      modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
                                     },
-                                    style: {
-                                      padding: "6px 12px",
-                                      borderRadius: 8,
-                                      border: "1px solid #E5E7EB",
-                                      background: H ? "#6B40D8" : "white",
-                                      color: H ? "white" : "#374151",
-                                      cursor: "pointer",
-                                      fontFamily: "inherit",
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                    },
+                                    title: clientSigs[y.id] ? "Voir le contrat signé" : "Le lien généré contient les données actuelles du contrat.",
+                                    style:{padding:"6px 12px",borderRadius:8,border:`1px solid ${clientSigs[y.id]?"#059669":"#6B40D8"}`,background:"white",color:clientSigs[y.id]?"#059669":"#6B40D8",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600},
+                                    children: clientSigs[y.id] ? "👁️ Contrat signé" : "Partager",
+                                  }),
+                                  /* Contre-signer si client a signé mais pas encore Sara */
+                                  clientSigs[y.id] && (() => {
+                                    const saraSigKey = `sara_sig_${clientSigs[y.id].token}`;
+                                    const saraSigned = !!localStorage.getItem(saraSigKey);
+                                    if (saraSigned) return null;
+                                    return n.jsx("button", {
+                                      onClick: async () => {
+                                        const agN2 = localStorage.getItem("ag_name") || "Be The One";
+                                        const now = new Date().toISOString();
+                                        const sd = { name: `${agN2} — Sara Baudouin`, signed_at: now };
+                                        localStorage.setItem(saraSigKey, JSON.stringify(sd));
+                                        await supaSet(saraSigKey, JSON.stringify(sd));
+                                        setClientSigs(prev => ({ ...prev }));
+                                      },
+                                      style:{padding:"6px 12px",borderRadius:8,border:"1px solid #3B5BDB",background:"white",color:"#3B5BDB",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700},
+                                      children:"✍️ Contresigner",
+                                    });
+                                  })(),
+                                  n.jsx("button", {
+                                    onClick: () => { H ? B(null) : (B(y.id), R(O)); },
+                                    style:{padding:"6px 12px",borderRadius:8,border:"1px solid #E5E7EB",background:H?"#6B40D8":"white",color:H?"white":"#374151",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600},
                                     children: H ? "✓ Fermer" : "✏️ Modifier",
                                   }),
+                                  ]}),
                                 ],
                               }),
                             ],
@@ -9914,32 +10856,14 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                                   },
                                   children: [
                                     [
-                                      {
-                                        k: "interlocuteur",
-                                        l: "Interlocuteur",
-                                        ph: "Prénom Nom",
-                                      },
-                                      {
-                                        k: "poste",
-                                        l: "Poste",
-                                        ph: "Gérant, Responsable…",
-                                      },
-                                      {
-                                        k: "telephone",
-                                        l: "Téléphone",
-                                        ph: "06 12 34 56 78",
-                                      },
-                                      {
-                                        k: "email",
-                                        l: "Email",
-                                        ph: "contact@client.fr",
-                                      },
-                                      {
-                                        k: "montant",
-                                        l: "Montant (€/mois)",
-                                        ph: "99",
-                                        type: "number",
-                                      },
+                                      { k: "interlocuteur", l: "Interlocuteur", ph: "Prénom Nom" },
+                                      { k: "poste", l: "Poste", ph: "Gérant, Responsable…" },
+                                      { k: "telephone", l: "Téléphone", ph: "06 12 34 56 78" },
+                                      { k: "email", l: "Email", ph: "contact@client.fr" },
+                                      { k: "adresseClient", l: "Adresse client", ph: "12 rue de la Paix, 75001 Paris" },
+                                      { k: "siretClient", l: "SIRET client", ph: "123 456 789 00010" },
+                                      { k: "dateDebut", l: "Date de démarrage", ph: "", type: "date" },
+                                      { k: "montant", l: "Montant (€)", ph: "139 ou 119", type: "number" },
                                     ].map((S) =>
                                       n.jsxs(
                                         "div",
@@ -9987,12 +10911,13 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                                         }),
                                         n.jsx("select", {
                                           className: "inp",
-                                          value: k.typeContrat || "abonnement",
-                                          onChange: (S) =>
-                                            R({
-                                              ...k,
-                                              typeContrat: S.target.value,
-                                            }),
+                                          value: k.typeContrat || "leader",
+                                          onChange: (S) => {
+                                            const defaultMontant = S.target.value === "setup" ? "299" : S.target.value === "leader_annuel" ? "119" : "139";
+                                            const prevDefault = k.typeContrat === "setup" ? "299" : k.typeContrat === "leader_annuel" ? "119" : "139";
+                                            const shouldReset = !k.montant || k.montant === prevDefault;
+                                            R({ ...k, typeContrat: S.target.value, montant: shouldReset ? defaultMontant : k.montant });
+                                          },
                                           style: { margin: 0, fontSize: 12.5 },
                                           children: U.map((S) =>
                                             n.jsx(
@@ -10082,6 +11007,43 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                                     }),
                                   ],
                                 }),
+                                /* Prestations personnalisées */
+                                n.jsxs("div", {
+                                  style: { marginBottom: 10, gridColumn: "1 / -1" },
+                                  children: [
+                                    n.jsxs("div", {
+                                      style: { fontSize: 11, fontWeight: 600, color: "#6B7280", marginBottom: 4, display:"flex", alignItems:"center", gap:6 },
+                                      children: [
+                                        "✏️ Prestations personnalisées",
+                                        n.jsx("span", { style:{fontSize:10,color:"#9CA3AF",fontWeight:400}, children:"(s'ajoutent à l'Annexe 1 du contrat)" }),
+                                      ],
+                                    }),
+                                    n.jsx("textarea", {
+                                      className: "ta",
+                                      rows: 3,
+                                      value: k.prestationsCustom || "",
+                                      onChange: (S) => R({ ...k, prestationsCustom: S.target.value }),
+                                      placeholder: "Ex : 1 shooting photo professionnel inclus · Création d'une fiche Google supplémentaire · Accompagnement stratégie réseaux…",
+                                      style: { margin: 0, fontSize: 12.5 },
+                                    }),
+                                  ],
+                                }),
+                                n.jsxs("div", {
+                                  style: { marginBottom: 10 },
+                                  children: [
+                                    n.jsx("div", {
+                                      style: { fontSize: 11, fontWeight: 600, color: "#6B7280", marginBottom: 4 },
+                                      children: "🎁 Parrainage — Parrainé par",
+                                    }),
+                                    n.jsx("input", {
+                                      className: "inp",
+                                      value: k.parrain || "",
+                                      onChange: (S) => R({ ...k, parrain: S.target.value }),
+                                      placeholder: "Nom de l'entreprise ou du client parrain…",
+                                      style: { margin: 0, fontSize: 12.5 },
+                                    }),
+                                  ],
+                                }),
                                 n.jsxs("div", {
                                   style: { marginBottom: 10 },
                                   children: [
@@ -10129,6 +11091,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                                 }),
                               ],
                             }),
+                        n.jsx(OnboardingPanel, { clientId: y.id, onSigLoaded:(id,s)=>setClientSigs(prev=>({...prev,[id]:s})) }),
                         ],
                       },
                       y.id,
@@ -10136,29 +11099,30 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                   }),
                 }),
           ],
-        }),
-      f === "facturation" && n.jsx(ContratTab, { clients: e, getContract: E }),
-      f === "onboarding" && n.jsx(FactureTab, { clients: e, getContract: E }),
+        });
+        })(),
+      f === "facturation" && n.jsx(ContratTab, { clients: e, getContract: E, upd: ed }),
       f === "parametres" &&
         n.jsxs("div", {
-          style: { maxWidth: 560 },
+          style: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:900 },
           children: [
+            /* COLONNE 1 */
+            n.jsxs("div", { style:{ display:"flex", flexDirection:"column", gap:14 }, children:[
             n.jsxs("div", {
               style: {
                 background: "white",
                 borderRadius: 14,
-                padding: "22px 24px",
+                padding: "18px 20px",
                 border: "1px solid #E5E7EB",
                 borderTop: "3px solid #6B40D8",
-                marginBottom: 14,
               },
               children: [
                 n.jsx("div", {
                   style: {
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 13,
                     color: "#1E1B30",
-                    marginBottom: 14,
+                    marginBottom: 12,
                   },
                   children: "🔑 Clés API",
                 }),
@@ -10200,8 +11164,10 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                       className: "inp",
                       type: "password",
                       defaultValue: localStorage.getItem("bto_apikey") || "",
-                      onChange: (y) =>
-                        localStorage.setItem("bto_apikey", y.target.value),
+                      onChange: (y) => {
+                        localStorage.setItem("bto_apikey", y.target.value);
+                        supaSet("bto_apikey", y.target.value);
+                      },
                       placeholder: "sk-ant-...",
                     }),
                   ],
@@ -10242,7 +11208,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                         localStorage.getItem("bto_google_key") || "",
                       onChange: (y) => {
                         (localStorage.setItem("bto_google_key", y.target.value),
-                          setGoogleApiKey(y.target.value));
+                          h(y.target.value));
                       },
                       placeholder: "AIzaSy...",
                       placeholder: "sk-ant-api03-…",
@@ -10325,48 +11291,79 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o 
                     ],
                   }),
                 ]}),
-                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:10 }, children:"💡 Pour transférer vers un autre navigateur : Exporter → copier le fichier → ouvrir l'app dans l'autre navigateur → Importer" }),
+                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:10 }, children:"💡 Exporter → copier → autre navigateur → Importer" }),
               ],
             }),
+            /* Objectif mensuel */
             n.jsxs("div", {
-              style: {
-                background: "white",
-                borderRadius: 14,
-                padding: "22px 24px",
-                border: "1px solid #E5E7EB",
-                borderTop: "3px solid #E85A30",
-              },
+              style: { background:"white", borderRadius:14, padding:"18px 20px", border:"1px solid #E5E7EB", borderTop:"3px solid #E85A30" },
               children: [
-                n.jsx("div", {
-                  style: {
-                    fontWeight: 700,
-                    fontSize: 14,
-                    color: "#1E1B30",
-                    marginBottom: 14,
-                  },
-                  children: "🎯 Objectif mensuel",
-                }),
+                n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30", marginBottom:10 }, children:"🎯 Objectif mensuel" }),
                 n.jsxs("div", {
                   style: { display: "flex", gap: 8, alignItems: "center" },
                   children: [
                     n.jsx("input", {
-                      type: "number",
-                      className: "inp",
-                      value: x,
-                      style: { width: 80, margin: 0 },
+                      type: "number", className: "inp", value: x,
+                      style: { width: 70, margin: 0 },
                       onChange: (y) => {
                         const O = Math.max(1, parseInt(y.target.value) || 1);
                         (j(O), localStorage.setItem("gmb_monthly_obj", O));
                       },
                     }),
-                    n.jsx("div", {
-                      style: { fontSize: 13, color: "#6B7280" },
-                      children: "audits par mois",
-                    }),
+                    n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"audits/mois" }),
                   ],
                 }),
               ],
             }),
+            ]}),
+            /* COLONNE 2 */
+            n.jsxs("div", { style:{ display:"flex", flexDirection:"column", gap:14 }, children:[
+            /* Informations agence pour facturation */
+            n.jsxs("div", {
+              style: { background:"white", borderRadius:14, padding:"18px 20px", border:"1px solid #E5E7EB", borderTop:"3px solid #059669" },
+              children: [
+                n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30", marginBottom:10 }, children:"🏢 Informations factures" }),
+                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginBottom:10 }, children:"Apparaissent sur vos factures clients" }),
+                ...[
+                  { k:"ag_name", l:"Nom commercial", ph:"Be The One", def:"Be The One" },
+                  { k:"ag_siret", l:"SIRET", ph:"105 096 291 00015", def:"105 096 291 00015" },
+                  { k:"ag_address", l:"Adresse", ph:"6 Keryvarho, 56450 Le Hézo", def:"6 Keryvarho, 56450 Le Hézo" },
+                  { k:"ag_email", l:"Email", ph:"contact@agence-betheone.fr", def:"contact@agence-betheone.fr" },
+                  { k:"ag_phone", l:"Téléphone", ph:"06 51 17 69 10", def:"06 51 17 69 10" },
+                  { k:"ag_iban", l:"IBAN (virement)", ph:"FR76 XXXX XXXX XXXX XXXX XXXX XXX", def:"" },
+                  { k:"ag_bic", l:"BIC", ph:"XXXXXXXX", def:"" },
+                ].map(({k: ky, l: lbl, ph, def}) =>
+                  n.jsxs("div", { style:{marginBottom:8}, key:ky, children:[
+                    n.jsx("div", { style:{fontSize:11, fontWeight:600, color:"#374151", marginBottom:3}, children:lbl }),
+                    n.jsx("input", {
+                      className:"inp",
+                      defaultValue: localStorage.getItem(ky) || def,
+                      onChange: (y) => { localStorage.setItem(ky, y.target.value); supaSet(ky, y.target.value); },
+                      placeholder: ph,
+                      style:{ margin:0, fontSize:12 },
+                    }),
+                  ]}),
+                ),
+              ],
+            }),
+            /* Clé Anthropic compacte */
+            n.jsxs("div", {
+              style: { background:"white", borderRadius:14, padding:"18px 20px", border:"1px solid #E5E7EB", borderTop:"3px solid #6B40D8" },
+              children: [
+                n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30", marginBottom:10 }, children:"🤖 Clé Claude (IA)" }),
+                n.jsx("input", {
+                  className:"inp", type:"password",
+                  defaultValue: localStorage.getItem("bto_apikey") || "",
+                  onChange: (y) => localStorage.setItem("bto_apikey", y.target.value),
+                  placeholder:"sk-ant-...",
+                  style:{ margin:0, fontSize:12 },
+                }),
+                n.jsxs("div", { style:{fontSize:11, color:"#9CA3AF", marginTop:5}, children:[
+                  n.jsx("a", { href:"https://console.anthropic.com", target:"_blank", rel:"noreferrer", style:{color:"#6B40D8"}, children:"console.anthropic.com" }), " → API Keys"
+                ]}),
+              ],
+            }),
+            ]}),
           ],
         }),
     ],
@@ -10431,16 +11428,17 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
     }),
     m = e.filter((B) => {
       try {
-        const k = B.calPosts || [];
-        if (!k.length) return !1;
-        const R = k
-          .filter((E) => E.done)
-          .sort((E, M) => new Date(M.date || 0) - new Date(E.date || 0))[0];
-        if (!R) return !0;
-        const N = new Date(R.date);
-        return (
-          isNaN(N.getTime()) || Date.now() - N.getTime() > 30 * 24 * 3600 * 1e3
-        );
+        // calPosts est un objet {dateKey:[posts]}, pas un tableau
+        const calObj = B.calPosts || {};
+        const today = new Date().toISOString().slice(0,10);
+        // Posts en retard = non faits ET date passée
+        const overdue = Object.entries(calObj).some(([dk, ps]) => dk < today && (ps||[]).some(p => !p.done));
+        if (overdue) return true;
+        // Pas de post récent depuis >30j — on utilise la dateKey comme date du post
+        const allDone = Object.entries(calObj).flatMap(([dk, ps]) => (ps||[]).filter(p => p.done).map(p => dk));
+        if (allDone.length === 0) return Object.keys(calObj).length > 0;
+        const lastDoneDate = allDone.sort().reverse()[0]; // dateKey "YYYY-MM-DD" la plus récente
+        return Date.now() - new Date(lastDoneDate).getTime() > 30 * 24 * 3600 * 1e3;
       } catch {
         return !1;
       }
@@ -10481,7 +11479,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
               }),
               n.jsx("div", {
                 style: {
-                  fontSize: 26,
+                  fontSize: 28,
                   fontWeight: 900,
                   color: "#1E1B30",
                   letterSpacing: "-.02em",
@@ -10490,12 +11488,15 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
               }),
             ],
           }),
-          n.jsx("button", {
-            className: "btn",
-            onClick: () => i("audit"),
-            style: { fontSize: 13, padding: "10px 20px" },
-            children: "+ Nouvel audit",
-          }),
+          n.jsxs("div", { style:{display:"flex", alignItems:"center", gap:10}, children:[
+            n.jsx(NotificationBell, {}),
+            n.jsx("button", {
+              className: "btn",
+              onClick: () => i("audit"),
+              style: { fontSize: 13, padding: "10px 20px" },
+              children: "+ Nouvel audit",
+            }),
+          ]}),
         ],
       }),
       n.jsx("div", {
@@ -10514,9 +11515,9 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
           },
           {
             label: "Score moyen",
-            value: l ? `${l}/100` : "—",
-            sub: (a && a.label) || "Aucun",
-            c: (a && a.color) || "#6B7280",
+            value: e.length && l ? `${l}/100` : "—",
+            sub: e.length ? ((a && a.label) || "Aucun") : "Aucun client",
+            c: e.length ? ((a && a.color) || "#6B7280") : "#9CA3AF",
           },
           {
             label: "Avis sans réponse",
@@ -10573,6 +11574,37 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
           ),
         ),
       }),
+      /* === ALERTES PAIEMENTS + ONBOARDING === */
+      (() => {
+        try {
+          const paiements = JSON.parse(localStorage.getItem("bto_paiements") || "{}");
+          const contracts = JSON.parse(localStorage.getItem("bto_contracts") || "{}");
+          const nowKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
+          const abonnes = e.filter(B => {
+            const tc = (contracts[B.id] || {}).typeContrat;
+            return tc === "leader" || tc === "leader_annuel";
+          });
+          const retard = abonnes.filter(B => paiements[`${B.id}_${nowKey}`] !== "paye");
+          if (retard.length === 0) return null;
+          return n.jsxs("div", {
+            style:{ background:"#FEF3C7", border:"1px solid #FCD34D", borderRadius:12, padding:"14px 18px", marginBottom:14, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 },
+            children:[
+              n.jsxs("div", { style:{display:"flex",alignItems:"center",gap:10}, children:[
+                n.jsx("span",{style:{fontSize:20},children:"⚠️"}),
+                n.jsxs("div",{children:[
+                  n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#92400E"},children:`${retard.length} paiement${retard.length>1?"s":""} en attente ce mois-ci`}),
+                  n.jsx("div",{style:{fontSize:12,color:"#B45309"},children:retard.map(B=>B.name).join(" · ")}),
+                ]}),
+              ]}),
+              n.jsx("button",{
+                onClick:()=>i("facturation"),
+                style:{padding:"7px 14px",borderRadius:8,border:"none",background:"#F59E0B",color:"white",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"},
+                children:"Voir facturation →",
+              }),
+            ],
+          });
+        } catch { return null; }
+      })(),
       n.jsxs("div", {
         style: {
           display: "grid",
@@ -11143,6 +12175,49 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
                 }),
             ],
           }),
+          // ── POSTS PROGRAMMÉS DEMAIN (notification J-1) ──
+          (() => {
+            const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+            const tomorrowKey = tomorrow.toISOString().slice(0,10);
+            const tmPosts = [];
+            e.forEach(cl => {
+              // calPosts
+              const calObj = cl.calPosts || {};
+              (calObj[tomorrowKey] || []).forEach(p => { if (!p.done) tmPosts.push({ client: cl, title: p.title || "Post éditorial", type: p.type, src: "cal" }); });
+              // scheduledPosts
+              (cl.scheduledPosts || []).filter(p => p.date === tomorrowKey && p.status !== "published").forEach(p => tmPosts.push({ client: cl, title: (p.text||"").slice(0,60), type: "Google", src: "google" }));
+            });
+            if (tmPosts.length === 0) return null;
+            return n.jsxs("div", {
+              style: { background: "linear-gradient(135deg,#FFF7ED,#FFFBEB)", borderRadius: 14, padding: "18px 22px", border: "2px solid #FDE68A", borderTop: "4px solid #F59E0B", marginBottom: 14 },
+              children: [
+                n.jsxs("div", { style: { display:"flex", alignItems:"center", gap:10, marginBottom:12 }, children: [
+                  n.jsx("div", { style:{ fontSize:24 }, children:"📅" }),
+                  n.jsxs("div", { children: [
+                    n.jsxs("div", { style:{ fontWeight:800, fontSize:14, color:"#92400E" }, children:[ tmPosts.length, " post", tmPosts.length>1?"s":"", " à publier demain" ] }),
+                    n.jsx("div", { style:{ fontSize:11, color:"#B45309", marginTop:1 }, children:"Préparez-les maintenant pour ne pas être en retard" }),
+                  ]}),
+                ]}),
+                n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:
+                  tmPosts.map((tp, ti) => n.jsxs("div", {
+                    key:ti,
+                    onClick: () => i("client", tp.client),
+                    style:{ display:"flex", alignItems:"center", gap:10, padding:"8px 12px", background:"white", borderRadius:10, border:"1px solid #FDE68A", cursor:"pointer" },
+                    children:[
+                      n.jsx("div", { style:{ width:28,height:28,borderRadius:8,background:(tp.client.color||"#F59E0B")+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0 }, children: tp.client.icon||"📍" }),
+                      n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                        n.jsx("div", { style:{ fontSize:12.5,fontWeight:700,color:"#1E1B30",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis" }, children: tp.client.name }),
+                        n.jsx("div", { style:{ fontSize:11,color:"#9CA3AF",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis" }, children: tp.title }),
+                      ]}),
+                      n.jsx("span", { style:{ background: tp.src==="google"?"#E8F0FE":"#F5F3FF", color: tp.src==="google"?"#4285F4":"#6B40D8", borderRadius:6, padding:"2px 8px", fontSize:10, fontWeight:700, flexShrink:0 }, children: tp.src==="google"?"🔵 Google":"📝 Éditorial" }),
+                    ],
+                  }, ti))
+                }),
+              ],
+            });
+          })(),
+
+          // ── LISTE CLIENTS (enrichie) ──
           n.jsxs("div", {
             style: {
               background: "white",
@@ -11152,99 +12227,53 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
               borderTop: "3px solid #6B40D8",
             },
             children: [
-              n.jsx("div", {
-                style: {
-                  fontWeight: 700,
-                  fontSize: 14,
-                  color: "#1E1B30",
-                  marginBottom: 14,
-                },
-                children: "Clients",
-              }),
+              n.jsxs("div", { style:{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }, children:[
+                n.jsx("div", { style: { fontWeight: 700, fontSize: 14, color: "#1E1B30" }, children: "👥 Tous les clients" }),
+                n.jsx("button", { className:"btn-ghost", onClick:()=>i("clients"), style:{fontSize:11}, children:"Gérer →" }),
+              ]}),
               e.length === 0
                 ? n.jsx("div", {
-                    style: {
-                      textAlign: "center",
-                      padding: "20px 0",
-                      color: "#9CA3AF",
-                      fontSize: 13,
-                    },
+                    style: { textAlign: "center", padding: "20px 0", color: "#9CA3AF", fontSize: 13 },
                     children: "Aucun client — commencez un audit",
                   })
-                : e.slice(0, 6).map((B, k) => {
-                    const R = o({
-                        ...(B.scores || {}),
-                        ...(B.manualOverrides || {}),
-                      }),
-                      N = R >= 70 ? "#059669" : R >= 50 ? "#E85A30" : "#dc2626";
-                    return n.jsxs(
-                      "div",
-                      {
-                        onClick: () => i("client", B),
-                        style: {
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          cursor: "pointer",
-                          transition: "background .12s",
-                          marginBottom: 4,
-                        },
-                        onMouseEnter: (E) =>
-                          (E.currentTarget.style.background = "#F4F5FA"),
-                        onMouseLeave: (E) =>
-                          (E.currentTarget.style.background = "transparent"),
-                        children: [
-                          n.jsx("div", {
-                            style: {
-                              width: 32,
-                              height: 32,
-                              borderRadius: 9,
-                              background: (B.color || "#6B40D8") + "18",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 14,
-                              flexShrink: 0,
-                            },
-                            children: B.icon || "📍",
-                          }),
-                          n.jsxs("div", {
-                            style: { flex: 1, minWidth: 0 },
-                            children: [
-                              n.jsx("div", {
-                                style: {
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: "#1E1B30",
-                                  overflow: "hidden",
-                                  whiteSpace: "nowrap",
-                                  textOverflow: "ellipsis",
-                                },
-                                children: B.name,
-                              }),
-                              n.jsx("div", {
-                                style: { fontSize: 11, color: "#9CA3AF" },
-                                children: B.city || B.category || "",
-                              }),
-                            ],
-                          }),
-                          n.jsxs("div", {
-                            style: { fontSize: 13, fontWeight: 800, color: N },
-                            children: [R, "/100"],
-                          }),
-                        ],
-                      },
-                      B.id,
-                    );
-                  }),
-              e.length > 6 &&
-                n.jsxs("button", {
-                  onClick: () => i("clients"),
-                  className: "btn-ghost",
-                  style: { width: "100%", fontSize: 12, marginTop: 6 },
-                  children: ["Voir tous (", e.length, ") →"],
+                : n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:10 }, children:
+                  e.map((B) => {
+                    const R = o({ ...(B.scores||{}), ...(B.manualOverrides||{}) });
+                    const N = R >= 70 ? "#059669" : R >= 50 ? "#E85A30" : "#dc2626";
+                    const Nbg = R >= 70 ? "#ECFDF5" : R >= 50 ? "#FFF7ED" : "#FEF2F2";
+                    // Calcul alertes rapides
+                    const avisNR = ((B.avisData||{}).recentAvis||[]).filter(a=>!a.reponse).length;
+                    const calObj = B.calPosts||{};
+                    const today2 = new Date().toISOString().slice(0,10);
+                    const overdueCount = Object.entries(calObj).filter(([dk,ps])=>dk<today2&&(ps||[]).some(p=>!p.done)).length;
+                    const scheduledOverdue = (B.scheduledPosts||[]).filter(p=>p.date&&p.date<=today2&&p.status!=="published").length;
+                    const totalAlerts = (avisNR>0?1:0)+(overdueCount+scheduledOverdue>0?1:0)+(R<50?1:0);
+                    return n.jsxs("div", {
+                      key: B.id,
+                      onClick: () => i("client", B),
+                      style:{ background:"#FAFAFA", border:"1.5px solid #E5E7EB", borderRadius:12, padding:"14px 16px", cursor:"pointer", transition:"all .12s" },
+                      onMouseEnter: E => { E.currentTarget.style.background="#F5F3FF"; E.currentTarget.style.borderColor="#C4B5FD"; },
+                      onMouseLeave: E => { E.currentTarget.style.background="#FAFAFA"; E.currentTarget.style.borderColor="#E5E7EB"; },
+                      children:[
+                        // Header client
+                        n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10,marginBottom:10},children:[
+                          n.jsx("div",{style:{width:34,height:34,borderRadius:9,background:(B.color||"#6B40D8")+"18",border:`1.5px solid ${B.color||"#6B40D8"}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0},children:B.icon||"📍"}),
+                          n.jsxs("div",{style:{flex:1,minWidth:0},children:[
+                            n.jsx("div",{style:{fontSize:13,fontWeight:700,color:"#1E1B30",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"},children:B.name}),
+                            n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:B.city||B.category||"—"}),
+                          ]}),
+                          n.jsxs("div",{style:{background:Nbg,color:N,borderRadius:9,padding:"4px 10px",fontSize:13,fontWeight:900,flexShrink:0},children:[R,"/100"]}),
+                        ]}),
+                        // Badges alertes
+                        totalAlerts > 0 && n.jsxs("div",{style:{display:"flex",gap:5,flexWrap:"wrap"},children:[
+                          avisNR > 0 && n.jsxs("span",{style:{background:"#FEF3C7",color:"#D97706",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700},children:["⭐ ",avisNR," sans réponse"]}),
+                          (overdueCount+scheduledOverdue) > 0 && n.jsxs("span",{style:{background:"#FEE2E2",color:"#DC2626",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700},children:["📅 ",overdueCount+scheduledOverdue," post",overdueCount+scheduledOverdue>1?"s":""," en retard"]}),
+                          R < 50 && n.jsx("span",{style:{background:"#FEE2E2",color:"#DC2626",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700},children:"⚠️ Score critique"}),
+                        ]}),
+                        totalAlerts === 0 && n.jsx("div",{style:{fontSize:11,color:"#059669",fontWeight:600},children:"✅ Tout est à jour"}),
+                      ],
+                    }, B.id);
+                  })
                 }),
             ],
           }),
@@ -12361,6 +13390,7 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
     [a, d] = D.useState("manual"),
     [p, b] = D.useState("desc"),
     [x, j] = D.useState("all"),
+    [filterGoogle, setFilterGoogle] = D.useState("all"), // "all" | "connected" | "disconnected"
     [I, z] = D.useState(null),
     [g, h] = D.useState(null),
     f = (E) => {
@@ -12374,12 +13404,19 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
   let u = e.filter(
     (E) =>
       E.name.toLowerCase().includes(s.toLowerCase()) ||
-      (E.city || "").toLowerCase().includes(s.toLowerCase()),
+      (E.city || "").toLowerCase().includes(s.toLowerCase()) ||
+      (E.category || "").toLowerCase().includes(s.toLowerCase()),
   );
   (x !== "all" &&
     (u = u.filter(
       (E) =>
         r(o({ ...(E.scores || {}), ...(E.manualOverrides || {}) })).label === x,
+    )),
+  filterGoogle !== "all" &&
+    (u = u.filter((E) =>
+      filterGoogle === "connected"
+        ? !!(E.googleTokens?.access_token && E.gmbLocationName)
+        : !(E.googleTokens?.access_token && E.gmbLocationName)
     )),
     a !== "manual" &&
       (u = [...u].sort((E, M) => {
@@ -12502,7 +13539,7 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
               n.jsx("div", {
                 style: {
                   ...ke,
-                  fontSize: 30,
+                  fontSize: 28,
                   color: "var(--ink)",
                   letterSpacing: "-.02em",
                   marginBottom: 4,
@@ -12557,39 +13594,6 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
               value: s,
               onChange: (E) => l(E.target.value),
               placeholder: "Rechercher…",
-            }),
-            n.jsx("div", {
-              style: { display: "flex", gap: 5, flexWrap: "wrap" },
-              children: [
-                { id: "all", label: "Tous", color: "#6B40D8", bg: "#ffffff" },
-                ...Ri.map((E) => ({
-                  id: E.label,
-                  label: E.label,
-                  color: E.color,
-                  bg: E.bg,
-                })),
-              ].map((E) =>
-                n.jsx(
-                  "button",
-                  {
-                    onClick: () => j(E.id),
-                    style: {
-                      padding: "5px 13px",
-                      borderRadius: 20,
-                      border: `1.5px solid ${x === E.id ? E.color : "var(--border)"}`,
-                      background: x === E.id ? E.bg : "var(--surface)",
-                      color: x === E.id ? E.color : "var(--ink3)",
-                      fontWeight: x === E.id ? 700 : 500,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      fontSize: 12,
-                      transition: "all .15s",
-                    },
-                    children: E.label,
-                  },
-                  E.id,
-                ),
-              ),
             }),
             n.jsxs("div", {
               style: {
@@ -12694,7 +13698,7 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                       { k: "score", l: "Score", w: "110px" },
                       { k: "prog", l: "Progression", w: "130px" },
                       { k: "audit", l: "Audit", w: "100px" },
-                      { k: "google", l: "Google", w: "110px" },
+                      { k: "onboarding", l: "Onboarding", w: "110px" },
                       { k: "del", l: "", w: "60px" },
                     ].map((E) =>
                       n.jsx(
@@ -12828,59 +13832,17 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                             },
                             children: E.city || "—",
                           }),
-                          n.jsx("td", {
-                            style: { padding: "14px 18px" },
-                            children: n.jsxs("div", {
-                              style: {
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 9,
-                              },
-                              children: [
-                                n.jsx("div", {
-                                  style: {
-                                    width: 38,
-                                    height: 38,
-                                    borderRadius: 10,
-                                    background: T.bg,
-                                    border: `1.5px solid ${T.border}`,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontWeight: 800,
-                                    fontSize: 13,
-                                    color: T.color,
-                                  },
-                                  children: P,
-                                }),
-                                n.jsxs("div", {
-                                  children: [
-                                    n.jsx("div", {
-                                      style: {
-                                        fontSize: 12,
-                                        color: T.color,
-                                        fontWeight: 600,
-                                      },
-                                      children: T.label,
-                                    }),
-                                    O !== null &&
-                                      n.jsxs("div", {
-                                        style: {
-                                          fontSize: 11,
-                                          fontWeight: 600,
-                                          color:
-                                            O > 0
-                                              ? "#059669"
-                                              : O < 0
-                                                ? "#dc2626"
-                                                : "var(--ink4)",
-                                        },
-                                        children: [O > 0 ? "+" : "", O, " pts"],
-                                      }),
-                                  ],
-                                }),
-                              ],
-                            }),
+                          n.jsx("td", { style:{ padding:"14px 18px", minWidth:130 }, children:
+                            n.jsxs("div", { children:[
+                              n.jsxs("div", { style:{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5 }, children:[
+                                n.jsxs("span", { style:{ fontSize:16,fontWeight:900,color:T.color }, children:[P,n.jsx("span",{style:{fontSize:10,fontWeight:400,color:"#9CA3AF"},children:"/100"})] }),
+                                n.jsxs("span", { style:{ fontSize:10,fontWeight:700,color:T.color,background:T.bg,border:`1px solid ${T.border}`,borderRadius:20,padding:"1px 7px" }, children:[T.label] }),
+                              ]}),
+                              n.jsx("div",{ style:{ height:5,background:"#F3F4F6",borderRadius:99,overflow:"hidden" }, children:
+                                n.jsx("div",{ style:{ height:"100%",width:`${P}%`,background:T.color,borderRadius:99,transition:"width .6s" } })
+                              }),
+                              O !== null && O !== 0 && n.jsxs("div",{ style:{ fontSize:10,fontWeight:700,color:O>0?"#059669":"#dc2626",marginTop:3 }, children:[O>0?"↑ +":"↓ ",O," pts"] }),
+                            ]}),
                           }),
                           n.jsxs("td", {
                             style: { padding: "14px 18px", minWidth: 140 },
@@ -12925,24 +13887,48 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                               "fr-FR",
                             ),
                           }),
-                          // Colonne Google
+                          // Colonne Onboarding
                           n.jsx("td", {
                             style: { padding: "14px 18px" },
                             onClick: (S) => S.stopPropagation(),
-                            children: E.googleTokens?.access_token
-                              ? n.jsxs("span", {
-                                  style: { display:"inline-flex", alignItems:"center", gap:4, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:700, color:"#065F46", whiteSpace:"nowrap" },
-                                  children: [
-                                    n.jsx("span", { style:{ width:6, height:6, borderRadius:"50%", background:"#22C55E", display:"inline-block" } }),
-                                    "Connecté",
-                                  ]
-                                })
-                              : n.jsx("a", {
-                                  href: `/api/auth/google?clientId=${E.id}`,
-                                  onClick: (S) => S.stopPropagation(),
-                                  style: { display:"inline-flex", alignItems:"center", gap:5, background:"#4285F4", color:"white", borderRadius:8, padding:"5px 11px", fontSize:11, fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" },
-                                  children: "🔗 Connecter",
-                                }),
+                            children: n.jsx("button", {
+                              onClick: async () => {
+                                // Récupérer le token depuis Supabase ou localStorage
+                                let tok = null;
+                                try {
+                                  const r = await fetch(`${SUPA_URL}/rest/v1/signing_requests?client_id=eq.${E.id}&order=created_at.desc&limit=1`,
+                                    { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } });
+                                  const rows = await r.json();
+                                  if (rows && rows.length > 0) tok = rows[0].token;
+                                } catch {}
+                                if (!tok) {
+                                  const reqs = JSON.parse(localStorage.getItem("bto_sign_reqs")||"{}");
+                                  tok = reqs[E.id]?.token || null;
+                                }
+                                if (!tok) { alert("Aucun lien de signature envoyé pour ce client. Allez dans Mon Espace → Contrats pour envoyer le lien."); return; }
+                                // Récupérer les données onboarding depuis Supabase
+                                try {
+                                  const r2 = await fetch(`${SUPA_URL}/rest/v1/onboarding?token=eq.${tok}&order=submitted_at.desc&limit=1`,
+                                    { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } });
+                                  const rows2 = await r2.json();
+                                  if (!rows2 || !rows2.length) { alert("Le formulaire d'onboarding n'a pas encore été rempli par ce client."); return; }
+                                  const d = rows2[0].data || {};
+                                  const submitted = rows2[0].submitted_at ? new Date(rows2[0].submitted_at).toLocaleDateString("fr-FR") : "—";
+                                  // Ouvrir une modale avec les infos
+                                  const modal = document.createElement("div");
+                                  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto";
+                                  const fields = Object.entries(d).filter(([k,v]) => v && String(v).trim() && !k.startsWith("_") && !k.startsWith("auth") && !k.startsWith("check")).map(([k,v]) => {
+                                    const labels={etablissement:"Établissement",adresse:"Adresse",telephone:"Téléphone",website:"Site web",activite:"Activité",lien_google:"Lien Google",ville_principale:"Ville principale",rayon_km:"Rayon (km)",villes_secondaires:"Villes secondaires",service_1:"Service n°1",service_2:"Service n°2",service_3:"Service n°3",lundi:"Lundi",mardi:"Mardi",mercredi:"Mercredi",jeudi:"Jeudi",vendredi:"Vendredi",samedi:"Samedi",dimanche:"Dimanche",fermetures:"Fermetures",presentation:"Présentation",facebook:"Facebook",instagram:"Instagram",linkedin:"LinkedIn",tiktok:"TikTok",youtube:"YouTube",repondre_avis:"Réponse aux avis",signature_avis:"Signature avis",consignes_avis:"Consignes avis",promo:"Promotion",nouveaute:"Nouveauté",produit_phare:"Produit phare",evenement:"Événement",photos_dispo:"Photos disponibles",photos_notes:"Notes photos",invitation_envoyee:"Invitation GBP",contact_nom:"Contact",contact_poste:"Poste",contact_email:"Email",contact_whatsapp:"WhatsApp",disponibilite:"Disponibilité",infos_complementaires:"Infos complémentaires"};
+                                    return `<tr style="border-top:1px solid #F3F4F6"><td style="padding:8px 12px;font-size:12px;font-weight:600;color:#6B7280;white-space:nowrap;vertical-align:top;width:180px">${labels[k]||k}</td><td style="padding:8px 12px;font-size:13px;color:#1E1B30">${String(v).replace(/</g,"&lt;")}</td></tr>`;
+                                  }).join("");
+                                  modal.innerHTML = `<div style="background:white;border-radius:18px;max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.2)"><div style="padding:20px 24px;border-bottom:1px solid #E5E7EB;display:flex;justify-content:space-between;align-items:center;flex-shrink:0"><div><div style="font-weight:800;font-size:16px;color:#1E1B30">📋 Onboarding — ${E.name}</div><div style="font-size:12px;color:#9CA3AF;margin-top:2px">Soumis le ${submitted}</div></div><button onclick="this.closest('div[style*=fixed]').remove()" style="background:#F4F5FA;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:18px;color:#6B7280">✕</button></div><div style="overflow-y:auto;flex:1"><table style="width:100%;border-collapse:collapse">${fields||"<tr><td colspan='2' style='padding:20px;text-align:center;color:#9CA3AF'>Aucune donnée</td></tr>"}</table></div></div>`;
+                                  document.body.appendChild(modal);
+                                  modal.addEventListener("click", e => { if(e.target===modal) modal.remove(); });
+                                } catch { alert("Erreur de connexion Supabase."); }
+                              },
+                              style:{padding:"5px 11px",borderRadius:8,border:"1px solid #6B40D8",background:"white",color:"#6B40D8",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"},
+                              children:"📋 Onboarding",
+                            }),
                           }),
                           n.jsx("td", {
                             style: { padding: "14px 18px" },
@@ -12974,13 +13960,46 @@ function VisibilitePageWrapper({ client: e, clients: t, upd: i, kw: r, googleApi
     { id: "concurrence", label: "⚔️ Concurrence",   desc: "Analyse des concurrents locaux" },
     { id: "mots_cles",   label: "🔑 Mots-clés",     desc: "Mots-clés & évolution" },
   ];
-  /* Competitors: map scan data takes priority over audit data */
-  const mapComps    = P.mapCompetitors || [];
+  /* Competitors: agrégation depuis TOUT le geoGrid (tous scans, tous mots-clés) */
+  const geoGridAll = (F == null ? void 0 : F.geoGrid) || (e == null ? void 0 : e.geoGrid) || {};
+  const aggComps = {};
+  Object.entries(geoGridAll).forEach(([kw, kwData]) => {
+    if (kw === 'center') return;
+    (kwData.scans || []).forEach(scan => {
+      (scan.cellData || []).forEach(cell => {
+        (cell && cell.top10 || []).filter(c => !c.isMe).forEach(c => {
+          const key = (c.name||"").toLowerCase().trim();
+          if (!key) return;
+          if (!aggComps[key]) aggComps[key] = { name: c.name, address: c.address||"", rating: c.rating, reviews: c.reviews||0, appearances: 0, rankSum: 0, keywords: new Set(), lastSeen: scan.date };
+          aggComps[key].appearances++;
+          aggComps[key].rankSum += (c.rank || 10);
+          aggComps[key].keywords.add(kw);
+          if ((scan.date||"") > (aggComps[key].lastSeen||"")) aggComps[key].lastSeen = scan.date;
+        });
+      });
+    });
+  });
+  // Total cellules scannées (toutes scans, tous MC)
+  const totalCellsScanned = Object.entries(geoGridAll)
+    .filter(([k])=>k!=='center')
+    .reduce((sum,[,v])=>sum+(v.scans||[]).reduce((s2,sc)=>s2+(sc.cells||[]).filter(c=>c!=null).length,0),0);
+
+  const mapCompsAgg = Object.values(aggComps)
+    .map(c => ({
+      ...c,
+      keywords: [...c.keywords],
+      visibilityPct: totalCellsScanned > 0 ? Math.round(c.appearances / totalCellsScanned * 100) : 0,
+      avgRank: c.appearances > 0 ? Math.round(c.rankSum / c.appearances) : null,
+    }))
+    .sort((a,b) => b.appearances - a.appearances)
+    .slice(0, 10);
+  const hasMapData  = mapCompsAgg.length > 0;
+  const mapComps    = hasMapData ? mapCompsAgg : (P.mapCompetitors || []);
   const auditComps  = P.competitors || [];
   const competitors = mapComps.length > 0 ? mapComps : auditComps;
-  const hasMapData  = mapComps.length > 0;
+  const totalScans  = Object.entries(geoGridAll).filter(([k])=>k!=='center').reduce((sum,[,v])=>sum+(v.scans||[]).length,0);
   const compRanking  = P.competitorRanking || {};
-  const compSummary  = P.competitorSummary || (hasMapData ? `Analyse basée sur le scan carte du ${P.mapScanDate||"dernier scan"} — mot-clé "${P.mapScanKeyword||""}"` : "");
+  const compSummary  = P.competitorSummary || (hasMapData ? `${mapCompsAgg.length} concurrents identifiés sur ${totalScans} scan${totalScans>1?"s":""} · tous mots-clés confondus` : "");
   const compOpps     = P.competitorOpportunities || [];
   const insights     = P.insights || {};
 
@@ -12989,7 +14008,7 @@ function VisibilitePageWrapper({ client: e, clients: t, upd: i, kw: r, googleApi
     n.jsxs("div", { style: { display:"flex", alignItems:"center", gap:0, marginBottom:16 }, children: [
       n.jsx("div", { style: { width:4, height:28, borderRadius:2, background:"linear-gradient(135deg,#6B40D8,#C03080)", marginRight:14, flexShrink:0 } }),
       n.jsxs("div", { children: [
-        n.jsx("div", { style: { fontSize:17, fontWeight:800, color:"#1E1B30", letterSpacing:"-.01em" }, children: "Visibilité & Positionnement" }),
+        n.jsx("div", { style: { fontSize:16, fontWeight:800, color:"#1E1B30" }, children: "Visibilité & Positionnement" }),
         n.jsx("div", { style: { fontSize:12, color:"#6B7280", marginTop:2 }, children: tabs.find(tb => tb.id === tab)?.desc }),
       ]}),
     ]}),
@@ -13018,26 +14037,78 @@ function VisibilitePageWrapper({ client: e, clients: t, upd: i, kw: r, googleApi
 
     /* === CONCURRENCE === */
     tab === "concurrence" && n.jsxs("div", { children: [
-      /* Score comparatif */
-      compRanking.estimatedPosition && n.jsxs("div", {
-        style: { background:"white", borderRadius:12, border:"1px solid #E2E8F0", padding:"16px 20px", marginBottom:16 },
-        children: [
-          n.jsxs("div", { style: { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }, children: [
-            n.jsxs("div", { children: [
-              n.jsx("div", { style: { fontSize:12, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:".6px" }, children: "Position estimée sur Maps" }),
-              n.jsx("div", { style: { fontSize:28, fontWeight:900, color:"#6B40D8", marginTop:4 }, children: compRanking.estimatedPosition }),
+      /* Score comparatif — position réelle si scan dispo, sinon estimée IA */
+      (() => {
+        // Calculer position réelle depuis les scans
+        // Trouver la config du dernier scan (pour ne pas mélanger 5x5 et 7x7)
+        const lastScanRecord = Object.entries(geoGridAll)
+          .filter(([k]) => k !== 'center')
+          .flatMap(([, kwData]) => (kwData.scans || []))
+          .filter(sc => sc.date)
+          .sort((a, b) => (b.date||"").localeCompare(a.date||""))[0];
+        const lastConfig = lastScanRecord
+          ? { gridSize: lastScanRecord.gridSize, rayon: lastScanRecord.rayon }
+          : null;
+
+        // Filtrer uniquement les scans de la même config que le dernier scan
+        const sameCfgScans = Object.entries(geoGridAll)
+          .filter(([k]) => k !== 'center')
+          .flatMap(([, kwData]) => (kwData.scans || []).filter(sc =>
+            !lastConfig || !sc.gridSize || // anciens scans sans config → inclus si pas de config récente
+            (sc.gridSize === lastConfig.gridSize && sc.rayon === lastConfig.rayon)
+          ));
+
+        const allCells = sameCfgScans.flatMap(sc => (sc.cells||[]).filter(c => c != null && c <= 20));
+        const scanRanks = sameCfgScans.map(sc => {
+          const cells = (sc.cells||[]).filter(c => c != null);
+          return cells.length ? Math.round(cells.reduce((a,b)=>a+b,0)/cells.length) : null;
+        }).filter(Boolean);
+
+        const hasRealData = allCells.length > 0;
+        const realAvg = hasRealData ? Math.round(scanRanks.reduce((a,b)=>a+b,0)/Math.max(scanRanks.length,1)) : null;
+        const realMin = hasRealData ? Math.min(...allCells) : null;
+        const realMax = hasRealData ? Math.max(...allCells) : null;
+        const cfgLabel = lastConfig?.gridSize ? `${lastConfig.gridSize}×${lastConfig.gridSize} · ${lastConfig.rayon}km` : "";
+        const totalScans2 = Object.entries(geoGridAll).filter(([k])=>k!=='center').reduce((s,[,v])=>s+(v.scans||[]).length,0);
+        const lastScanDate2 = Object.entries(geoGridAll).filter(([k])=>k!=='center')
+          .flatMap(([,v])=>(v.scans||[]).map(s=>s.date||"")).filter(Boolean).sort().at(-1);
+        const displayPos = hasRealData ? `#${realAvg}` : (compRanking.estimatedPosition || "—");
+        const posColor = hasRealData
+          ? (realAvg<=3?"#059669":realAvg<=10?"#E85A30":"#DC2626")
+          : "#6B40D8";
+
+        return n.jsxs("div", {
+          style: { background:"white", borderRadius:12, border:"1px solid #E2E8F0", padding:"16px 20px", marginBottom:16 },
+          children: [
+            n.jsxs("div", { style:{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:12 }, children:[
+              n.jsxs("div", { children:[
+                n.jsxs("div", { style:{ fontSize:12, fontWeight:700, color:"#94A3B8", textTransform:"uppercase", letterSpacing:".6px", display:"flex", alignItems:"center", gap:6 }, children:[
+                  hasRealData ? "Position réelle (scan carte)" : "Position estimée (IA)",
+                  hasRealData
+                    ? n.jsx("span",{style:{background:"#E0E7FF",color:"#3730A3",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700},children:"🗺️ Réel"})
+                    : n.jsx("span",{style:{background:"#F3F4F6",color:"#6B7280",borderRadius:4,padding:"1px 6px",fontSize:10},children:"🤖 IA"}),
+                ]}),
+                n.jsx("div", { style:{ fontSize:36, fontWeight:900, color:posColor, marginTop:4, lineHeight:1 }, children: displayPos }),
+                hasRealData && n.jsxs("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:4 }, children:[
+                  `Min #${realMin} · Max #${realMax} · ${scanRanks.length} scan${scanRanks.length>1?"s":""}`,
+                  cfgLabel ? ` · ${cfgLabel}` : "",
+                  lastScanDate2 ? ` · ${new Date(lastScanDate2).toLocaleDateString("fr-FR")}` : "",
+                ]}),
+                !hasRealData && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:4 }, children:"Lancez un scan carte pour obtenir une position réelle" }),
+              ]}),
+              /* Facteurs clés résumés */
+              hasRealData && n.jsxs("div", { style:{ textAlign:"right" }, children:[
+                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:"Meilleure position" }),
+                n.jsxs("div", { style:{ fontSize:22, fontWeight:800, color:"#059669" }, children:["#",realMin] }),
+              ]}),
             ]}),
-            n.jsxs("div", { style: { textAlign:"right" }, children: [
-              n.jsx("div", { style: { fontSize:12, color:"#94A3B8" }, children: "Part de marché" }),
-              n.jsx("div", { style: { fontSize:22, fontWeight:800, color:"#059669" }, children: compRanking.marketShareEstimate || "—" }),
-            ]}),
-          ]}),
-          compRanking.rankingOpportunity && n.jsxs("div", {
-            style: { background:"linear-gradient(135deg,#f0f4ff,#f5f0ff)", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#4B5563" },
-            children: [ n.jsx("span", { style:{fontWeight:700, color:"#6B40D8"}, children:"💡 " }), compRanking.rankingOpportunity ]
-          }),
-        ]
-      }),
+            compRanking.rankingOpportunity && n.jsxs("div", {
+              style:{ background:"linear-gradient(135deg,#f0f4ff,#f5f0ff)", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#4B5563" },
+              children:[ n.jsx("span",{ style:{fontWeight:700,color:"#6B40D8"}, children:"💡 " }), compRanking.rankingOpportunity ]
+            }),
+          ]
+        });
+      })(),
 
       /* Facteurs de classement */
       (compRanking.rankingFactors || []).length > 0 && n.jsxs("div", {
@@ -13082,8 +14153,10 @@ function VisibilitePageWrapper({ client: e, clients: t, upd: i, kw: r, googleApi
           ]}),
           n.jsx("div", { style: { display:"flex", flexDirection:"column", gap:10 },
             children: competitors.map((c, idx) => {
-              const threatColor = c.threat === "Haute" ? "#dc2626" : c.threat === "Moyenne" ? "#d97706" : c.appearances ? (c.appearances >= 15 ? "#dc2626" : c.appearances >= 8 ? "#d97706" : "#059669") : "#6B7280";
-              const threatLabel = c.threat || (c.appearances >= 15 ? "Haute" : c.appearances >= 8 ? "Moyenne" : "Faible");
+              const vis = c.visibilityPct ?? 0;
+              // Seuils basés sur la visibilité réelle du scan
+              const threatLabel = vis >= 70 ? "Haute" : vis >= 40 ? "Moyenne" : "Faible";
+              const threatColor = threatLabel === "Haute" ? "#dc2626" : threatLabel === "Moyenne" ? "#d97706" : "#059669";
               return n.jsxs("div", {
                 style: { display:"grid", gridTemplateColumns:"36px 1fr auto", gap:12, alignItems:"start", padding:"12px 14px", background: idx===0 ? "#fff7ed" : "#F4F5FA", borderRadius:10, border:`1px solid ${idx===0?"#fed7aa":"#E2E8F0"}` },
                 children: [
@@ -13092,7 +14165,8 @@ function VisibilitePageWrapper({ client: e, clients: t, upd: i, kw: r, googleApi
                     n.jsxs("div", { style:{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}, children:[
                       n.jsx("span", { style:{fontWeight:700,fontSize:14,color:"#1E1B30"}, children: c.name }),
                       n.jsx("span", { style:{background:threatColor,color:"white",fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4}, children: threatLabel }),
-                      c.appearances && n.jsxs("span",{style:{background:"#ede9fe",color:"#7c3aed",fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4},children:[c.appearances," zones"]}),
+                      c.visibilityPct != null && n.jsxs("span",{style:{background:"#ede9fe",color:"#7c3aed",fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4},children:[c.visibilityPct,"% visibilité"]}),
+                      c.avgRank && n.jsxs("span",{style:{background:"#F0FDF4",color:"#059669",fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4},children:["Rang moy. #",c.avgRank]}),
                     ]}),
                     n.jsxs("div", { style:{display:"flex",gap:12,fontSize:12,color:"#6B7280",flexWrap:"wrap"}, children:[
                       c.rating && n.jsxs("span", { children:["⭐ ", c.rating, c.reviews ? ` (${c.reviews} avis)` : ""] }),
@@ -13143,18 +14217,24 @@ function VisibilitePageWrapper({ client: e, clients: t, upd: i, kw: r, googleApi
 
 function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }) {
   var H, S;
-  /* All keywords: from audit + custom */
+  /* Mots-clés carte — libre : avec ou sans ville */
   const auditKws = [...((r == null ? void 0 : r.primary) || []), ...((r == null ? void 0 : r.secondary) || [])];
-  const customKwList = (e == null ? void 0 : e.customKeywords) || [];
-  const categoryKw = (e.category && e.city) ? `${e.category} ${e.city}` : (e.name && e.city) ? `${e.name} ${e.city}` : "";
-  const baseKwOptions = [...new Set([...auditKws.map(w => w.kw), ...customKwList, ...Object.keys((e == null ? void 0 : e.geoGrid) || {}).filter(k => k !== 'center')])].filter(Boolean);
+  const rawMapKws = (e == null ? void 0 : e.customMapKeywords) || (e == null ? void 0 : e.customKeywords) || [];
+  const categoryKw = e.category || (e.name ? e.name.split(' ')[0] : "");
+  const baseKwOptions = [...new Set([
+    ...auditKws.map(w => (w.kw||"").trim()).filter(Boolean),
+    ...rawMapKws.map(k => (k||"").trim()).filter(Boolean),
+    ...Object.keys((e == null ? void 0 : e.geoGrid) || {}).filter(k => k !== 'center'),
+  ])].filter(Boolean);
   const allKwOptions = baseKwOptions.length > 0 ? baseKwOptions : (categoryKw ? [categoryKw] : []);
   const defaultKw = allKwOptions[0] || categoryKw || "";
 
+  const savedCfg = (e == null ? void 0 : e.preferredScanConfig) || {};
   const l = (e == null ? void 0 : e.geoGrid) || {},
     [a, d] = D.useState(defaultKw),
-    [p, b] = D.useState(5),
-    [x, j] = D.useState(10000),   /* default 10km spacing = 50km coverage */
+    [p, b] = D.useState(savedCfg.gridSize || 7),
+    [rayon, setRayon] = D.useState(savedCfg.rayon || 20),  /* rayon en km — zone fixe */
+    x = rayon * 1000 * 2 / Math.max(p - 1, 1), /* espacement calculé automatiquement */
     [I, z] = D.useState(!1),
     [g, h] = D.useState(0),
     [f, c] = D.useState(!!window.L),
@@ -13162,13 +14242,18 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     [showAddKwMap, setShowAddKwMap] = D.useState(false),
     [newKwMap, setNewKwMap] = D.useState(""),
     [scanError, setScanError] = D.useState(null),
+    [selScanIdx, setSelScanIdx] = D.useState(null), /* null = dernier scan */
     u = D.useRef(null),
     m = D.useRef(null),
     C = D.useRef([]),
+    mapClickRef = D.useRef(null),
     B = (w) => i(t.map((W) => (W.id === e.id ? { ...W, ...w } : W))),
     k = l[a] || {},
     R = k.scans || [],
-    N = R[R.length - 1] || null,
+    // Filtrer les scans selon la config active (grille × zone)
+    Rconfig = R.filter(s => !s.gridSize || (s.gridSize === p && s.rayon === rayon)),
+    // Scan affiché : index sélectionné ou dernier par défaut
+    N = Rconfig.length > 0 ? (selScanIdx != null ? (Rconfig[selScanIdx] || Rconfig[Rconfig.length-1]) : Rconfig[Rconfig.length-1]) : null,
     E = (N == null ? void 0 : N.cells) || [],
     cellDataFull = (N == null ? void 0 : N.cellData) || [],
     M = p * p,
@@ -13189,6 +14274,9 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     W.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; W.onload = () => c(!0); document.head.appendChild(W);
   }, []),
 
+  /* Réinitialiser l'index de scan quand le mot-clé change */
+  D.useEffect(() => { setSelScanIdx(null); }, [a]),
+
   /* Init map */
   D.useEffect(() => {
     var $, X, te, Q;
@@ -13199,6 +14287,8 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap", maxZoom: 18 }).addTo(L);
     L.setView([w, W], 10);
     m.current = L;
+    /* Clic sur la carte → définir le centre du scan (via ref pour éviter closure stale) */
+    L.on('click', (ev) => { if (mapClickRef.current) mapClickRef.current(ev); });
   }, [f]),
 
   /* Draw markers */
@@ -13211,13 +14301,20 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     const { lat: W, lng: L } = w;
     m.current.setView([W, L], 10);
     const $ = Math.floor(p / 2), X = 111320;
+    const rayonM = rayon * 1000; // rayon en mètres
+
     let te = 0;
     for (let Z = 0; Z < p; Z++)
       for (let Y = 0; Y < p; Y++) {
+        const K = Z === $ && Y === $;
+        /* Distance réelle en mètres depuis le centre */
+        const drM = ($ - Z) * x;
+        const dcM = (Y - $) * x;
+        const distM = Math.sqrt(drM * drM + dcM * dcM);
+        if (distM > rayonM && !K) { te++; continue; } // hors du cercle → skip
         const ee = (($ - Z) * x) / X,
           v = ((Y - $) * x) / (X * Math.cos((W * Math.PI) / 180)),
           A = W + ee, q = L + v,
-          K = Z === $ && Y === $,
           ie = E[te],
           re = K ? "#1E1B30" : P(ie),
           oe = K ? "📍" : T(ie),
@@ -13235,17 +14332,50 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         }
         C.current.push(de); te++;
       }
-  }, [E, p, x, f, (S = e == null ? void 0 : e.geoGrid) == null ? void 0 : S.center]));
+  }, [E, p, x, rayon, f, (S = e == null ? void 0 : e.geoGrid) == null ? void 0 : S.center]));
 
-  /* Geocode */
-  const y = async (w) => {
-    const W = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(w)}&limit=1`,
-      $ = await (await fetch(W, { headers: { "User-Agent": "BeTheOne-CRM" } })).json();
-    return $ && $[0] ? { lat: parseFloat($[0].lat), lng: parseFloat($[0].lon) } : null;
+  /* Geocode avec fallbacks progressifs */
+  const y = async (addr) => {
+    const tryNominatim = async (q) => {
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, { headers: { "User-Agent": "BeTheOne-CRM" } });
+        const j = await r.json();
+        return j && j[0] ? { lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon) } : null;
+      } catch { return null; }
+    };
+    // 1. Adresse complète
+    let res = await tryNominatim(addr);
+    if (res) return res;
+    // 2. Supprimer le nom de zone commerciale/parc (tout avant le numéro de rue)
+    const simplified = addr.replace(/^[^,]*,\s*/, "").trim();
+    if (simplified !== addr) { res = await tryNominatim(simplified); if (res) return res; }
+    // 3. Numéro + rue + code postal + ville (sans complément)
+    const m3 = addr.match(/(\d+\s+[^,]+),?\s*(\d{5})\s+(\w+)/);
+    if (m3) { res = await tryNominatim(`${m3[1]}, ${m3[2]} ${m3[3]}`); if (res) return res; }
+    // 4. Code postal + ville seulement
+    const m4 = addr.match(/(\d{5})\s+(\w[\w\s-]+)/);
+    if (m4) { res = await tryNominatim(`${m4[1]} ${m4[2].trim()}`); if (res) return res; }
+    // 5. Ville seule
+    const city = (e.city || addr.split(",").pop() || "").trim();
+    if (city) { res = await tryNominatim(city); if (res) return res; }
+    return null;
   };
 
-  /* Google Places search — returns {rank, top10} */
-  const O = async (lat, lng, query, myName) => {
+  /* ── Helpers matching ── */
+  const buildNameTokens = (myName, cityLow) => {
+    const clean = cityLow ? (myName||"").toLowerCase().replace(new RegExp(`\\b${cityLow}\\b`,"gi"),"").trim() : (myName||"").toLowerCase().trim();
+    return clean.split(/\s+/).filter(k => k.length > 2);
+  };
+  const scoreMatch = (nm, addr, nameTokens, cityLow, postalCode) => {
+    const n = nm.toLowerCase(), a = addr.toLowerCase();
+    const nameScore = nameTokens.filter(k => n.includes(k)).length / Math.max(nameTokens.length, 1);
+    const cityOk = cityLow ? a.includes(cityLow) : true;
+    const postalOk = postalCode ? a.includes(postalCode) : false;
+    return nameScore * (cityOk || postalOk ? 2 : 0.5);
+  };
+
+  /* ── Google Places search avec retry ── */
+  const O = async (lat, lng, query, myName, attempt = 0) => {
     if (!o) return null;
     try {
       const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
@@ -13253,62 +14383,71 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": o,
-          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.photos",
+          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.photos,places.id",
         },
         body: JSON.stringify({
           textQuery: query,
-          locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: x * 1.5 } },
-          maxResultCount: 10,
+          locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: x * 2 } },
+          maxResultCount: 20, // 20 au lieu de 10 pour ne pas rater
+          rankPreference: "RELEVANCE",
+          languageCode: "fr",
         }),
       });
+
+      // Quota dépassé → retry avec backoff
+      if (resp.status === 429) {
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+          return O(lat, lng, query, myName, attempt + 1);
+        }
+        return { rank: null, top10: [], error: "quota" };
+      }
+
       const json = await resp.json();
-      if (json.error) throw new Error(`API Google : ${json.error.message || json.error.status}`);
-      const places = (json.places) || [];
-      const myNameLow = (myName || "").toLowerCase().trim();
-      /* Strip city from name to get pure brand tokens (ex: "Aasgard Vannes" → ["aasgard"]) */
+      if (json.error) {
+        const msg = json.error.message || json.error.status || "";
+        if (msg.includes("RESOURCE_EXHAUSTED") && attempt < 3) {
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          return O(lat, lng, query, myName, attempt + 1);
+        }
+        throw new Error(`API Google : ${msg}`);
+      }
+
+      const places = json.places || [];
       const cityLow = (e.city || "").toLowerCase().trim();
-      /* Also grab postal code if present in address (e.g. "56000") */
       const addrRaw = (e.data?.extracted?.address || e.address || "").toLowerCase();
       const postalMatch = addrRaw.match(/\b(\d{5})\b/);
       const postalCode = postalMatch ? postalMatch[1] : "";
-      const myNameNoCity = cityLow ? myNameLow.replace(new RegExp(`\\b${cityLow}\\b`, "gi"), "").trim() : myNameLow;
-      const nameTokens = myNameNoCity.split(/\s+/).filter(k => k.length > 2);
+      const nameTokens = buildNameTokens(myName, cityLow);
 
-      /* Strategy 1 (strict): name token match AND city/postal match in address → correct branch */
-      let myIdx = places.findIndex(pl => {
-        const nm  = (pl.displayName?.text || "").toLowerCase();
-        const addr = (pl.formattedAddress || "").toLowerCase();
-        const nameMatch = nameTokens.length > 0 && nameTokens.some(k => nm.includes(k));
-        const cityMatch = cityLow ? addr.includes(cityLow) : true;
-        const postalMatch2 = postalCode ? addr.includes(postalCode) : false;
-        return nameMatch && (cityMatch || postalMatch2);
+      // Score chaque résultat et prendre le meilleur
+      let bestIdx = -1, bestScore = 0;
+      places.forEach((pl, idx) => {
+        const score = scoreMatch(pl.displayName?.text || "", pl.formattedAddress || "", nameTokens, cityLow, postalCode);
+        if (score > bestScore && score > 0.3) { bestScore = score; bestIdx = idx; }
       });
 
-      /* Strategy 2 (fallback if strict finds nothing): name + any French city format */
-      if (myIdx === -1) {
-        myIdx = places.findIndex(pl => {
-          const nm  = (pl.displayName?.text || "").toLowerCase();
-          const addr = (pl.formattedAddress || "").toLowerCase();
-          const nameMatch = nameTokens.length > 0 && nameTokens.some(k => nm.includes(k));
-          /* Make sure address does NOT contain another known city (Lorient, etc.) */
-          const wrongCity = cityLow && !addr.includes(cityLow);
-          return nameMatch && !wrongCity;
-        });
-      }
-      const rank = myIdx >= 0 ? myIdx + 1 : 21;
-      const top10 = places.map((pl, idx) => ({
+      // Si rien trouvé dans les 20 premiers → non classé = rang 20+
+      const rank = bestIdx >= 0 ? bestIdx + 1 : 20 + 1;
+      const top10 = places.slice(0, 10).map((pl, idx) => ({ // TOP 10 uniquement
         name: pl.displayName?.text || "?",
         address: pl.formattedAddress || "",
         rating: pl.rating || null,
         reviews: pl.userRatingCount || 0,
         rank: idx + 1,
         hasPhoto: (pl.photos || []).length > 0,
-        isMe: idx === myIdx,
+        isMe: idx === bestIdx,
       }));
       return { rank, top10 };
+
     } catch (err) {
+      // Retry réseau (max 2 tentatives)
+      if (attempt < 2 && (err.message?.includes("fetch") || err.name === "TypeError")) {
+        await new Promise(r => setTimeout(r, 1000));
+        return O(lat, lng, query, myName, attempt + 1);
+      }
       console.warn("Places API error:", err);
-      return { rank: null, top10: [] };
+      return { rank: null, top10: [], error: err.message };
     }
   };
 
@@ -13318,43 +14457,64 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     setScanError(null);
     if (!o) { alert("Clé Google Maps API manquante.\nVa dans Mon Espace → Paramètres → Clé Google Maps API."); return; }
     if (!a) { alert("Sélectionne un mot-clé d'abord."); return; }
-    z(!0); h(0);
+    z(!0); h(0); setScanError(null);
     try {
+    // Pré-validation de la clé API avec un seul appel test
     let w = (v = e == null ? void 0 : e.geoGrid) == null ? void 0 : v.center;
     if (!w) {
-      const K = ((q = (A = e == null ? void 0 : e.data) == null ? void 0 : A.extracted) == null ? void 0 : q.address) || (e == null ? void 0 : e.city) || "";
+      const K = (e == null ? void 0 : e.address) || ((q = (A = e == null ? void 0 : e.data) == null ? void 0 : A.extracted) == null ? void 0 : q.address) || (e == null ? void 0 : e.city) || "";
       if (!K) { alert("Adresse du client introuvable. Lance un audit d'abord."); z(!1); return; }
-      if ((w = await y(K)), !w) { alert("Impossible de géocoder l'adresse : " + K); z(!1); return; }
-      /* Don't call B here — will be included in the single final B call */
+      if ((w = await y(K)), !w) { alert(`Impossible de géocoder l'adresse.\n\nEssayé :\n• ${K}\n\nSolution : modifie l'adresse du client (enlève le nom de zone commerciale) ou entre une adresse plus simple comme "56000 Vannes".`); z(!1); return; }
     }
     const { lat: W, lng: L } = w, $ = Math.floor(p / 2), X = 111320,
       cells = [], cellData = [], myName = (e == null ? void 0 : e.name) || "";
+    let quotaErrors = 0;
+    const rayonM = rayon * 1000;
     for (let K = 0; K < p; K++)
       for (let ie = 0; ie < p; ie++) {
-        if (K === $ && ie === $) {
+        const isCenter = K === $ && ie === $;
+        const drM = ($ - K) * x;
+        const dcM = (ie - $) * x;
+        const distM = Math.sqrt(drM * drM + dcM * dcM);
+        if (distM > rayonM && !isCenter) {
+          cells.push(null); cellData.push(null); // hors cercle → pas de scan
+          h(Math.round(((K * p + ie + 1) / M) * 100)); continue;
+        }
+        if (isCenter) {
           cells.push(1); cellData.push({ rank: 1, top10: [{ name: myName, isMe: true, rank: 1 }] });
           h(Math.round(((K * p + ie + 1) / M) * 100)); continue;
         }
         const oe = (($ - K) * x) / X, he = ((ie - $) * x) / (X * Math.cos((W * Math.PI) / 180));
         const result = await O(W + oe, L + he, a, myName);
+        if (result?.error === "quota") quotaErrors++;
         cells.push(result ? result.rank : null);
         cellData.push(result || { rank: null, top10: [] });
         h(Math.round(((K * p + ie + 1) / M) * 100));
-        await new Promise(res => setTimeout(res, 250));
+        // Délai adaptatif : plus long si erreurs quota détectées
+        const delay = quotaErrors > 2 ? 800 : quotaErrors > 0 ? 500 : 300;
+        await new Promise(res => setTimeout(res, delay));
       }
-    const scanRecord = { date: new Date().toISOString().slice(0, 10), cells, cellData },
-      updScans = [...R, scanRecord].slice(-12),
+    const scanRecord = { date: new Date().toISOString().slice(0, 10), cells, cellData, gridSize: p, rayon },
+      // Garder TOUS les anciens scans (sans config) + 5 derniers par config active
+      prevScans = [
+        ...(k.scans || []).filter(s => !s.gridSize), // anciens scans sans config → toujours gardés
+        ...(k.scans || []).filter(s => s.gridSize && (s.gridSize !== p || s.rayon !== rayon)), // autres configs
+        ...(k.scans || []).filter(s => s.gridSize === p && s.rayon === rayon).slice(-5), // config actuelle
+      ],
+      updScans = [...prevScans, scanRecord],
       updGrid = { ...l, center: w, [a]: { ...k, scans: updScans } };
 
     /* Build competitors for Concurrence tab */
     const allComps = {};
-    cellData.forEach(cell => (cell.top10 || []).filter(c => !c.isMe).forEach(c => {
+    cellData.forEach(cell => (cell && cell.top10 || []).filter(c => !c.isMe).forEach(c => {
       const key = c.name.toLowerCase();
       if (!allComps[key]) allComps[key] = { ...c, appearances: 0, keywords: [] };
       allComps[key].appearances++;
       if (!allComps[key].keywords.includes(a)) allComps[key].keywords.push(a);
     }));
     const topComps = Object.values(allComps).sort((a2, b2) => b2.appearances - a2.appearances).slice(0, 10);
+    // Ajouter config dans le scan
+    const scanConfig = `${p}x${p}_${rayon}km`;
     const curData = (e.data || {});
 
     /* Single B call — avoid stale-closure double-write bug */
@@ -13372,9 +14532,16 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
   const addKwToMap = () => {
     if (!newKwMap.trim()) return;
-    const updated = [...(e.customKeywords || []), newKwMap.trim()];
-    i(t.map(c => c.id === e.id ? { ...c, customKeywords: updated } : c));
-    d(newKwMap.trim()); setNewKwMap(""); setShowAddKwMap(false);
+    const kw = newKwMap.trim(); // gardé tel quel — ville autorisée
+    const updated = [...(e.customMapKeywords || e.customKeywords || []), kw];
+    i(t.map(c => c.id === e.id ? { ...c, customMapKeywords: updated } : c));
+    d(kw); setNewKwMap(""); setShowAddKwMap(false);
+  };
+
+  /* Toujours à jour — utilisé par le click handler Leaflet */
+  mapClickRef.current = (ev) => {
+    const { lat, lng } = ev.latlng;
+    B({ geoGrid: { ...(e.geoGrid || {}), center: { lat, lng } } });
   };
 
   return n.jsxs("div", { className: "card", style: { marginBottom: 12 }, children: [
@@ -13384,25 +14551,49 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         n.jsx("div", { style:{ width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#3B5BDB,#6B40D8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18 }, children:"🗺️" }),
         n.jsxs("div", { children:[
           n.jsx("div", { style:{fontWeight:800,fontSize:15,color:"#1E1B30"}, children:"Carte de positionnement local" }),
-          n.jsxs("div", { style:{fontSize:12,color:"#6B7280"}, children:["Grille ",p,"×",p," · ",x >= 1000 ? (x/1000)+"km" : x+"m"," entre points · couverture ~",Math.round(p*x/1000),"km", N && ` · Dernier scan : ${new Date(N.date).toLocaleDateString("fr-FR")}`] }),
+          n.jsxs("div", { style:{fontSize:12,color:"#6B7280"}, children:["Grille ",p,"×",p," · Zone ",rayon,"km · ",Math.round(x/1000*10)/10,"km entre points", N && ` · Dernier scan : ${new Date(N.date).toLocaleDateString("fr-FR")}`] }),
         ]}),
       ]}),
       n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }, children:[
         /* Grid size */
-        n.jsxs("select", { value:p, onChange:w=>b(parseInt(w.target.value)), style:{fontSize:12,padding:"6px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontFamily:"inherit",cursor:"pointer",outline:"none"}, children:[
-          n.jsx("option",{value:3,children:"3×3 (9 pts)"}),
-          n.jsx("option",{value:5,children:"5×5 (25 pts)"}),
-          n.jsx("option",{value:7,children:"7×7 (49 pts)"}),
-        ]}),
-        /* Spacing */
-        n.jsxs("select", { value:x, onChange:w=>j(parseInt(w.target.value)), style:{fontSize:12,padding:"6px 10px",borderRadius:8,border:"1.5px solid #E5E7EB",fontFamily:"inherit",cursor:"pointer",outline:"none"}, children:[
-          n.jsx("option",{value:2500,children:"2.5km (12km)"}),
-          n.jsx("option",{value:5000,children:"5km (25km)"}),
-          n.jsx("option",{value:10000,children:"10km (50km) ✓"}),
-          n.jsx("option",{value:15000,children:"15km (75km)"}),
-          n.jsx("option",{value:20000,children:"20km (100km)"}),
-          n.jsx("option",{value:25000,children:"25km (125km)"}),
-        ]}),
+        n.jsxs("select", {
+          value:p,
+          onChange:w=>{ const v=parseInt(w.target.value); b(v); },
+          style:{fontSize:12,padding:"6px 10px",borderRadius:8,border:`1.5px solid ${savedCfg.gridSize===p?"#6B40D8":"#E5E7EB"}`,fontFamily:"inherit",cursor:"pointer",outline:"none"},
+          children:[
+            n.jsx("option",{value:3,children:"3×3 (9 pts)"}),
+            n.jsx("option",{value:5,children:"5×5 (25 pts)"}),
+            n.jsx("option",{value:7,children:"7×7 (49 pts)"}),
+          ],
+        }),
+        /* Rayon (zone fixe) */
+        n.jsxs("select", {
+          value:rayon,
+          onChange:w=>{ const v=parseInt(w.target.value); setRayon(v); },
+          style:{fontSize:12,padding:"6px 10px",borderRadius:8,border:`1.5px solid ${savedCfg.rayon===rayon?"#6B40D8":"#E5E7EB"}`,fontFamily:"inherit",cursor:"pointer",outline:"none"},
+          children:[
+            n.jsx("option",{value:5,children:"Zone 5 km"}),
+            n.jsx("option",{value:10,children:"Zone 10 km"}),
+            n.jsx("option",{value:20,children:"Zone 20 km ✓"}),
+            n.jsx("option",{value:30,children:"Zone 30 km"}),
+            n.jsx("option",{value:40,children:"Zone 40 km"}),
+            n.jsx("option",{value:60,children:"Zone 60 km"}),
+          ],
+        }),
+        /* Bouton sauvegarder config */
+        (savedCfg.gridSize !== p || savedCfg.rayon !== rayon) && n.jsx("button", {
+          onClick: () => {
+            const newCfg = { gridSize: p, rayon };
+            i(t.map(cl => cl.id === e.id ? { ...cl, preferredScanConfig: newCfg } : cl));
+          },
+          title: `Mémoriser ${p}×${p} · Zone ${rayon}km pour ce client`,
+          style:{fontSize:11,padding:"5px 10px",borderRadius:7,border:"1.5px solid #6B40D8",background:"#F5F3FF",color:"#6B40D8",fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"},
+          children:"📌 Mémoriser",
+        }),
+        savedCfg.gridSize === p && savedCfg.rayon === rayon && n.jsx("span",{
+          style:{fontSize:11,color:"#059669",fontWeight:600,padding:"5px 8px",background:"#F0FDF4",borderRadius:7,border:"1px solid #BBF7D0"},
+          children:`✓ Config client`,
+        }),
         /* Scan button */
         n.jsx("button", { onClick:F, disabled:I||!o, style:{ fontSize:12,padding:"7px 16px",borderRadius:8,border:"none",background:I?"#E5E7EB":o?"linear-gradient(135deg,#059669,#16a34a)":"#F3F4F6",color:I||!o?"#9CA3AF":"white",cursor:I||!o?"default":"pointer",fontFamily:"inherit",fontWeight:700,display:"flex",alignItems:"center",gap:6 }, children: I ? `⏳ Scan ${g}%` : "🔍 Lancer le scan" }),
         I && n.jsx("div",{style:{fontSize:12,color:"#6B7280",alignSelf:"center"},children:`Point ${Math.round(g * M / 100)}/${M}`}),
@@ -13419,36 +14610,48 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       ]}),
     ]}),
 
-    /* === ONBOARDING (no API key) === */
-    !o && n.jsxs("div", { style:{background:"linear-gradient(135deg,#fefce8,#fffbeb)",border:"1.5px solid #fde68a",borderRadius:14,padding:"20px 24px",marginBottom:16}, children:[
-      n.jsxs("div",{style:{fontWeight:800,fontSize:14,color:"#92400e",marginBottom:4,display:"flex",alignItems:"center",gap:8},children:["🗺️ Comment fonctionne la carte de positionnement ?"]}),
-      n.jsx("div",{style:{fontSize:12.5,color:"#78350f",marginBottom:16,lineHeight:1.6},children:"Visualisez votre position Google Maps sur une grille de points autour de votre établissement — et découvrez qui vous devance zone par zone."}),
-      n.jsx("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:16},children:[
-        n.jsxs("div",{style:{background:"white",borderRadius:10,padding:"14px 16px",border:"2px solid #fde68a"},children:[
-          n.jsx("div",{style:{fontSize:22,marginBottom:6},children:"1️⃣"}),
-          n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#1E1B30",marginBottom:4},children:"Clé Google Maps API"}),
-          n.jsx("div",{style:{fontSize:12,color:"#6B7280",lineHeight:1.5},children:"Va dans Mon Espace → Paramètres → colle ta clé Google Maps (Places API activée)"}),
-        ]}),
-        n.jsxs("div",{style:{background:"white",borderRadius:10,padding:"14px 16px",border:"1.5px solid #E5E7EB"},children:[
-          n.jsx("div",{style:{fontSize:22,marginBottom:6},children:"2️⃣"}),
-          n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#1E1B30",marginBottom:4},children:"Choisis un mot-clé"}),
-          n.jsx("div",{style:{fontSize:12,color:"#6B7280",lineHeight:1.5},children:categoryKw ? `Ex : "${categoryKw}" est déjà prêt ci-dessous. Tu peux en ajouter d'autres.` : "Ajoute un mot-clé avec le bouton ＋ Nouveau ci-dessous (ex: plombier Vannes)"}),
-        ]}),
-        n.jsxs("div",{style:{background:"white",borderRadius:10,padding:"14px 16px",border:"1.5px solid #E5E7EB"},children:[
-          n.jsx("div",{style:{fontSize:22,marginBottom:6},children:"3️⃣"}),
-          n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#1E1B30",marginBottom:4},children:"Lance le scan"}),
-          n.jsx("div",{style:{fontSize:12,color:"#6B7280",lineHeight:1.5},children:"Clique 🔍 Lancer le scan — la grille se remplit en ~2 min avec tes vrais rankings."}),
-        ]}),
-      ]}),
-      n.jsx("div",{style:{display:"flex",gap:10,alignItems:"center"},children:[
-        n.jsx("span",{style:{fontSize:12,color:"#92400e",fontWeight:600},children:"⚠️ Clé Google Maps API manquante →"}),
-        n.jsxs("button",{onClick:()=>{ const el=document.querySelector('[data-section="params"]'); if(el) el.click(); }, style:{padding:"7px 16px",borderRadius:8,border:"none",background:"#d97706",color:"white",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"},children:["⚙️ Aller dans Paramètres"]}),
-      ]}),
+
+    /* === TIMELINE HISTORIQUE SCANS === */
+    Rconfig.length > 1 && n.jsxs("div",{style:{marginBottom:14,background:"#F9FAFB",borderRadius:12,padding:"10px 14px",border:"1px solid #E5E7EB"},children:[
+      n.jsx("div",{style:{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8},children:"📅 Historique des scans — cliquez pour voir l'évolution"}),
+      n.jsx("div",{style:{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"},children:
+        Rconfig.map((sc, idx) => {
+          const scCells = (sc.cells || []).filter(c => c != null);
+          const scAvg = scCells.length ? Math.round(scCells.reduce((a,b)=>a+b,0)/scCells.length*10)/10 : null;
+          const isLatest = idx === Rconfig.length - 1;
+          const isSel = selScanIdx === idx || (selScanIdx == null && isLatest);
+          // Delta vs scan précédent
+          let delta = null;
+          if (idx > 0) {
+            const prev = Rconfig[idx-1];
+            const prevCells = (prev.cells||[]).filter(c=>c!=null);
+            const prevAvg = prevCells.length ? Math.round(prevCells.reduce((a,b)=>a+b,0)/prevCells.length*10)/10 : null;
+            if (scAvg != null && prevAvg != null) delta = Math.round((prevAvg - scAvg)*10)/10; // positif = amélioration
+          }
+          return n.jsxs("button",{
+            key:idx,
+            onClick:()=>setSelScanIdx(isLatest&&selScanIdx==null?null:idx),
+            style:{
+              padding:"6px 12px",borderRadius:9,border:`2px solid ${isSel?"#6B40D8":"#E5E7EB"}`,
+              background:isSel?"#6B40D8":"white",color:isSel?"white":"#374151",
+              fontFamily:"inherit",fontWeight:isSel?700:500,fontSize:12,cursor:"pointer",
+              display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:70,
+              transition:"all .15s",
+            },
+            children:[
+              n.jsx("span",{style:{fontSize:10,opacity:.85},children:new Date(sc.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"2-digit"})}),
+              n.jsxs("span",{style:{fontSize:15,fontWeight:900,lineHeight:1},children:["#",scAvg||"—"]}),
+              delta != null && n.jsxs("span",{style:{fontSize:10,color:isSel?(delta>=0?"#86efac":"#fca5a5"):(delta>=0?"#059669":"#dc2626"),fontWeight:700},children:[delta>=0?"▲+":"▼",Math.abs(delta)]}),
+              isLatest && n.jsx("span",{style:{fontSize:9,opacity:.7},children:"actuel"}),
+            ],
+          },idx);
+        })
+      }),
     ]}),
 
     /* === KEYWORDS ROW === */
     n.jsxs("div", { style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}, children:[
-      n.jsx("span",{style:{fontSize:12,color:"#6B7280",fontWeight:600},children:"Mot-clé à scanner :"}),
+      n.jsx("span",{style:{fontSize:12,color:"#6B7280",fontWeight:600},children:"🗺️ Mots-clés carte :"}),
       allKwOptions.map(w => {
         const isAudit = auditKws.some(k => k.kw === w);
         const isActive = a === w;
@@ -13462,7 +14665,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
               children: w,
             }),
             !isAudit && n.jsx("button",{
-              onClick:(ev)=>{ ev.stopPropagation(); const updKws=(e.customKeywords||[]).filter(k=>k!==w); const updGrid=Object.fromEntries(Object.entries(e.geoGrid||{}).filter(([k])=>k!==w)); B({customKeywords:updKws,geoGrid:{...updGrid}}); if(a===w) d(allKwOptions.find(k=>k!==w)||""); },
+              onClick:(ev)=>{ ev.stopPropagation(); const updMapKws=(e.customMapKeywords||[]).filter(k=>k!==w); const updKws=(e.customKeywords||[]).filter(k=>k!==w); const updGrid=Object.fromEntries(Object.entries(e.geoGrid||{}).filter(([k])=>k!==w)); B({customMapKeywords:updMapKws,customKeywords:updKws,geoGrid:{...updGrid}}); if(a===w) d(allKwOptions.find(k=>k!==w)||""); },
               title:"Supprimer ce mot-clé",
               style:{fontSize:13,padding:"5px 8px 5px 4px",border:"none",background:"transparent",color:isActive?"rgba(255,255,255,.7)":"#9CA3AF",cursor:"pointer",lineHeight:1,fontFamily:"inherit"},
               children:"×",
@@ -13483,7 +14686,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       const pos4to10   = _.filter(w=>w>=4&&w<=10).length;
       const pos11to20  = _.filter(w=>w>=11&&w<=20).length;
       const horsTop20  = _.filter(w=>w>20).length;
-      const total      = E.length || M;
+      const total      = _.length || M; // points du cercle uniquement (hors coins exclus)
       const pct = v => Math.round(v/total*100);
       return n.jsxs("div",{style:{marginBottom:14},children:[
         /* Row 1 : rang moyen + barre de répartition */
@@ -13516,12 +14719,32 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
     /* Légende intégrée dans STATS BAR */
 
+    /* === BANNIÈRE CENTRE MAP === */
+    f && (() => {
+      const hasCenter = !!(e.geoGrid && e.geoGrid.center);
+      if (!hasCenter) return n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#EEF2FF",border:"1.5px solid #a5b4fc",borderRadius:10,padding:"10px 14px",marginBottom:10},children:[
+        n.jsx("span",{style:{fontSize:20},children:"📍"}),
+        n.jsxs("div",{style:{flex:1},children:[
+          n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#3730a3"},children:"Cliquez sur la carte pour placer le centre du scan"}),
+          n.jsx("div",{style:{fontSize:12,color:"#6366f1",marginTop:2},children:"L'adresse de la fiche n'a pas pu être géocodée automatiquement. Un clic sur la carte définit la position de départ."}),
+        ]}),
+      ]});
+      return n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"},children:[
+        n.jsxs("span",{style:{fontSize:12,color:"#6B7280"},children:["📍 Centre : ",e.geoGrid.center.lat.toFixed(4),"°N, ",e.geoGrid.center.lng.toFixed(4),"°E"]}),
+        n.jsx("button",{
+          onClick:()=>{ B({ geoGrid: { ...(e.geoGrid||{}), center: null } }); },
+          style:{fontSize:11,padding:"3px 10px",borderRadius:6,border:"1.5px solid #E5E7EB",background:"white",color:"#6B7280",cursor:"pointer",fontFamily:"inherit"},
+          children:"🔄 Repositionner (clic carte)",
+        }),
+      ]});
+    })(),
+
     /* === MAP === */
-    f ? n.jsx("div",{ref:u,style:{height:420,borderRadius:12,overflow:"hidden",border:"1px solid #E5E7EB",marginBottom:12}})
+    f ? n.jsx("div",{ref:u,style:{height:420,borderRadius:12,overflow:"hidden",border:"1px solid #E5E7EB",marginBottom:12,cursor: !(e.geoGrid && e.geoGrid.center) ? "crosshair" : "grab"}})
       : n.jsx("div",{style:{height:420,background:"#F4F5FA",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #E5E7EB",marginBottom:12},children:n.jsx("span",{style:{color:"#6B7280",fontSize:13},children:"⏳ Chargement de la carte…"})}),
 
-    /* === CELL POPUP (top 10 competitors) === */
-    selCell && n.jsxs("div", { style:{background:"white",border:"1.5px solid #6B40D8",borderRadius:14,padding:"18px 20px",marginBottom:14,boxShadow:"0 4px 24px rgba(107,64,216,.13)"}, children:[
+    /* === CELL POPUP — en dessous de la carte === */
+    selCell && n.jsxs("div", { style:{background:"white",border:"1.5px solid #6B40D8",borderRadius:14,padding:"18px 20px",marginTop:12,boxShadow:"0 4px 24px rgba(107,64,216,.1)"}, children:[
       /* Header */
       n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14},children:[
         n.jsxs("div",{children:[
@@ -13568,66 +14791,88 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
     /* MINI GRID removed — interaction via carte Leaflet uniquement */
 
-    /* === SCAN HISTORY === */
-    R.length > 1 && n.jsxs("div",{style:{marginTop:14,background:"#F4F5FA",borderRadius:12,padding:"12px 16px",border:"1px solid #E5E7EB"},children:[
-      n.jsx("div",{style:{fontWeight:700,fontSize:13,marginBottom:10},children:"📅 Historique des scans"}),
-      n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:6},children:
-        R.slice().reverse().map((w,W)=>{const L=w.cells.filter(Q=>Q!=null),$=L.length?Math.round((L.reduce((Q,Z)=>Q+Z,0)/L.length)*10)/10:null,X=L.filter(Q=>Q<=3).length,te=W===0;return n.jsxs("div",{key:W,style:{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:te?"#F5F3FF":"white",borderRadius:8,border:`1px solid ${te?"#C4B5FD":"#E5E7EB"}`},children:[n.jsx("span",{style:{fontSize:12,fontWeight:600,color:"#374151",width:90},children:new Date(w.date).toLocaleDateString("fr-FR")}),n.jsxs("span",{style:{fontSize:12,color:"#6B7280"},children:["Rang moy. ",n.jsxs("strong",{style:{color:"#1E1B30"},children:["#",$||"?"]})]}),n.jsxs("span",{style:{fontSize:12,color:"#6B7280"},children:["TOP 3 ",n.jsxs("strong",{style:{color:"#059669"},children:[X,"/",w.cells.length]})]}),te&&n.jsx("span",{style:{fontSize:11,background:"#6B40D8",color:"white",padding:"1px 8px",borderRadius:20,fontWeight:700,marginLeft:"auto"},children:"Actuel"})]},W)})
-      }),
-    ]}),
-
-    /* === EMPTY STATE === */
-    !I && E.length === 0 && n.jsxs("div",{style:{textAlign:"center",padding:"24px",color:"#9CA3AF"},children:[
-      /* Preview of what the heatmap looks like */
-      n.jsx("div",{style:{marginBottom:16},children:
-        n.jsx("div",{style:{display:"inline-grid",gridTemplateColumns:"repeat(5,1fr)",gap:4},children:
-          [[1,"#059669"],[3,"#059669"],[7,"#E85A30"],[12,"#DC2626"],[20,"#DC2626"],
-           [2,"#059669"],[5,"#E85A30"],[9,"#E85A30"],[15,"#DC2626"],[null,"#94A3B8"],
-           [1,"#059669"],[4,"#E85A30"],["📍","#1E1B30"],[8,"#E85A30"],[18,"#DC2626"],
-           [3,"#059669"],[6,"#E85A30"],[11,"#DC2626"],[16,"#DC2626"],[null,"#94A3B8"],
-           [5,"#E85A30"],[9,"#E85A30"],[13,"#DC2626"],[19,"#DC2626"],[null,"#94A3B8"],
-          ].map(([v,c],i)=>n.jsx("div",{key:i,style:{width:40,height:40,borderRadius:8,background:c,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"white",border:"1.5px solid white",opacity:.85}},v===null?"?":v))
-        })
-      }),
-      n.jsx("div",{style:{fontSize:14,fontWeight:700,color:"#374151",marginBottom:6},children:"Aucune donnée de scan pour l'instant"}),
-      n.jsx("div",{style:{fontSize:12.5,color:"#6B7280",marginBottom:14,lineHeight:1.6,maxWidth:340},children:a ? `Tout est prêt ! Clique sur "Lancer le scan" pour voir ton positionnement sur le mot-clé "${a}".` : "Sélectionne un mot-clé ci-dessus puis lance le scan."}),
-      o && a && n.jsx("button",{onClick:F,style:{padding:"10px 24px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#059669,#16a34a)",color:"white",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 12px rgba(5,150,105,.3)"},children:"🔍 Lancer le premier scan"}),
+    /* === EMPTY STATE compact === */
+    !I && E.length === 0 && n.jsxs("div",{style:{textAlign:"center",padding:"16px",color:"#9CA3AF"},children:[
+      n.jsx("div",{style:{fontSize:13,color:"#6B7280",marginBottom:10},children:a ? `Cliquez sur "Lancer le scan" pour voir votre positionnement sur "${a}"` : "Sélectionnez un mot-clé puis lancez le scan"}),
+      o && a && n.jsx("button",{onClick:F,style:{padding:"9px 20px",borderRadius:9,border:"none",background:"linear-gradient(135deg,#059669,#16a34a)",color:"white",fontFamily:"inherit",fontWeight:700,fontSize:13,cursor:"pointer"},children:"🔍 Lancer le premier scan"}),
     ]}),
   ]});
 }
 
 function KeywordsTab({ kw: e, city: t, client: i, clients: r, upd: o }) {
-  const customKws = (i == null ? void 0 : i.customKeywords) || [];
+  const msKey = `bto_monthly_stats_${i?.id}`;
+  const [msData, setMsData] = D.useState(() => { try { return JSON.parse(localStorage.getItem(msKey)||"[]"); } catch { return []; } });
+  const [msForm, setMsForm] = D.useState({ mois:new Date().toISOString().slice(0,7), note:"", nbAvis:"", appels:"", vues:"", clics:"", tauxReponse:"" });
+  const saveMsData = (updated) => { setMsData(updated); localStorage.setItem(msKey, JSON.stringify(updated)); };
+  const addMsEntry = () => {
+    if (!msForm.mois) return;
+    const idx = msData.findIndex(s=>s.mois===msForm.mois);
+    const updated = idx>=0 ? msData.map((s,j)=>j===idx?{...msForm}:s) : [...msData,{...msForm}];
+    saveMsData(updated.sort((a,b)=>b.mois.localeCompare(a.mois)));
+  };
+  const msMonths = Array.from({length:12},(_,j)=>{const dd=new Date();dd.setMonth(dd.getMonth()-j);return dd.toISOString().slice(0,7);});
+  const customKws = (i == null ? void 0 : i.customSeoKeywords) || (i == null ? void 0 : i.customKeywords) || [];
   /* Récupère les mots-clés scannés sur la carte avec leur rang moyen comme "position" */
   const geoGrid = (i == null ? void 0 : i.geoGrid) || {};
+
+  // Calcul avg rank + historique scan pour un mot-clé carte
+  const getMapData = (kwCarte) => {
+    const data = geoGrid[kwCarte];
+    if (!data) return null;
+    const scans = (data.scans || []);
+    if (!scans.length) return null;
+    const lastScan = scans[scans.length - 1];
+    const cells = (lastScan && lastScan.cells) || [];
+    const valid = cells.filter(c => c != null);
+    const avgRank = valid.length ? Math.round(valid.reduce((a,b)=>a+b,0)/valid.length) : null;
+    // Tous les points historiques (un par scan)
+    const scanHistory = scans.map(sc => {
+      const vc = (sc.cells||[]).filter(c=>c!=null);
+      const avg = vc.length ? Math.round(vc.reduce((a,b)=>a+b,0)/vc.length) : null;
+      return avg != null ? { date: sc.date, position: avg } : null;
+    }).filter(Boolean);
+    return { avgRank, scanDate: lastScan.date, scanHistory, kwCarte };
+  };
+
+  // Matching flou : "poêle à bois" (carte) ↔ "poêle à bois Vannes" (SEO)
+  const findMapDataForSeoKw = (kwSeo) => {
+    const kwSeoLow = (kwSeo||"").toLowerCase().trim();
+    // 1. Exact match
+    let md = getMapData(kwSeo);
+    if (md) return md;
+    // 2. Le mot-clé carte est un préfixe du SEO (sans la ville)
+    for (const kwCarte of Object.keys(geoGrid).filter(k=>k!=="center")) {
+      const kwCarteLow = kwCarte.toLowerCase().trim();
+      if (kwSeoLow.startsWith(kwCarteLow) || kwCarteLow.startsWith(kwSeoLow)) {
+        const d = getMapData(kwCarte);
+        if (d) return d;
+      }
+    }
+    return null;
+  };
+
   const mapKwsWithRank = Object.entries(geoGrid)
     .filter(([k]) => k !== "center")
-    .map(([kw, data]) => {
-      const scans = (data.scans || []);
-      const lastScan = scans[scans.length - 1];
-      const cells = (lastScan && lastScan.cells) || [];
-      const valid = cells.filter(c => c != null);
-      const avgRank = valid.length ? Math.round(valid.reduce((a,b)=>a+b,0)/valid.length) : null;
-      return { kw, avgRank, scanDate: lastScan && lastScan.date };
-    });
-  /* Merge: audit kws + custom kws + map-scanned kws (deduplicated) */
-  /* Si un mot-clé a été scanné sur la carte, sa position réelle (avgRank) prime sur l'estimation de l'audit */
+    .map(([kw]) => getMapData(kw))
+    .filter(Boolean);
+
   const auditKwKeys = new Set([...(e.primary||[]),...(e.secondary||[])].map(k=>k.kw));
-  const mapOnlyKws = mapKwsWithRank.filter(m => !auditKwKeys.has(m.kw) && !customKws.includes(m.kw));
+  const mapOnlyKws = mapKwsWithRank.filter(m => !auditKwKeys.has(m.kwCarte) && !customKws.some(ck=>(ck||"").toLowerCase().startsWith(m.kwCarte.toLowerCase())));
+
+  const enrichWithMap = (k, kwKey) => {
+    const md = findMapDataForSeoKw(kwKey);
+    if (!md || md.avgRank == null) return k;
+    return { ...k, position: md.avgRank, positionLabel: `#${md.avgRank} 🗺️`, fromMap: true, scanHistory: md.scanHistory, action: `Scan réel · ${md.scanDate||"?"}` };
+  };
+
   const allKws = [
-    ...(e.primary || []).map(k => {
-      const mapData = mapKwsWithRank.find(m => m.kw === k.kw);
-      return mapData && mapData.avgRank != null ? { ...k, position: mapData.avgRank, positionLabel: `#${mapData.avgRank} (carte 🗺️)`, fromMap: true, action: k.action || `Scan du ${mapData.scanDate||"?"}` } : k;
-    }),
-    ...(e.secondary || []).map(k => {
-      const mapData = mapKwsWithRank.find(m => m.kw === k.kw);
-      return mapData && mapData.avgRank != null ? { ...k, position: mapData.avgRank, positionLabel: `#${mapData.avgRank} (carte 🗺️)`, fromMap: true, action: k.action || `Scan du ${mapData.scanDate||"?"}` } : k;
-    }),
+    ...(e.primary   || []).map(k => enrichWithMap(k, k.kw)),
+    ...(e.secondary || []).map(k => enrichWithMap(k, k.kw)),
     ...customKws.map(k => {
-      const mapData = mapKwsWithRank.find(m => m.kw === k);
-      return { kw: k, volume:"—", position: mapData ? mapData.avgRank : null, evolutionDir:"stable", competition:"—", priority:"Manuel", action: mapData ? `Scan du ${mapData.scanDate||"?"}` : "", fromMap: !!mapData };
+      const base = { kw: k, volume:"—", position: null, evolutionDir:"stable", competition:"—", priority:"SEO" };
+      return enrichWithMap(base, k);
     }),
-    ...mapOnlyKws.map(m => ({ kw: m.kw, volume:"—", position: m.avgRank, evolutionDir:"stable", competition:"—", priority:"Carte 🗺️", action:`Dernier scan : ${m.scanDate||"?"}`, fromMap: true })),
+    ...mapOnlyKws.map(m => ({ kw: m.kwCarte, volume:"—", position: m.avgRank, positionLabel:`#${m.avgRank} 🗺️`, evolutionDir:"stable", competition:"—", priority:"Carte 🗺️", action:`Scan réel · ${m.scanDate||"?"}`, fromMap: true, scanHistory: m.scanHistory })),
   ];
   const s = allKws,
     [l, a] = D.useState(s[0] || null),
@@ -13637,27 +14882,25 @@ function KeywordsTab({ kw: e, city: t, client: i, clients: r, upd: o }) {
     b = (i == null ? void 0 : i.kwHistory) || [],
     x = (h) => {
       const f = [];
+      // Points d'audit IA (historique)
       b.forEach((m) => {
-        const C = [...(m.primary || []), ...(m.secondary || [])].find(
-          (B) => B.kw === h,
-        );
-        C && f.push({ date: m.date, position: C.position });
+        const C = [...(m.primary || []), ...(m.secondary || [])].find((B) => B.kw === h);
+        C && C.position && f.push({ date: m.date, position: C.position, source: 'audit' });
       });
-      const c = s.find((m) => m.kw === h);
-      c != null &&
-        c.position &&
-        f.push({
-          date: (i == null ? void 0 : i.date) || new Date().toISOString(),
-          position: c.position,
-        });
-      const u = new Set();
-      return f
-        .filter((m) => {
-          var B;
-          const C = (B = m.date) == null ? void 0 : B.slice(0, 10);
-          return u.has(C) ? !1 : (u.add(C), !0);
-        })
-        .slice(-6);
+      // Points de scan carte (réels) — priorité sur l'audit
+      const kwObj = s.find((m) => m.kw === h);
+      if (kwObj?.scanHistory?.length) {
+        kwObj.scanHistory.forEach(pt => f.push({ ...pt, source: 'scan' }));
+      } else if (kwObj?.position) {
+        f.push({ date: (i == null ? void 0 : i.date) || new Date().toISOString(), position: kwObj.position, source: kwObj.fromMap ? 'scan' : 'audit' });
+      }
+      // Déduplique par date, privilégie les scans
+      const byDate = {};
+      f.forEach(pt => {
+        const d = (pt.date||"").slice(0,10);
+        if (!byDate[d] || pt.source === 'scan') byDate[d] = pt;
+      });
+      return Object.values(byDate).sort((a,b2)=>(a.date||"").localeCompare(b2.date||"")).slice(-8);
     },
     j = (h) =>
       !h || h === 0
@@ -13722,657 +14965,162 @@ function KeywordsTab({ kw: e, city: t, client: i, clients: r, upd: o }) {
           ? { c: "#dc2626", icon: "▼" }
           : { c: "#64748b", icon: "=" },
     g = s.find((h) => h.kw === (l == null ? void 0 : l.kw)) || l;
+  const rCol = p2 => !p2?"#94A3B8":p2<=3?"#059669":p2<=10?"#E85A30":"#DC2626";
+  const rBg  = p2 => !p2?"#F4F5FA":p2<=3?"#F0FDF4":p2<=10?"#FFF7ED":"#FEF2F2";
+
   return n.jsxs("div", {
     children: [
+      /* Header */
       n.jsxs("div", {
-        style: {
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 14,
-          flexWrap: "wrap",
-          gap: 10,
-        },
-        children: [
+        style:{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:14, flexWrap:"wrap", gap:10 },
+        children:[
           n.jsxs("div", {
-            style: { display:"flex", alignItems:"center", gap:10 },
-            children: [
+            style:{ display:"flex", alignItems:"center", gap:10 },
+            children:[
               n.jsxs("div", {
-                style: { fontSize: 12.5, color: "var(--ink4)" },
-                children: [
-                  s.length,
-                  " mots-clés · Local Pack Google · Mise à jour hebdomadaire",
+                children:[
+                  n.jsxs("div", { style:{ fontSize:12.5, color:"var(--ink4)" }, children:[
+                    s.filter(k=>k.fromMap).length, " mots-clés scannés · ", s.length, " au total · ",
+                    s.filter(k=>k.fromMap).length > 0 ? "Rangs réels 🗺️" : "Rangs estimés par IA",
+                  ]}),
                 ],
               }),
+            ],
+          }),
+          n.jsxs("div", {
+            style:{ display:"flex", gap:8, alignItems:"center" },
+            children:[
               n.jsx("button", {
                 onClick: () => setShowAddKw(v => !v),
-                style: { fontSize:11, padding:"4px 10px", borderRadius:7, border:"1.5px dashed #a78bfa", background:"#faf5ff", color:"#7c3aed", fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
-                children: showAddKw ? "✕ Fermer" : "＋ Ajouter un mot-clé",
-              }),
-            ],
-          }),
-          n.jsxs("div", {
-            style: { display: "flex", gap: 6 },
-            children: [
-              n.jsxs("button", {
-                onClick: () => p("tableau"),
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 16px",
-                  borderRadius: 9,
-                  border: `1.5px solid ${d === "tableau" ? "var(--indigo2)" : "#F4F5FA"}`,
-                  background: d === "tableau" ? "#ffffff" : "#fff",
-                  color: d === "tableau" ? "var(--indigo2)" : "#64748b",
-                  fontWeight: d === "tableau" ? 700 : 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: 12.5,
-                  transition: "all .15s",
-                },
-                children: [n.jsx("span", { children: "📊" }), " Tableau"],
-              }),
-              n.jsxs("button", {
-                onClick: () => p("evolution"),
-                style: {
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 16px",
-                  borderRadius: 9,
-                  border: `1.5px solid ${d === "evolution" ? "#059669" : "#F4F5FA"}`,
-                  background: d === "evolution" ? "#ffffff" : "#fff",
-                  color: d === "evolution" ? "#059669" : "#64748b",
-                  fontWeight: d === "evolution" ? 700 : 500,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: 12.5,
-                  transition: "all .15s",
-                },
-                children: [n.jsx("span", { children: "📈" }), " Évolution"],
+                style:{ fontSize:11, padding:"4px 10px", borderRadius:7, border:"1.5px dashed #a78bfa", background:"#faf5ff", color:"#7c3aed", fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+                children: showAddKw ? "✕ Fermer" : "🔑 Ajouter un mot-clé SEO (avec ville)",
               }),
             ],
           }),
         ],
       }),
-      /* === AJOUT MOT-CLÉ MANUEL === */
+      /* Ajout mot-clé */
       showAddKw && n.jsxs("div", {
-        style: { background:"#faf5ff", border:"1.5px solid #d8b4fe", borderRadius:12, padding:"14px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" },
-        children: [
-          n.jsx("span", { style:{fontSize:13, fontWeight:700, color:"#7c3aed"}, children:"➕ Nouveau mot-clé :" }),
-          n.jsx("input", {
-            value: newKw,
-            onChange: ev => setNewKw(ev.target.value),
-            onKeyDown: ev => {
-              if (ev.key === "Enter" && newKw.trim()) {
-                const updated = [...(i.customKeywords || []), newKw.trim()];
-                o(r.map(c => c.id === i.id ? { ...c, customKeywords: updated } : c));
-                setNewKw("");
-                setShowAddKw(false);
-              }
-            },
-            placeholder: "ex: plombier urgence Vannes",
-            style: { flex:1, minWidth:200, padding:"7px 12px", borderRadius:8, border:"1.5px solid #d8b4fe", fontSize:13, fontFamily:"inherit", outline:"none" },
+        style:{ background:"#faf5ff", border:"1.5px solid #d8b4fe", borderRadius:12, padding:"14px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" },
+        children:[
+          n.jsxs("span",{ style:{fontSize:13,fontWeight:700,color:"#7c3aed"}, children:["🔑 Nouveau mot-clé SEO ",n.jsx("span",{style:{fontSize:11,fontWeight:400,color:"#9CA3AF"},children:"(avec ville)"}),":" ]}),
+          n.jsx("input",{
+            value:newKw, onChange:ev=>setNewKw(ev.target.value),
+            onKeyDown:ev=>{ if(ev.key==="Enter"&&newKw.trim()){ const u=[...(i.customSeoKeywords||i.customKeywords||[]),newKw.trim()]; o(r.map(c=>c.id===i.id?{...c,customSeoKeywords:u}:c)); setNewKw(""); setShowAddKw(false); }},
+            placeholder:"ex: poêle à bois Vannes",
+            style:{ flex:1, minWidth:200, padding:"7px 12px", borderRadius:8, border:"1.5px solid #d8b4fe", fontSize:13, fontFamily:"inherit", outline:"none" },
           }),
-          n.jsx("button", {
-            onClick: () => {
-              if (!newKw.trim()) return;
-              const updated = [...(i.customKeywords || []), newKw.trim()];
-              o(r.map(c => c.id === i.id ? { ...c, customKeywords: updated } : c));
-              setNewKw("");
-              setShowAddKw(false);
-            },
-            style: { padding:"7px 16px", borderRadius:8, border:"none", background:"#7c3aed", color:"white", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" },
-            children: "Ajouter",
-          }),
-          customKws.length > 0 && n.jsxs("div", {
-            style: { width:"100%", display:"flex", flexWrap:"wrap", gap:6, marginTop:8 },
-            children: [
-              n.jsx("span", { style:{fontSize:11, color:"#6B7280", fontWeight:600}, children:"Mots-clés ajoutés manuellement :" }),
-              ...customKws.map((k, idx) => n.jsxs("span", {
-                key: idx,
-                style: { background:"#ede9fe", border:"1px solid #c4b5fd", borderRadius:20, padding:"3px 10px", fontSize:12, color:"#6d28d9", display:"flex", alignItems:"center", gap:5 },
-                children: [
-                  k,
-                  n.jsx("button", {
-                    onClick: () => {
-                      const updated = customKws.filter((_,i2)=>i2!==idx);
-                      o(r.map(c => c.id === i.id ? { ...c, customKeywords: updated } : c));
-                    },
-                    style: { background:"none", border:"none", cursor:"pointer", color:"#7c3aed", fontWeight:800, fontSize:12, padding:0, lineHeight:1 },
-                    children: "×",
-                  }),
-                ],
-              }, idx)),
-            ],
+          n.jsx("button",{
+            onClick:()=>{ if(!newKw.trim()) return; const u=[...(i.customSeoKeywords||i.customKeywords||[]),newKw.trim()]; o(r.map(c=>c.id===i.id?{...c,customSeoKeywords:u}:c)); setNewKw(""); setShowAddKw(false); },
+            style:{ padding:"7px 16px",borderRadius:8,border:"none",background:"#7c3aed",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit" },
+            children:"Ajouter",
           }),
         ],
       }),
-      d === "evolution" &&
-        n.jsxs("div", {
-          children: [
-            n.jsxs("div", {
-              style: {
-                background: "#EFF6FF",
-                border: "1px solid #BFDBFE",
-                borderRadius: 10,
-                padding: "12px 16px",
-                marginBottom: 16,
-                fontSize: 12.5,
-                color: "#1D4ED8",
-                lineHeight: 1.6,
-              },
-              children: [
-                "📈 ",
-                n.jsx("strong", {
-                  children: "Évolution des positions estimées par l'IA",
-                }),
-                " — à chaque audit, Claude analyse la fiche et estime les positions dans le Pack Local. La courbe se construit audit après audit. Plus tu audites régulièrement, plus la tendance est fiable.",
-              ],
-            }),
-            n.jsx("div", {
-              style: { display: "flex", flexDirection: "column", gap: 12 },
-              children: s.map((h) => {
-                var R, N;
-                const f = x(h.kw),
-                  c = f.length >= 2,
-                  u = (R = f[0]) == null ? void 0 : R.position,
-                  m = (N = f[f.length - 1]) == null ? void 0 : N.position,
-                  C = c ? u - m : 0,
-                  B = h.position,
-                  k = j(B || 20);
-                return n.jsxs(
-                  "div",
-                  {
-                    style: {
-                      background: "white",
-                      borderRadius: 14,
-                      padding: "18px 20px",
-                      border: "1px solid #E5E7EB",
-                      borderLeft: `4px solid ${C > 0 ? "#059669" : C < 0 ? "#dc2626" : "#E5E7EB"}`,
-                    },
-                    children: [
-                      n.jsxs("div", {
-                        style: {
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          marginBottom: c ? 14 : 0,
-                        },
-                        children: [
-                          n.jsxs("div", {
-                            style: { flex: 1 },
-                            children: [
-                              n.jsx("div", {
-                                style: {
-                                  fontWeight: 700,
-                                  fontSize: 13.5,
-                                  color: "#1E1B30",
-                                },
-                                children: h.kw,
-                              }),
-                              n.jsxs("div", {
-                                style: {
-                                  fontSize: 11.5,
-                                  color: "#6B7280",
-                                  marginTop: 2,
-                                },
-                                children: [
-                                  h.volume || "—",
-                                  " recherches/mois · ",
-                                  h.competition || "—",
-                                ],
-                              }),
-                            ],
-                          }),
-                          n.jsxs("div", {
-                            style: {
-                              textAlign: "center",
-                              padding: "8px 14px",
-                              background: k.bg,
-                              borderRadius: 10,
-                              border: `1px solid ${k.border}`,
-                            },
-                            children: [
-                              n.jsxs("div", {
-                                style: {
-                                  fontSize: 18,
-                                  fontWeight: 900,
-                                  color: k.c,
-                                },
-                                children: ["#", B || "—"],
-                              }),
-                              n.jsx("div", {
-                                style: {
-                                  fontSize: 10,
-                                  color: k.c,
-                                  fontWeight: 600,
-                                },
-                                children: "actuel",
-                              }),
-                            ],
-                          }),
-                          c &&
-                            C !== 0 &&
-                            n.jsxs("div", {
-                              style: {
-                                textAlign: "center",
-                                padding: "8px 14px",
-                                background: C > 0 ? "#F0FDF4" : "#FEF2F2",
-                                borderRadius: 10,
-                                border: `1px solid ${C > 0 ? "#BBF7D0" : "#FECACA"}`,
-                              },
-                              children: [
-                                n.jsxs("div", {
-                                  style: {
-                                    fontSize: 18,
-                                    fontWeight: 900,
-                                    color: C > 0 ? "#059669" : "#dc2626",
-                                  },
-                                  children: [C > 0 ? "+" : "", C],
-                                }),
-                                n.jsx("div", {
-                                  style: {
-                                    fontSize: 10,
-                                    color: C > 0 ? "#059669" : "#dc2626",
-                                    fontWeight: 600,
-                                  },
-                                  children: "places",
-                                }),
-                              ],
-                            }),
-                        ],
-                      }),
-                      c
-                        ? n.jsx("div", {
-                            children: n.jsx("div", {
-                              style: {
-                                display: "flex",
-                                gap: 6,
-                                alignItems: "flex-end",
-                                height: 80,
-                              },
-                              children: f.map((E, M) => {
-                                const P = Math.max(
-                                    ...f.map((G) => G.position || 1),
-                                    1,
-                                  ),
-                                  T = Math.max(
-                                    Math.round(
-                                      ((P + 1 - E.position) / P) * 100,
-                                    ),
-                                    8,
-                                  ),
-                                  _ = j(E.position || 20),
-                                  U = M > 0 ? f[M - 1].position : null,
-                                  V = U ? U - E.position : null;
-                                return n.jsxs(
-                                  "div",
-                                  {
-                                    style: {
-                                      flex: 1,
-                                      display: "flex",
-                                      flexDirection: "column",
-                                      alignItems: "center",
-                                      gap: 2,
-                                    },
-                                    children: [
-                                      V !== null &&
-                                        V !== 0 &&
-                                        n.jsx("div", {
-                                          style: {
-                                            fontSize: 9,
-                                            fontWeight: 700,
-                                            color:
-                                              V > 0 ? "#059669" : "#dc2626",
-                                          },
-                                          children: V > 0 ? `+${V}` : V,
-                                        }),
-                                      n.jsx("div", {
-                                        style: {
-                                          width: "100%",
-                                          background: _.c,
-                                          borderRadius: "4px 4px 0 0",
-                                          height: `${T}%`,
-                                          minHeight: 8,
-                                          opacity: M === f.length - 1 ? 1 : 0.6,
-                                          position: "relative",
-                                        },
-                                        children: n.jsxs("div", {
-                                          style: {
-                                            position: "absolute",
-                                            bottom: "calc(100% + 2px)",
-                                            left: "50%",
-                                            transform: "translateX(-50%)",
-                                            fontSize: 9,
-                                            fontWeight: 800,
-                                            color: _.c,
-                                            whiteSpace: "nowrap",
-                                          },
-                                          children: ["#", E.position],
-                                        }),
-                                      }),
-                                      n.jsx("div", {
-                                        style: {
-                                          fontSize: 8,
-                                          color: "#9CA3AF",
-                                          textAlign: "center",
-                                          lineHeight: 1.2,
-                                        },
-                                        children: new Date(
-                                          E.date,
-                                        ).toLocaleDateString("fr-FR", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                        }),
-                                      }),
-                                    ],
-                                  },
-                                  M,
-                                );
-                              }),
-                            }),
-                          })
-                        : n.jsxs("div", {
-                            style: {
-                              fontSize: 12,
-                              color: "#9CA3AF",
-                              fontStyle: "italic",
-                              marginTop: 8,
-                            },
-                            children: [
-                              "Historique disponible après le prochain audit — position actuelle : #",
-                              B || "—",
-                            ],
-                          }),
-                    ],
-                  },
-                  h.kw,
-                );
-              }),
-            }),
-          ],
-        }),
-      d !== "evolution" &&
-        n.jsxs("div", {
-          style: {
-            background: "#F4F5FA",
-            border: "1px solid #b8b8f8",
-            borderRadius: 10,
-            padding: "10px 16px",
-            marginBottom: 16,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-          },
-          children: [
-            n.jsx("span", {
-              style: { flexShrink: 0, marginTop: 1 },
-              children: "📍",
-            }),
-            n.jsxs("div", {
-              style: { fontSize: 12.5, color: "#3730a3", lineHeight: 1.6 },
-              children: [
-                n.jsx("strong", {
-                  children:
-                    "Votre classement varie selon la position géographique",
-                }),
-                ` de l'internaute. Passez en vue "Zones" pour voir votre position réelle zone par zone autour de `,
-                t || "votre ville",
-                ".",
-              ],
-            }),
-          ],
-        }),
-      d === "tableau" &&
-        n.jsxs(n.Fragment, {
-          children: [
-            n.jsxs("div", {
-              className: "card",
-              style: {
-                marginBottom: 16,
-                padding: 0,
-                overflow: "hidden",
-                border: "1px solid var(--border)",
-              },
-              children: [
-                n.jsx("div", {
-                  style: {
-                    padding: "14px 18px 10px",
-                    borderBottom: "1px solid #f1f5f9",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  },
-                  children: n.jsx("div", {
-                    style: { display: "flex", alignItems: "center", gap: 8 },
-                    children: n.jsxs("span", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "var(--ink4)",
-                        letterSpacing: ".5px",
-                        textTransform: "uppercase",
-                      },
-                      children: [
-                        "🔍 ",
-                        s.length,
-                        " MOTS-CLÉS — DEPUIS ",
-                        (t || "").toUpperCase(),
-                        " CENTRE",
-                      ],
-                    }),
-                  }),
-                }),
-                n.jsxs("table", {
-                  style: {
-                    width: "100%",
-                    borderCollapse: "collapse",
-                    fontSize: 13,
-                  },
-                  children: [
-                    n.jsx("thead", {
-                      children: n.jsx("tr", {
-                        style: { borderBottom: "1px solid #f1f5f9" },
-                        children: [
-                          "MOT-CLÉ",
-                          "VOLUME",
-                          "POSITION",
-                          "ÉVOLUTION",
-                          "ACTION",
-                        ].map((h) =>
-                          n.jsx(
-                            "th",
-                            {
-                              style: {
-                                padding: "9px 16px",
-                                textAlign: "left",
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: "#94A3B8",
-                                letterSpacing: ".5px",
-                                background: "#F4F5FA",
-                              },
-                              children: h,
-                            },
-                            h,
-                          ),
-                        ),
-                      }),
-                    }),
-                    n.jsx("tbody", {
-                      children: s.map((h, f) => {
-                        j(h.position);
-                        const c = z(h.evolutionDir),
-                          u = f < (e.primary || []).length;
-                        return n.jsxs(
-                          "tr",
-                          {
-                            onClick: () => a(h),
-                            className: "tr",
-                            style: { cursor: "pointer" },
-                            children: [
-                              n.jsxs("td", {
-                                style: { padding: "13px 16px" },
-                                children: [
-                                  n.jsx("div", {
-                                    style: {
-                                      fontWeight: 700,
-                                      color: "var(--ink)",
-                                      fontSize: 13,
-                                    },
-                                    children: h.kw,
-                                  }),
-                                  !u &&
-                                    n.jsx("span", {
-                                      style: {
-                                        fontSize: 9.5,
-                                        background: "#ecfeff",
-                                        color: "#0891b2",
-                                        borderRadius: 4,
-                                        padding: "1px 5px",
-                                        fontWeight: 600,
-                                      },
-                                      children: "secondaire",
-                                    }),
-                                ],
-                              }),
-                              n.jsx("td", {
-                                style: {
-                                  padding: "13px 16px",
-                                  color: "var(--ink2)",
-                                  fontWeight: 600,
-                                },
-                                children: h.volume,
-                              }),
-                              n.jsx("td", {
-                                style: { padding: "13px 16px" },
-                                children: (() => {
-                                  const m = h.position,
-                                    C = j(m);
-                                  return m
-                                    ? n.jsxs("span", {
-                                        style: {
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: 5,
-                                          padding: "5px 12px",
-                                          borderRadius: 8,
-                                          fontSize: 13,
-                                          fontWeight: 800,
-                                          background: C.bg,
-                                          color: C.c,
-                                          border: `1.5px solid ${C.border}`,
-                                          whiteSpace: "nowrap",
-                                        },
-                                        children: [
-                                          m <= 3 ? "🏆 " : "",
-                                          m <= 3
-                                            ? `TOP ${m}`
-                                            : m <= 10
-                                              ? `TOP ${m}`
-                                              : `#${m}`,
-                                        ],
-                                      })
-                                    : n.jsx("span", {
-                                        style: {
-                                          color: "var(--ink4)",
-                                          fontSize: 12,
-                                        },
-                                        children: "N/C",
-                                      });
-                                })(),
-                              }),
-                              n.jsx("td", {
-                                style: { padding: "13px 16px" },
-                                children:
-                                  h.evolution && h.evolution !== "0"
-                                    ? n.jsxs("span", {
-                                        style: {
-                                          fontWeight: 800,
-                                          color: c.c,
-                                          fontSize: 13.5,
-                                        },
-                                        children: [c.icon, " ", h.evolution],
-                                      })
-                                    : n.jsx("span", {
-                                        style: {
-                                          fontWeight: 700,
-                                          color: "var(--ink3)",
-                                          fontSize: 12.5,
-                                        },
-                                        children: "= stable",
-                                      }),
-                              }),
-                              n.jsx("td", {
-                                style: {
-                                  padding: "13px 16px",
-                                  color: "var(--ink2)",
-                                  fontSize: 12.5,
-                                  lineHeight: 1.5,
-                                  maxWidth: 240,
-                                },
-                                children: h.action,
-                              }),
-                            ],
-                          },
-                          f,
-                        );
-                      }),
-                    }),
-                  ],
-                }),
-              ],
-            }),
-            (e.longTail || []).length > 0 &&
-              n.jsxs("div", {
-                className: "card",
-                style: { borderTop: "3px solid #d97706", marginBottom: 0 },
-                children: [
-                  n.jsx("div", {
-                    style: {
-                      fontWeight: 700,
-                      fontSize: 13.5,
-                      marginBottom: 4,
-                      color: "var(--ink)",
-                    },
-                    children: "💡 Requêtes longue traîne",
-                  }),
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 12,
-                      color: "var(--ink4)",
-                      marginBottom: 11,
-                    },
-                    children:
-                      "À exploiter dans les posts GMB et la description",
-                  }),
-                  n.jsx("div", {
-                    style: { display: "flex", flexWrap: "wrap", gap: 7 },
-                    children: e.longTail.map((h, f) =>
-                      n.jsx(
-                        "span",
-                        {
-                          style: {
-                            background: "#fffbeb",
-                            border: "1px solid #fde68a",
-                            borderRadius: 20,
-                            padding: "5px 14px",
-                            fontSize: 12.5,
-                            color: "#92400e",
-                            fontWeight: 500,
-                          },
-                          children: h,
-                        },
-                        f,
-                      ),
+      /* ÉVOLUTION — tableau de suivi */
+      d === "evolution" && (() => {
+        // Collecter toutes les dates de scan (toutes colonnes)
+        const allDates = [...new Set(
+          s.flatMap(h => x(h.kw).map(pt => (pt.date||"").slice(0,10)))
+        )].filter(Boolean).sort();
+        const col = p2 => !p2?"#94A3B8":p2<=3?"#059669":p2<=10?"#E85A30":"#DC2626";
+        const bg  = p2 => !p2?"#F4F5FA":p2<=3?"#F0FDF4":p2<=10?"#FFF7ED":"#FEF2F2";
+        return n.jsxs("div",{ style:{display:"flex",flexDirection:"column",gap:12}, children:[
+          /* Légende */
+          n.jsxs("div",{style:{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:"#6B7280"},children:[
+            n.jsxs("span",{children:[n.jsx("span",{style:{color:"#059669",fontWeight:700},children:"■"}), " TOP 1–3"]}),
+            n.jsxs("span",{children:[n.jsx("span",{style:{color:"#E85A30",fontWeight:700},children:"■"}), " TOP 4–10"]}),
+            n.jsxs("span",{children:[n.jsx("span",{style:{color:"#DC2626",fontWeight:700},children:"■"}), " +10"]}),
+            n.jsx("span",{style:{color:"#94A3B8"},children:"— = pas scanné ce jour"}),
+          ]}),
+          /* Tableau */
+          allDates.length === 0
+            ? n.jsx("div",{style:{textAlign:"center",padding:"32px",color:"#9CA3AF",fontSize:13},children:"Lancez des scans pour voir l'évolution des positions"})
+            : n.jsxs("div",{style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",overflow:"auto"},children:[
+              n.jsxs("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12},children:[
+                /* En-têtes : mot-clé + dates */
+                n.jsx("thead",{children:
+                  n.jsxs("tr",{style:{background:"#F8F9FB"},children:[
+                    n.jsx("th",{style:{padding:"10px 14px",textAlign:"left",fontWeight:700,color:"#374151",fontSize:12,borderBottom:"2px solid #E5E7EB",minWidth:180},children:"Mot-clé"}),
+                    ...allDates.map(dt =>
+                      n.jsx("th",{key:dt,style:{padding:"10px 10px",textAlign:"center",fontWeight:600,color:"#6B7280",fontSize:11,borderBottom:"2px solid #E5E7EB",whiteSpace:"nowrap"},
+                        children: new Date(dt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})
+                      },dt)
                     ),
-                  }),
-                ],
-              }),
-          ],
+                    n.jsx("th",{style:{padding:"10px 10px",textAlign:"center",fontWeight:700,color:"#1E1B30",fontSize:11,borderBottom:"2px solid #E5E7EB",background:"#EEF2FF"},children:"Tendance"}),
+                  ]},)
+                }),
+                /* Lignes : une par mot-clé, triées par rang actuel */
+                n.jsx("tbody",{children:
+                  [...s].sort((a,b)=>{
+                    const pa = x(a.kw).at(-1)?.position ?? 999;
+                    const pb = x(b.kw).at(-1)?.position ?? 999;
+                    return pa - pb;
+                  }).map((h,ri) => {
+                    const pts = x(h.kw);
+                    const ptsByDate = Object.fromEntries(pts.map(pt=>[(pt.date||"").slice(0,10), pt.position]));
+                    const lastPos = pts.at(-1)?.position;
+                    const firstPos = pts[0]?.position;
+                    const trend = firstPos && lastPos && pts.length>1 ? firstPos - lastPos : 0;
+                    return n.jsxs("tr",{style:{background:ri%2===0?"white":"#FAFAFA",borderTop:"1px solid #F3F4F6"},children:[
+                      /* Nom du mot-clé */
+                      n.jsxs("td",{style:{padding:"9px 14px",fontWeight:600,color:"#1E1B30",fontSize:12},children:[
+                        h.kw,
+                        h.fromMap && n.jsx("span",{style:{marginLeft:5,background:"#E0E7FF",color:"#3730A3",borderRadius:3,padding:"1px 4px",fontSize:9,fontWeight:700},children:"🗺️"}),
+                      ]}),
+                      /* Cellule par date */
+                      ...allDates.map(dt => {
+                        const pos = ptsByDate[dt];
+                        return n.jsx("td",{key:dt,style:{padding:"9px 8px",textAlign:"center"},children:
+                          pos
+                            ? n.jsxs("span",{style:{display:"inline-block",minWidth:32,padding:"2px 6px",borderRadius:6,background:bg(pos),color:col(pos),fontWeight:800,fontSize:12},children:["#",pos]})
+                            : n.jsx("span",{style:{color:"#CBD5E1",fontSize:13},children:"—"})
+                        },dt);
+                      }),
+                      /* Tendance */
+                      n.jsx("td",{style:{padding:"9px 8px",textAlign:"center",background:"#EEF2FF"},children:
+                        trend===0
+                          ? n.jsx("span",{style:{color:"#9CA3AF",fontSize:13},children:"→"})
+                          : n.jsxs("span",{style:{color:trend>0?"#059669":"#DC2626",fontWeight:800,fontSize:12},children:[trend>0?"↑":"↓"," ",Math.abs(trend)]}),
+                      }),
+                    ]},h.kw);
+                  })
+                }),
+              ]}),
+            ]}),
+        ]});
+      })(),
+      /* TABLEAU — 2 colonnes, tri par rang croissant */
+      d === "tableau" && n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8},children:[
+        s.length===0&&n.jsx("div",{style:{gridColumn:"1/-1",textAlign:"center",padding:"32px",color:"#9CA3AF",fontSize:13},children:"Aucun mot-clé — ajoutez un mot-clé SEO pour commencer"}),
+        ...[...s].sort((a,b)=>{
+          const pa = x(a.kw).at(-1)?.position ?? (a.position||999);
+          const pb = x(b.kw).at(-1)?.position ?? (b.position||999);
+          return pa - pb;
+        }).map(h => {
+          const pts = x(h.kw);
+          const lastPos = pts.length>0?pts[pts.length-1]?.position:h.position;
+          const prevPos = pts.length>1?pts[pts.length-2]?.position:null;
+          const trend = prevPos&&lastPos ? prevPos-lastPos : 0;
+          return n.jsxs("div",{key:h.kw,style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",padding:"10px 12px",display:"flex",alignItems:"center",gap:10,borderLeft:"3px solid "+rCol(lastPos)},children:[
+            n.jsxs("div",{style:{width:46,height:46,borderRadius:9,background:rBg(lastPos),display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0},children:[
+              n.jsxs("div",{style:{fontSize:16,fontWeight:900,color:rCol(lastPos),lineHeight:1},children:["#",lastPos||"?"]}),
+              trend!==0&&n.jsxs("div",{style:{fontSize:9,fontWeight:700,color:trend>0?"#059669":"#DC2626"},children:[trend>0?"↑":"↓",Math.abs(trend)]}),
+            ]}),
+            n.jsxs("div",{style:{flex:1,minWidth:0},children:[
+              n.jsxs("div",{style:{fontWeight:700,fontSize:12,color:"#1E1B30",display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"},children:[
+                n.jsx("span",{children:h.kw}),
+                h.fromMap&&n.jsx("span",{style:{background:"#E0E7FF",color:"#3730A3",borderRadius:4,padding:"1px 4px",fontSize:9,fontWeight:700,flexShrink:0},children:"🗺️"}),
+                !h.fromMap&&n.jsx("span",{style:{background:"#F3F4F6",color:"#6B7280",borderRadius:4,padding:"1px 4px",fontSize:9,flexShrink:0},children:"🤖"}),
+              ]}),
+              n.jsxs("div",{style:{fontSize:10,color:"#9CA3AF",marginTop:2},children:[
+                pts.length>0?pts.length+" scan"+(pts.length>1?"s":""):"Pas de scan",
+                pts[pts.length-1]?.date?" · "+new Date(pts[pts.length-1].date).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):"",
+              ]}),
+            ]}),
+          ]});
         }),
+      ]}),
     ],
   });
 }
@@ -14422,8 +15170,8 @@ function AuditResultCard({ data: e, client: t, ext: i, score: r }) {
       n.jsx("div", {
         style: {
           fontWeight: 800,
-          fontSize: 18,
-          color: "var(--ink)",
+          fontSize: 16,
+          color: "#1E1B30",
           marginBottom: 2,
         },
         children: "Analyse concurrentielle",
@@ -15015,7 +15763,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
           }),
           n.jsx("div", {
             style: { fontSize: 13 },
-            children: "Lancez un audit IA pour générer la roadmap 3 mois.",
+            children: "Lancez un audit pour générer la roadmap 3 mois.",
           }),
         ],
       })
@@ -15029,15 +15777,12 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
               marginBottom: 16,
             },
             children: [
-              n.jsxs("div", {
+              n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:0 }, children:[
+                n.jsx("div", { style:{ width:4, height:24, borderRadius:2, background:"linear-gradient(135deg,var(--indigo2),#C03080)", marginRight:12, flexShrink:0 } }),
+                n.jsxs("div", {
                 children: [
                   n.jsx("div", {
-                    style: {
-                      fontFamily: "var(--serif)",
-                      fontSize: 24,
-                      fontWeight: 800,
-                      marginBottom: 2,
-                    },
+                    style: { fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 2 },
                     children: "Roadmap 3 mois",
                   }),
                   n.jsx("div", {
@@ -15046,6 +15791,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                   }),
                 ],
               }),
+              ]}),
               n.jsx("button", {
                 onClick: () => (s ? p() : l(!0)),
                 style: {
@@ -15065,6 +15811,44 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
               }),
             ],
           }),
+          (() => {
+            const CMr = new Date().toISOString().slice(0,7);
+            const posts = (t.publishedPosts || []).filter(p2 => p2.date && p2.date.slice(0,7) === CMr);
+            const photosCount = posts.reduce((acc,p2)=>acc+(p2.photoCount || (p2.photoUrl ? 1 : 0)),0);
+            const recentAvis = ((t.avisData || {}).recentAvis || []);
+            const avisEnAttente = recentAvis.filter(a => !a.reponse).length;
+            const totalAvis = recentAvis.length;
+            const kwTracked = Object.keys(t.geoGrid || {}).filter(k => k !== "center").length || (((t.data||{}).keywords||{}).primary||[]).length;
+            const items = [
+              { icon:"📝", label:"Posts publiés ce mois", value: posts.length, target: 4, unit:"" },
+              { icon:"🖼️", label:"Photos publiées ce mois", value: photosCount, target: 10, unit:"" },
+              { icon:"⭐", label:"Avis en attente de réponse", value: avisEnAttente, target: 0, unit:"", inverse: true, sub: totalAvis ? `${totalAvis - avisEnAttente}/${totalAvis} avis traités` : null },
+              { icon:"🔍", label:"Mots-clés suivis", value: kwTracked, target: null, unit:"" },
+            ];
+            return n.jsxs("div",{className:"card",style:{marginBottom:14,borderTop:"4px solid #6D5BD0"},children:[
+              n.jsxs("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:6},children:[
+                n.jsxs("div",{children:[
+                  n.jsx("div",{style:{fontSize:14,fontWeight:800,color:"var(--ink)"},children:"📋 Engagements du mois — Forfait Leader Local"}),
+                  n.jsx("div",{style:{fontSize:11.5,color:"var(--ink4)",marginTop:2},children:"Suivi en temps réel des livrables inclus dans l'abonnement mensuel"}),
+                ]}),
+                n.jsx("span",{style:{fontSize:10.5,fontWeight:700,color:"#6D5BD0",background:"#F4F2FE",borderRadius:8,padding:"4px 10px"},children:"Leader Local"}),
+              ]}),
+              n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10},children:
+                items.map((it,idx) => {
+                  const ok = it.target == null ? null : (it.inverse ? it.value <= it.target : it.value >= it.target);
+                  const color = ok == null ? "#6B7280" : (ok ? "#059669" : "#d97706");
+                  const bg = ok == null ? "#F9FAFB" : (ok ? "#F0FDF4" : "#FFFBEB");
+                  return n.jsxs("div",{key:idx,style:{background:bg,borderRadius:10,padding:"10px 12px"},children:[
+                    n.jsx("div",{style:{fontSize:11,color:"#6B7280",fontWeight:600,marginBottom:4},children:it.icon+" "+it.label}),
+                    n.jsxs("div",{style:{fontSize:18,fontWeight:800,color},children:[it.value, it.target!=null ? n.jsxs("span",{style:{fontSize:12,fontWeight:600,color:"#9CA3AF"},children:[" / ", it.target]}) : null]}),
+                    it.sub && n.jsx("div",{style:{fontSize:10.5,color:"#9CA3AF",marginTop:2},children:it.sub}),
+                    ok != null && n.jsx("div",{style:{fontSize:10.5,fontWeight:700,color,marginTop:3},children: ok ? "✓ Objectif atteint" : "À poursuivre ce mois-ci"}),
+                  ]});
+                }),
+              }),
+              n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:10},children:"Inclus également ce mois-ci : optimisation continue de la fiche, veille concurrentielle, rapport mensuel PDF (onglet Suivi mensuel) et accès WhatsApp prioritaire sous 3h."}),
+            ]});
+          })(),
           n.jsx("div", {
             style: {
               display: "grid",
@@ -15561,7 +16345,9 @@ function ClientDetail({
   sectorBenchmark: d,
   googleApiKey,
 }) {
-  const [p, b] = D.useState("overview"),
+  const [p, b] = D.useState(() => {
+    try { return localStorage.getItem(`bto_tab_${e.id}`) || "overview"; } catch { return "overview"; }
+  }),
     [x, j] = D.useState(0),
     [I, z] = D.useState(null),
     [g, h] = D.useState(null),
@@ -15601,7 +16387,7 @@ function ClientDetail({
       setEnabledOptional(next);
       const updated = t.map(cl => cl.id === e.id ? { ...cl, enabledOptionalTasks: next } : cl);
       i(updated);
-      e.enabledOptionalTasks = next;
+      // pas de mutation directe de e — la mise à jour via i() suffit
     };
   const X = (Q) => {
       const newVal = !T[Q];
@@ -15610,20 +16396,18 @@ function ClientDetail({
       const newOverrides = { ...(e.manualOverrides || {}), [Q]: newVal ? !0 : !1 };
       const Y = t.map((ee) => ee.id === e.id ? { ...ee, tasksDone: Z, manualOverrides: newOverrides } : ee);
       i(Y);
-      e.tasksDone = Z;
-      e.manualOverrides = newOverrides;
+      // pas de mutation directe de e — la mise à jour via i() suffit
     },
     te = [
       { id: "overview", label: "Résumé" },
       { id: "tasks", label: `Tâches (${y}/${V.length})` },
       { id: "fiche", label: "Fiche & Services" },
       { id: "posts", label: "Publications" },
-      { id: "avis", label: "⭐ Avis" },
+      { id: "avis", label: "Avis" },
       { id: "visibilite", label: "Visibilité" },
-      { id: "performance", label: "Évolution" },
       { id: "roadmap", label: "Roadmap" },
-      { id: "temps", label: "⏱ Temps" },
-      { id: "suivi", label: "📅 Suivi mensuel" },
+      { id: "temps", label: "Temps" },
+      { id: "suivi", label: "Suivi mensuel" },
     ];
   return n.jsxs("div", {
     style: { display: "flex", flexDirection: "column", height: "100vh" },
@@ -15654,170 +16438,25 @@ function ClientDetail({
               n.jsx("div", {
                 style: { width: 1, height: 20, background: "var(--border)" },
               }),
-              n.jsx("div", {
-                style: {
-                  width: 32,
-                  height: 32,
-                  borderRadius: 9,
-                  background: (e.color || "var(--indigo)") + "18",
-                  border: `1.5px solid ${e.color || "var(--indigo)"}33`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 15,
-                  flexShrink: 0,
-                },
-                children: e.icon || "📍",
-              }),
-              n.jsxs("div", {
-                children: [
-                  n.jsx("div", {
-                    style: {
-                      ...ke,
-                      fontSize: 16,
-                      color: "var(--ink)",
-                      lineHeight: 1.2,
-                      letterSpacing: "-.01em",
-                    },
-                    children: e.name,
-                  }),
-                  (e.city || e.category) &&
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 11,
-                        color: "var(--ink4)",
-                        marginTop: 1,
-                      },
-                      children: [e.city, e.category]
-                        .filter(Boolean)
-                        .join(" · "),
-                    }),
-                ],
-              }),
-              n.jsxs("div", {
-                style: {
-                  marginLeft: "auto",
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "center",
-                },
-                children: [
-                  $ !== null &&
-                    n.jsxs("span", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color:
-                          $ > 0 ? "#059669" : $ < 0 ? "#dc2626" : "#94a3b8",
-                        background:
-                          $ > 0 ? "#f0fdf4" : $ < 0 ? "#fef2f2" : "#F4F5FA",
-                        border: `1px solid ${$ > 0 ? "#BBF7D0" : $ < 0 ? "#fecaca" : "#E5E7EB"}`,
-                        borderRadius: 20,
-                        padding: "3px 10px",
-                      },
-                      children: [$ > 0 ? "+" : "", $, " pts"],
-                    }),
-                  Object.keys(e.manualOverrides || {}).length > 0 &&
-                    n.jsxs("span", {
-                      style: {
-                        fontSize: 10.5,
-                        fontWeight: 700,
-                        color: "#E85A30",
-                        background: "#FFF7ED",
-                        border: "1px solid #FED7AA",
-                        borderRadius: 20,
-                        padding: "3px 10px",
-                      },
-                      children: [
-                        "✏️ ",
-                        Object.keys(e.manualOverrides).length,
-                        " corrections",
-                      ],
-                    }),
-                  n.jsxs("div", {
-                    style: {
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      background: U.bg,
-                      border: `1.5px solid ${U.border}`,
-                      borderRadius: 20,
-                      padding: "5px 14px",
-                    },
-                    children: [
-                      n.jsx("div", {
-                        style: {
-                          width: 7,
-                          height: 7,
-                          borderRadius: "50%",
-                          background: U.color,
-                          flexShrink: 0,
-                        },
-                      }),
-                      n.jsxs("span", {
-                        style: {
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: U.color,
-                        },
-                        children: [_, "/100"],
-                      }),
-                      n.jsx("span", {
-                        style: {
-                          fontSize: 11,
-                          color: U.color,
-                          opacity: 0.7,
-                          fontWeight: 500,
-                        },
-                        children: U.label,
-                      }),
-                    ],
-                  }),
-                  // Badge Google dans l'en-tête client (affiché seulement si connecté)
-                  e.googleTokens?.access_token && n.jsxs("span", {
-                    style: { display:"flex", alignItems:"center", gap:5, background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:20, padding:"4px 12px", fontSize:11, fontWeight:700, color:"#065F46" },
-                    children: [
-                      n.jsx("span",{style:{width:7,height:7,borderRadius:"50%",background:"#22C55E",display:"inline-block"}}),
-                      "Google connecté",
-                    ]
-                  }),
-                  n.jsx("button", {
-                    className: "btn-ghost",
-                    onClick: () => B(!0),
-                    style: { fontSize: 12, padding: "6px 12px" },
-                    children: "✏️ Modifier",
-                  }),
-                  n.jsx("button", {
-                    onClick: () => m(!0),
-                    style: {
-                      padding: "8px 18px",
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      borderRadius: 9,
-                      border: "none",
-                      background:
-                        "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                      color: "white",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    },
-                    children: "↺ Nouvel audit",
-                  }),
-                  n.jsx(PostsIATab, {
-                    client: e,
-                    history: W,
-                    score: _,
-                    ll: U,
-                    ok: G,
-                    failed: V,
-                    calcScore: s,
-                    setShowReport: c,
-                  }),
-                ],
-              }),
+              // Icône + nom + ville
+              n.jsx("div", { style:{ width:36,height:36,borderRadius:10,background:(e.color||"var(--indigo)")+"18",border:`1.5px solid ${e.color||"var(--indigo)"}33`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0 }, children: e.icon||"📍" }),
+              n.jsxs("div", { style:{ minWidth:0 }, children:[
+                n.jsx("div", { style:{ fontSize:15,fontWeight:800,color:"var(--ink)",lineHeight:1.2,letterSpacing:"-.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }, children: e.name }),
+                n.jsx("div", { style:{ fontSize:11,color:"var(--ink4)",marginTop:1 }, children: [e.city,e.category].filter(Boolean).join(" · ") }),
+              ]}),
+              // Score compact
+              n.jsxs("div", { style:{ display:"flex",alignItems:"center",gap:4,background:U.bg,border:`1.5px solid ${U.border}`,borderRadius:10,padding:"5px 12px",flexShrink:0 }, children:[
+                n.jsxs("span", { style:{ fontSize:15,fontWeight:900,color:U.color }, children:[_,n.jsx("span",{style:{fontSize:11,fontWeight:400,opacity:.6},children:"/100"})] }),
+                n.jsx("span", { style:{ fontSize:11,color:U.color,fontWeight:700,opacity:.8 }, children: U.label }),
+                $ !== null && $ !== 0 && n.jsxs("span", { style:{ fontSize:10,fontWeight:700,color:$>0?"#059669":"#dc2626",background:$>0?"#F0FDF4":"#FEF2F2",borderRadius:20,padding:"1px 6px",marginLeft:2 }, children:[$>0?"↑ +":"↓ ",$," pts"] }),
+              ]}),
+              // Google badge compact
+              e.googleTokens?.access_token && n.jsx("div", { style:{ width:8,height:8,borderRadius:"50%",background:"#22C55E",flexShrink:0 }, title:"Google connecté" }),
+              // Actions à droite
+              n.jsxs("div", { style:{ marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexShrink:0 }, children:[
+                n.jsx(PostsIATab, { client:e, history:W, score:_, ll:U, ok:G, failed:V, calcScore:s, setShowReport:c }),
+                n.jsx("button", { onClick:()=>m(!0), style:{ padding:"7px 16px",fontSize:12,fontWeight:700,borderRadius:8,border:"none",background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }, children:"↺ Nouvel audit" }),
+              ]}),
             ],
           }),
           n.jsxs("div", {
@@ -15880,8 +16519,7 @@ function ClientDetail({
                     "button",
                     {
                       className: `tab ${p === Q.id ? "on" : ""}`,
-                      onClick: () => b(Q.id),
-                      style: { fontSize: 12, padding: "6px 14px" },
+                      onClick: () => { b(Q.id); try { localStorage.setItem(`bto_tab_${e.id}`, Q.id); } catch {} },
                       children: Q.label,
                     },
                     Q.id,
@@ -15901,8 +16539,8 @@ function ClientDetail({
         },
         className: "fade",
         children: [
-          p === "overview" &&
-            n.jsxs("div", {
+
+          p === "overview" && n.jsxs("div", {
               className: "fade",
               children: [
                 n.jsxs("div", {
@@ -16545,8 +17183,8 @@ function ClientDetail({
                             children: "✨",
                           }),
                           n.jsx("div", {
-                            style: { ...ke, fontSize: 19 },
-                            children: "Analyse IA",
+                            style: { fontSize: 16, fontWeight: 800, color: "#1E1B30" },
+                            children: "Analyse & Recommandations",
                           }),
                         ],
                       }),
@@ -16663,7 +17301,7 @@ function ClientDetail({
                         },
                         children: [
                           n.jsx("div", {
-                            style: { ...ke, fontSize: 19 },
+                            style: { fontSize: 16, fontWeight: 800, color: "#1E1B30" },
                             children: "🎯 Actions prioritaires",
                           }),
                           n.jsx("button", {
@@ -16754,15 +17392,8 @@ function ClientDetail({
                   }),
               ],
             }),
-          p === "performance" &&
-            n.jsx(InfosTab, {
-              client: e,
-              clients: t,
-              upd: i,
-              calcScore: s,
-              getLvl: o,
-            }),
           p === "suivi" &&
+            n.jsx("div", { style:{ margin:"-24px -30px", height:"calc(100% + 48px)" }, children:
             n.jsx(ErrorBoundary, {
               children: n.jsx(MonthlyTab, {
                 client: e,
@@ -16770,6 +17401,7 @@ function ClientDetail({
                 upd: i,
                 calcScore: s,
               }),
+            }),
             }),
           p === "tasks" &&
             n.jsxs("div", {
@@ -16782,39 +17414,34 @@ function ClientDetail({
                     marginBottom: 18,
                   },
                   children: [
-                    n.jsxs("div", {
-                      children: [
-                        n.jsx("div", {
-                          style: { ...ke, fontSize: 24, marginBottom: 2 },
-                          children: "Suivi des tâches & Critères",
-                        }),
-                        n.jsx("div", {
-                          style: { fontSize: 12.5, color: "var(--ink4)" },
-                          children:
-                            "Vert = critère OK · Cases à cocher = actions à réaliser",
-                        }),
-                      ],
-                    }),
-                    n.jsxs("div", {
-                      style: {
-                        background:
-                          "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                        borderRadius: 12,
-                        padding: "10px 18px",
-                        textAlign: "center",
-                        color: "#fff",
-                      },
-                      children: [
-                        n.jsxs("div", {
-                          style: { fontSize: 22, fontWeight: 800 },
-                          children: [O, "%"],
-                        }),
-                        n.jsx("div", {
-                          style: { fontSize: 10.5, opacity: 0.8 },
-                          children: "progression",
-                        }),
-                      ],
-                    }),
+                    n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:0 }, children:[
+                      n.jsx("div", { style:{ width:4, height:28, borderRadius:2, background:"linear-gradient(135deg,var(--indigo2),#C03080)", marginRight:14, flexShrink:0 } }),
+                      n.jsxs("div", { children:[
+                        n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"var(--ink)", marginBottom:2 }, children:"Suivi des tâches & Critères" }),
+                        n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)" }, children:"Vert = critère OK · Cases à cocher = actions à réaliser" }),
+                      ]}),
+                    ]}),
+                    n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
+                      n.jsx("button", {
+                        className: "btn-ghost",
+                        onClick: () => B(!0),
+                        style: { fontSize: 12, padding: "7px 14px" },
+                        children: "✏️ Modifier",
+                      }),
+                      n.jsxs("div", {
+                        style: {
+                          background: "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
+                          borderRadius: 12,
+                          padding: "10px 18px",
+                          textAlign: "center",
+                          color: "#fff",
+                        },
+                        children: [
+                          n.jsxs("div", { style: { fontSize: 22, fontWeight: 800 }, children: [O, "%"] }),
+                          n.jsx("div", { style: { fontSize: 10.5, opacity: 0.8 }, children: "progression" }),
+                        ],
+                      }),
+                    ]}),
                   ],
                 }),
                 n.jsx("div", {
@@ -17053,12 +17680,14 @@ function ClientDetail({
               children: n.jsx(HistoriqueTab, { data: P, client: e, clients: t, upd: i }),
             }),
           p === "posts" &&
-            n.jsx(PublicationsTab, {
-              client: e,
-              clients: t,
-              upd: i,
-              hasEnvKey: r,
-              apiKey: a,
+            n.jsx("div", { style:{ margin:"-24px -30px", height:"calc(100% + 48px)" }, children:
+              n.jsx(PublicationsTab, {
+                client: e,
+                clients: t,
+                upd: i,
+                hasEnvKey: r,
+                apiKey: a,
+              })
             }),
           p === "posts_old_disabled" &&
             n.jsxs("div", {
@@ -17311,7 +17940,7 @@ function PostsTab({
     [z, g] = D.useState({ note: 5, texte: "" }),
     [h, f] = D.useState(!1),
     [c, u] = D.useState(null),
-    [m, C] = D.useState("google_live"),
+    [m, C] = D.useState("repondre"),
     [B, k] = D.useState(!1),
     [R, N] = D.useState(
       () => localStorage.getItem(`avis_sig_${e.id}`) || `${e.name || ""}`,
@@ -17331,13 +17960,24 @@ function PostsTab({
     [generatingLiveReply, setGeneratingLiveReply] = D.useState(false),
     [publishingLiveReply, setPublishingLiveReply] = D.useState(false),
     [liveReplySuccess, setLiveReplySuccess] = D.useState(null),
+    // Générateur de réponses manuel
+    [replyAvisText, setReplyAvisText] = D.useState(""),
+    [replyNote, setReplyNote] = D.useState(5),
+    [replyAuthor, setReplyAuthor] = D.useState(""),
+    [replyVouvoie, setReplyVouvoie] = D.useState(true),
+    [replyResult, setReplyResult] = D.useState(""),
+    [replyLoading, setReplyLoading] = D.useState(false),
+    [replyCopied, setReplyCopied] = D.useState(false),
+    // Stats mensuelles manuelles
+    [monthlyStats, setMonthlyStats] = D.useState(() => { try { return JSON.parse(localStorage.getItem(`bto_monthly_stats_${e.id}`)||"[]"); } catch { return []; } }),
+    [statsForm, setStatsForm] = D.useState({ mois: new Date().toISOString().slice(0,7), note:"", nbAvis:"", appels:"", vues:"", clics:"", tauxReponse:"" }),
     P = parseFloat(b.note || a.rating || 0),
     T = parseInt(b.totalAvis || a.reviewCount || 0),
     _ = parseInt(b.responseRate || d.responseRate || 0),
     U = b.lienGoogle || "",
     V = () => {
       const v = t.map((A) => (A.id === e.id ? { ...A, avisData: b } : A));
-      (i(v), (e.avisData = b), I(!1));
+      (i(v), I(!1));
     },
     G = (v) => {
       const A = B,
@@ -17430,7 +18070,7 @@ Rédige la réponse.`,
           const he = t.map((de) =>
             de.id === e.id ? { ...de, avisData: oe } : de,
           );
-          (i(he), (e.avisData = oe));
+          i(he);
         } catch {}
         f(null);
       }
@@ -17507,7 +18147,7 @@ Rédige la réponse.`,
       };
       x(v);
       const A = t.map((q) => (q.id === e.id ? { ...q, avisData: v } : q));
-      (i(A), (e.avisData = v), g({ note: 5, texte: "" }));
+      (i(A), g({ note: 5, texte: "" }));
     },
     H =
       P >= 4.5
@@ -17727,436 +18367,187 @@ Rédige la réponse.`,
           background: "#F4F5FA",
           borderRadius: 10,
           padding: 4,
-          width: "fit-content",
+          width: "100%",
           border: "1px solid #E5E7EB",
         },
         children: [
-          { id: "google_live", l: e.gmbLocationName ? "🔴 Avis Google" : "⭐ Avis Google" },
-          { id: "collecter", l: "🔗 Collecter" },
+          { id: "repondre", l: "✍️ Répondre" },
           { id: "analyse", l: "📊 Analyse" },
         ].map((v) =>
-          n.jsx(
-            "button",
-            {
-              onClick: () => C(v.id),
-              style: {
-                padding: "7px 16px",
-                borderRadius: 8,
-                border: "none",
-                fontFamily: "inherit",
-                fontSize: 12.5,
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all .15s",
-                background: m === v.id ? "white" : "transparent",
-                color: m === v.id ? "#1E1B30" : "#6B7280",
-                boxShadow: m === v.id ? "0 1px 4px rgba(0,0,0,.08)" : "none",
-              },
-              children: v.l,
+          n.jsx("button", {
+            key: v.id,
+            onClick: () => C(v.id),
+            style: {
+              flex: 1,
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "none",
+              fontFamily: "inherit",
+              fontSize: 12.5,
+              fontWeight: m === v.id ? 700 : 500,
+              cursor: "pointer",
+              transition: "all .15s",
+              background: m === v.id ? "white" : "transparent",
+              color: m === v.id ? "#1E1B30" : "#6B7280",
+              boxShadow: m === v.id ? "0 1px 4px rgba(0,0,0,.1)" : "none",
+              textAlign: "center",
             },
-            v.id,
-          ),
+            children: v.l,
+          }, v.id),
         ),
       }),
-      m === "google_live" && n.jsxs("div", { className: "fade", children: [
-        // Header
-        n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }, children:[
-          n.jsxs("div", { children:[
-            n.jsx("div", { style:{ fontSize:15, fontWeight:800, color:"#1E1B30", marginBottom:3 }, children:"🔴 Avis Google en direct" }),
-            n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children: e.gmbLocationName ? "Chargez les avis depuis votre fiche Google Business" : "Connectez Google et liez votre fiche pour accéder aux avis en direct." }),
-          ]}),
-          e.gmbLocationName && n.jsx("button", {
-            onClick: fetchLiveReviews,
-            disabled: loadingLiveReviews,
-            style:{ background: loadingLiveReviews ? "#E5E7EB" : "linear-gradient(135deg,#4285F4,#34A853)", color: loadingLiveReviews ? "#9CA3AF":"white", border:"none", borderRadius:9, padding:"9px 18px", fontSize:13, fontWeight:700, cursor: loadingLiveReviews ? "not-allowed":"pointer", fontFamily:"inherit" },
-            children: loadingLiveReviews ? "⏳ Chargement…" : "🔄 Charger les avis",
-          }),
-        ]}),
-        !e.gmbLocationName && n.jsxs("div", { style:{ background:"#FFF7ED", border:"1.5px solid #FED7AA", borderRadius:12, padding:"24px", textAlign:"center" }, children:[
-          n.jsx("div", { style:{ fontSize:32, marginBottom:8 }, children:"🔗" }),
-          n.jsx("div", { style:{ fontSize:14, fontWeight:700, color:"#92400E", marginBottom:6 }, children:"Fiche Google non liée" }),
-          n.jsx("div", { style:{ fontSize:12, color:"#B45309" }, children:"Allez dans Suivi mensuel → lier votre fiche Google pour accéder aux avis en direct." }),
-        ]}),
-        liveReviewError && n.jsx("div", { style:{ background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13, color:"#DC2626", fontWeight:600 }, children: "⚠️ " + liveReviewError }),
-        liveReplySuccess && n.jsx("div", { style:{ background:"#D1FAE5", border:"1px solid #6EE7B7", borderRadius:10, padding:"12px 16px", marginBottom:14, fontSize:13, color:"#065F46", fontWeight:700 }, children:"✅ Réponse publiée sur Google avec succès !" }),
-        liveGoogleReviews && n.jsxs("div", { children:[
-          // Stats + filtre mois
-          (() => {
-            const allRvs = liveGoogleReviews.reviews || [];
-            const nowYM = new Date().toISOString().slice(0,7);
-            const thisMonthRvs = allRvs.filter(r => (r.date||"").slice(0,7) === nowYM);
-            const noReply = allRvs.filter(r=>!r.reply).length;
-            return n.jsxs("div", { children:[
-              n.jsxs("div", { style:{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap" }, children:[
-                { label:"Note moyenne", value: liveGoogleReviews.averageRating ? parseFloat(liveGoogleReviews.averageRating).toFixed(1)+"⭐" : "—", col:"#d97706", bg:"#FFFBEB" },
-                { label:"Total avis", value: liveGoogleReviews.totalReviewCount || allRvs.length, col:"#6B40D8", bg:"#F5F3FF" },
-                { label:"Ce mois", value: thisMonthRvs.length, col:"#059669", bg:"#F0FDF4" },
-                { label:"Sans réponse", value: noReply, col:"#DC2626", bg:"#FEF2F2" },
-              ].map(s => n.jsxs("div", { key:s.label, style:{ background:s.bg, border:`1px solid ${s.col}30`, borderRadius:10, padding:"10px 18px", display:"flex", gap:10, alignItems:"center" }, children:[
-                n.jsx("div", { style:{ fontSize:20, fontWeight:900, color:s.col }, children:s.value }),
-                n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:s.label }),
-              ]})),
-              }),
-              // Nouveaux avis du mois en haut
-              thisMonthRvs.length > 0 && n.jsxs("div", { style:{ background:"#F0FDF4", border:"1.5px solid #BBF7D0", borderRadius:12, padding:"12px 16px", marginBottom:14 }, children:[
-                n.jsx("div", { style:{ fontSize:12, fontWeight:700, color:"#065F46", marginBottom:10 }, children:`✨ ${thisMonthRvs.length} nouvel${thisMonthRvs.length>1?"s":""} avis ce mois` }),
-                n.jsx("div", { style:{ fontSize:11, color:"#6B7280" }, children:"Ces avis sont également visibles dans la liste complète ci-dessous." }),
-              ]}),
-            ]});
-          })(),
-          // Liste avis complète (les plus récents en premier)
-          n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:12 }, children:
-            (liveGoogleReviews.reviews||[]).map((rv,ri) => {
-              const stars = "⭐".repeat(rv.rating||0);
-              const isReplying = replyingToLive === ri;
-              return n.jsxs("div", {
-                key:rv.reviewId||ri,
-                style:{ background:"white", border: !rv.reply ? "2px solid #FCA5A5" : "1px solid #E5E7EB", borderRadius:14, padding:"16px 18px", position:"relative" },
-                children:[
-                  !rv.reply && n.jsx("div", { style:{ position:"absolute", top:-8, right:12, background:"#DC2626", color:"white", fontSize:10, fontWeight:700, borderRadius:8, padding:"2px 8px" }, children:"Sans réponse" }),
-                  n.jsxs("div", { style:{ display:"flex", gap:12, alignItems:"flex-start", marginBottom:10 }, children:[
-                    n.jsx("div", { style:{ width:36, height:36, borderRadius:"50%", background:"#F3F4F6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }, children: rv.profilePhoto ? n.jsx("img",{src:rv.profilePhoto,style:{width:36,height:36,borderRadius:"50%",objectFit:"cover"}}) : "👤" }),
-                    n.jsxs("div", { style:{ flex:1 }, children:[
-                      n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }, children:[
-                        n.jsx("span", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children: rv.author }),
-                        n.jsx("span", { style:{ fontSize:13 }, children: stars }),
-                        n.jsx("span", { style:{ fontSize:11, color:"#9CA3AF" }, children: rv.date ? new Date(rv.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"}) : "" }),
-                      ]}),
-                      rv.text && n.jsx("div", { style:{ fontSize:13, color:"#374151", lineHeight:1.6, marginTop:6 }, children: rv.text }),
-                    ]}),
-                  ]}),
-                  rv.reply && n.jsxs("div", { style:{ background:"#F0FDF4", borderRadius:10, padding:"10px 14px", marginBottom:8, borderLeft:"3px solid #22C55E" }, children:[
-                    n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#065F46", marginBottom:4 }, children:"✅ Votre réponse" }),
-                    n.jsx("div", { style:{ fontSize:12.5, color:"#374151", lineHeight:1.5 }, children: rv.reply }),
-                  ]}),
-                  !rv.reply && n.jsxs("div", { children:[
-                    !isReplying && n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
-                      n.jsx("button", {
-                        onClick:()=>{ setReplyingToLive(ri); setLiveReplyText(""); },
-                        style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
-                        children:"✍️ Répondre",
-                      }),
-                    ]}),
-                    isReplying && n.jsxs("div", { style:{ marginTop:8 }, children:[
-                      n.jsx("textarea", {
-                        value: liveReplyText,
-                        onChange: ev => setLiveReplyText(ev.target.value),
-                        rows:4,
-                        placeholder:"Votre réponse…",
-                        style:{ width:"100%", border:"1.5px solid #D1D5DB", borderRadius:9, padding:"10px", fontSize:13, fontFamily:"inherit", resize:"vertical", lineHeight:1.5, boxSizing:"border-box", marginBottom:8 },
-                      }),
-                      n.jsxs("div", { style:{ display:"flex", gap:8, flexWrap:"wrap" }, children:[
-                        n.jsx("button", {
-                          onClick:()=>generateLiveReply(rv),
-                          disabled: generatingLiveReply,
-                          style:{ background: generatingLiveReply?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color: generatingLiveReply?"#9CA3AF":"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor: generatingLiveReply?"not-allowed":"pointer", fontFamily:"inherit" },
-                          children: generatingLiveReply ? "⏳ Génération…" : "✨ Générer IA",
-                        }),
-                        n.jsx("button", {
-                          onClick:()=>publishLiveReply(rv),
-                          disabled: publishingLiveReply || !liveReplyText.trim(),
-                          style:{ background: publishingLiveReply||!liveReplyText.trim()?"#E5E7EB":"linear-gradient(135deg,#4285F4,#34A853)", color: publishingLiveReply||!liveReplyText.trim()?"#9CA3AF":"white", border:"none", borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:700, cursor: publishingLiveReply||!liveReplyText.trim()?"not-allowed":"pointer", fontFamily:"inherit" },
-                          children: publishingLiveReply ? "⏳ Publication…" : "🚀 Publier sur Google",
-                        }),
-                        n.jsx("button", {
-                          onClick:()=>{ setReplyingToLive(null); setLiveReplyText(""); },
-                          style:{ background:"none", border:"1px solid #E5E7EB", borderRadius:8, padding:"7px 12px", fontSize:12, cursor:"pointer", color:"#6B7280", fontFamily:"inherit" },
-                          children:"Annuler",
-                        }),
-                      ]}),
-                    ]}),
-                  ]}),
-                ],
-              });
-            })
-          }),
-        ]}),
-      ]}),
+      m === "repondre" && (() => {
+        const apiKeyLocal = o || localStorage.getItem("bto_apikey") || "";
+        const SEO_KWS = [...(e.data?.keywords?.primary||[]).map(k=>k.kw||k), ...(e.data?.keywords?.secondary||[]).map(k=>k.kw||k), ...(customSeoKws||[])].filter(Boolean).slice(0,12);
+        const persistCustomSeoKws = (updated) => {
+          setCustomSeoKws(updated);
+          i(t.map(cl => cl.id === e.id ? { ...cl, avisData: { ...(cl.avisData||{}), customSeoKeywords: updated } } : cl));
+        };
+        const addCustomSeoKw = () => {
+          const v = newSeoKwInput.trim();
+          if (!v || customSeoKws.includes(v)) { setNewSeoKwInput(""); setShowAddSeoKw(false); return; }
+          persistCustomSeoKws([...customSeoKws, v]);
+          setNewSeoKwInput(""); setShowAddSeoKw(false);
+        };
+        const removeCustomSeoKw = (kw) => persistCustomSeoKws(customSeoKws.filter(k=>k!==kw));
+        const generateReply = async () => {
+          if (!apiKeyLocal || (!replyAvisText.trim() && !replyAuthor.trim())) return;
+          setReplyLoading(true); setReplyResult("");
+          try {
+            const tone = replyNote >= 4 ? "4 ou 5 étoiles : remerciement sincère, rebondis sur le positif." : replyNote === 3 ? "3 étoiles : remercie pour l'honnêteté, montre que le retour est pris en compte, reste positif sans être sur la défensive." : "1 ou 2 étoiles : empathie sincère, excuses mesurées, propose un contact direct pour résoudre.";
+            const vouv = replyVouvoie ? "Vouvoiement (vous)." : "Tutoiement (tu).";
+            const kwHint = SEO_KWS.length > 0 ? `\nMots-clés SEO à intégrer naturellement si pertinent : ${SEO_KWS.slice(0,5).join(", ")}` : "";
+            const sig = R || e.name || "";
+            const estabAddress = e.address || (e.data?.extracted?.address) || "";
+            const estabDesc = e.description || (e.data?.extracted?.description) || "";
+            const sys = `Tu es le gérant de ma fiche Google et tu réponds personnellement aux avis publiés par mes clients.
 
-      m === "collecter" &&
-        n.jsxs("div", {
-          children: [
-            n.jsxs("div", {
-              style: {
-                background: "white",
-                borderRadius: 12,
-                padding: "20px",
-                marginBottom: 14,
-                border: "1px solid #E5E7EB",
-                borderTop: "3px solid #6B40D8",
-              },
-              children: [
-                n.jsx("div", {
-                  style: {
-                    fontWeight: 700,
-                    fontSize: 14,
-                    color: "#1E1B30",
-                    marginBottom: 12,
-                  },
-                  children: "🔗 Lien direct vers vos avis Google",
+Règles de rédaction :
+- Commence chaque réponse par une salutation chaleureuse avec le prénom du client (ex : "Bonjour [prénom]", "Merci [prénom]").
+- Ne mentionne jamais la note, les étoiles ou le nombre d'étoiles.
+- N'utilise aucun markdown : ni gras, ni italique, ni listes à puces, ni titres, ni emojis
+- Évite les formules génériques type "Votre avis compte", "N'hésitez pas à revenir", "Votre satisfaction est notre priorité".
+- Reformule toujours avec tes propres mots, ne recopie jamais le commentaire mot pour mot.
+
+Structure d'une réponse :
+1. Ouverture personnalisée avec le prénom.
+2. Corps : rebondis sur un élément précis du commentaire (plat, service, personne, moment, ambiance). Si l'avis n'a pas de commentaire, fais une réponse courte (2-3 phrases) sans inventer de détail.
+3. Fermeture chaleureuse et variée : "À très bientôt", "Au plaisir de vous revoir", "Belle continuation à vous".
+
+Adapte le ton à la note :
+- ${tone}
+- ${vouv}
+- Termine par la signature : ${sig}
+${kwHint}
+
+Mon établissement :
+- Nom : ${e.name || ""}
+- Activité : ${e.category || ""}
+- Adresse : ${estabAddress}
+- Téléphone : ${(e.data?.extracted?.phone) || ""}
+- Site web : ${(e.data?.extracted?.website) || ""}
+- Description : ${estabDesc}`;
+            const userMsg = `Avis ${replyNote} étoiles${replyAuthor ? ` de ${replyAuthor}` : ""} :\n"${replyAvisText||"(aucun commentaire)"}"\n\nRédige la réponse à cet avis.`;
+            const res = await fetch("https://api.anthropic.com/v1/messages", {
+              method:"POST", headers:{"content-type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","x-api-key":apiKeyLocal},
+              body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,system:sys,messages:[{role:"user",content:userMsg}]}),
+            });
+            const data = await res.json();
+            setReplyResult(data?.content?.[0]?.text || "");
+          } catch { setReplyResult("Erreur — vérifiez votre clé API."); }
+          setReplyLoading(false);
+        };
+        return n.jsxs("div", { className:"fade", style:{display:"flex",flexDirection:"column",gap:14}, children:[
+          // Saisie de l'avis + critères
+          n.jsxs("div", { style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",borderTop:"3px solid #6B40D8",padding:"20px 22px"}, children:[
+            n.jsx("div", { style:{fontWeight:700,fontSize:14,color:"#1E1B30",marginBottom:14}, children:"📋 L'avis reçu" }),
+            // Ligne 1 : note + auteur + vouvoiement
+            n.jsxs("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}, children:[
+              n.jsxs("div", { children:[
+                n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Note" }),
+                n.jsx("select", { value:replyNote, onChange:ev=>setReplyNote(parseInt(ev.target.value)), className:"inp", style:{margin:0}, children:
+                  [5,4,3,2,1].map(n2=>n.jsx("option",{value:n2,children:`${n2} ⭐`},n2))
                 }),
-                U
-                  ? n.jsxs("div", {
-                      children: [
-                        n.jsxs("div", {
-                          style: { display: "flex", gap: 8, marginBottom: 14 },
-                          children: [
-                            n.jsx("input", {
-                              className: "inp",
-                              value: U,
-                              readOnly: !0,
-                              style: {
-                                flex: 1,
-                                fontSize: 12,
-                                color: "#6B7280",
-                                margin: 0,
-                              },
-                            }),
-                            n.jsx("button", {
-                              onClick: () => {
-                                (navigator.clipboard.writeText(U),
-                                  u("lien"),
-                                  setTimeout(() => u(null), 2e3));
-                              },
-                              style: {
-                                padding: "9px 16px",
-                                borderRadius: 8,
-                                border: "1px solid #E5E7EB",
-                                background: c === "lien" ? "#059669" : "white",
-                                color: c === "lien" ? "white" : "#374151",
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                fontWeight: 600,
-                                fontSize: 13,
-                                transition: "all .18s",
-                                flexShrink: 0,
-                              },
-                              children:
-                                c === "lien" ? "✓ Copié !" : "📋 Copier",
-                            }),
-                            n.jsx("a", {
-                              href: U,
-                              target: "_blank",
-                              rel: "noreferrer",
-                              style: {
-                                padding: "9px 16px",
-                                borderRadius: 8,
-                                border: "none",
-                                background:
-                                  "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                                color: "white",
-                                textDecoration: "none",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                flexShrink: 0,
-                              },
-                              children: "Ouvrir →",
-                            }),
-                          ],
-                        }),
-                        n.jsxs("div", {
-                          style: {
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 16,
-                          },
-                          children: [
-                            n.jsx("img", {
-                              src: `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(U)}`,
-                              alt: "QR Code",
-                              style: {
-                                width: 100,
-                                height: 100,
-                                borderRadius: 8,
-                                border: "1px solid #E5E7EB",
-                              },
-                            }),
-                            n.jsxs("div", {
-                              children: [
-                                n.jsx("div", {
-                                  style: {
-                                    fontWeight: 600,
-                                    fontSize: 13,
-                                    color: "#1E1B30",
-                                    marginBottom: 6,
-                                  },
-                                  children: "QR Code à imprimer",
-                                }),
-                                n.jsx("div", {
-                                  style: {
-                                    fontSize: 12.5,
-                                    color: "#6B7280",
-                                    lineHeight: 1.7,
-                                    marginBottom: 8,
-                                  },
-                                  children:
-                                    "Caisse, factures, cartes de visite — vos clients scannent et laissent un avis.",
-                                }),
-                                n.jsx("a", {
-                                  href: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(U)}`,
-                                  target: "_blank",
-                                  rel: "noreferrer",
-                                  style: {
-                                    fontSize: 12,
-                                    padding: "5px 12px",
-                                    borderRadius: 8,
-                                    border: "1px solid #E5E7EB",
-                                    background: "white",
-                                    color: "#6B40D8",
-                                    textDecoration: "none",
-                                    fontWeight: 600,
-                                  },
-                                  children: "⬇️ HD",
-                                }),
-                              ],
-                            }),
-                          ],
-                        }),
-                      ],
-                    })
-                  : n.jsxs("div", {
-                      style: {
-                        background: "#FFF7ED",
-                        borderRadius: 10,
-                        padding: "14px",
-                        border: "1px solid #FED7AA",
-                        fontSize: 13,
-                        color: "#92400e",
-                      },
-                      children: [
-                        "Configurez d'abord le lien Google dans ",
-                        n.jsx("strong", { children: "Configurer les KPIs" }),
-                        " (onglet Répondre aux avis).",
-                      ],
-                    }),
-              ],
-            }),
-            n.jsx("div", {
-              style: {
-                fontWeight: 700,
-                fontSize: 14,
-                color: "#1E1B30",
-                marginBottom: 12,
-              },
-              children: "📨 Templates de collecte",
-            }),
-            n.jsx("div", {
-              style: {
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-              },
-              children: [
-                {
-                  icon: "💬",
-                  label: "SMS",
-                  text: `Bonjour [Prénom] 👋
-
-Merci pour votre confiance !
-Votre avis nous aiderait beaucoup 🙏
-
-👉 ${U || "[lien]"}
-
-1 minute suffit — merci !`,
-                },
-                {
-                  icon: "📧",
-                  label: "Email",
-                  text: `Objet : Votre avis compte beaucoup pour nous ⭐
-
-Bonjour [Prénom],
-
-Nous espérons que vous êtes satisfait(e) de nos services. Un avis Google nous aiderait enormément à nous faire connaître.
-
-👉 ${U || "[lien]"}
-
-Merci !`,
-                },
-                {
-                  icon: "💚",
-                  label: "WhatsApp",
-                  text: `Bonjour [Prénom] 😊 Merci de nous avoir fait confiance ! Un petit avis Google ferait vraiment la différence 🙏 → ${U || "[lien]"}`,
-                },
-                {
-                  icon: "🧾",
-                  label: "Facture / Carte de visite",
-                  text: `Vous êtes satisfait(e) ?
-Laissez-nous un avis Google ⭐
-
-[QR Code]
-
-Merci de votre confiance !`,
-                },
-              ].map((v, A) =>
-                n.jsxs(
-                  "div",
-                  {
-                    style: {
-                      background: "white",
-                      borderRadius: 12,
-                      padding: "16px",
-                      border: "1px solid #E5E7EB",
-                    },
-                    children: [
-                      n.jsxs("div", {
-                        style: {
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 10,
-                        },
-                        children: [
-                          n.jsxs("div", {
-                            style: {
-                              fontWeight: 700,
-                              fontSize: 13,
-                              color: "#1E1B30",
-                            },
-                            children: [v.icon, " ", v.label],
-                          }),
-                          n.jsx("button", {
-                            onClick: () => {
-                              (navigator.clipboard.writeText(v.text),
-                                u(`tpl${A}`),
-                                setTimeout(() => u(null), 2e3));
-                            },
-                            style: {
-                              fontSize: 11.5,
-                              padding: "4px 10px",
-                              borderRadius: 7,
-                              border: "1px solid #E5E7EB",
-                              background: c === `tpl${A}` ? "#059669" : "white",
-                              color: c === `tpl${A}` ? "white" : "#374151",
-                              cursor: "pointer",
-                              fontFamily: "inherit",
-                              fontWeight: 600,
-                              transition: "all .18s",
-                            },
-                            children: c === `tpl${A}` ? "✓ Copié" : "Copier",
-                          }),
-                        ],
+              ]}),
+              n.jsxs("div", { children:[
+                n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Prénom du client" }),
+                n.jsx("input", { value:replyAuthor, onChange:ev=>setReplyAuthor(ev.target.value), className:"inp", placeholder:"ex : Jean", style:{margin:0} }),
+              ]}),
+              n.jsxs("div", { children:[
+                n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Ton de la réponse" }),
+                n.jsxs("div", { style:{display:"flex",gap:6}, children:[
+                  n.jsx("button", { onClick:()=>setReplyVouvoie(true), style:{flex:1,padding:"7px",borderRadius:7,border:`1.5px solid ${replyVouvoie?"#6B40D8":"#E5E7EB"}`,background:replyVouvoie?"#F5F3FF":"white",color:replyVouvoie?"#6B40D8":"#6B7280",fontWeight:replyVouvoie?700:500,fontSize:12,cursor:"pointer",fontFamily:"inherit"}, children:"Vouvoyer" }),
+                  n.jsx("button", { onClick:()=>setReplyVouvoie(false), style:{flex:1,padding:"7px",borderRadius:7,border:`1.5px solid ${!replyVouvoie?"#6B40D8":"#E5E7EB"}`,background:!replyVouvoie?"#F5F3FF":"white",color:!replyVouvoie?"#6B40D8":"#6B7280",fontWeight:!replyVouvoie?700:500,fontSize:12,cursor:"pointer",fontFamily:"inherit"}, children:"Tutoyer" }),
+                ]}),
+              ]}),
+            ]}),
+            // Signature
+            n.jsxs("div", { style:{marginBottom:12}, children:[
+              n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Signature" }),
+              n.jsx("input", { value:R, onChange:ev=>{N(ev.target.value);localStorage.setItem(`avis_sig_${e.id}`,ev.target.value);}, className:"inp", placeholder:`L'équipe ${e.name||""}`, style:{margin:0} }),
+            ]}),
+            // Texte avis
+            n.jsxs("div", { style:{marginBottom:12}, children:[
+              n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Texte de l'avis (collez ici)" }),
+              n.jsx("textarea", { value:replyAvisText, onChange:ev=>setReplyAvisText(ev.target.value), rows:3, placeholder:"Collez l'avis Google ici…", className:"inp", style:{margin:0,resize:"vertical",fontFamily:"inherit"} }),
+            ]}),
+            // Mots-clés SEO cliquables
+            n.jsxs("div", { style:{marginBottom:14}, children:[
+              n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:6}, children:"Mots-clés SEO à intégrer (cliquez pour ajouter dans la réponse)" }),
+              n.jsxs("div", { style:{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}, children:[
+                ...SEO_KWS.map(kw=>{
+                  const isCustom = customSeoKws.includes(kw);
+                  return n.jsxs("div", {
+                    key:kw,
+                    style:{display:"flex",alignItems:"center",gap:0,borderRadius:20,border:"1.5px solid #DDD6FE",background:"#F5F3FF",overflow:"hidden"},
+                    children:[
+                      n.jsx("button",{
+                        onClick:()=>setReplyAvisText(prev=>prev+(prev?" ":"")+kw),
+                        style:{padding: isCustom?"4px 4px 4px 10px":"4px 10px",border:"none",background:"transparent",color:"#6B40D8",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},
+                        children:kw,
                       }),
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 12,
-                          color: "#374151",
-                          lineHeight: 1.7,
-                          background: "#F4F5FA",
-                          borderRadius: 8,
-                          padding: "10px",
-                          whiteSpace: "pre-wrap",
-                          fontFamily: "monospace",
-                        },
-                        children: v.text,
+                      isCustom && n.jsx("button",{
+                        onClick:(ev)=>{ ev.stopPropagation(); removeCustomSeoKw(kw); },
+                        title:"Supprimer ce mot-clé",
+                        style:{padding:"4px 9px 4px 3px",border:"none",background:"transparent",color:"#A78BFA",fontSize:13,lineHeight:1,cursor:"pointer",fontFamily:"inherit"},
+                        children:"×",
                       }),
                     ],
-                  },
-                  A,
-                ),
-              ),
+                  }, kw);
+                }),
+                showAddSeoKw
+                  ? n.jsxs("div", { style:{display:"flex",gap:6,alignItems:"center"}, children:[
+                      n.jsx("input",{ value:newSeoKwInput, onChange:ev=>setNewSeoKwInput(ev.target.value), onKeyDown:ev=>ev.key==="Enter"&&addCustomSeoKw(), placeholder:"ex : poêle à bois Vannes", autoFocus:true, style:{padding:"4px 10px",borderRadius:20,border:"1.5px solid #DDD6FE",fontSize:11,fontFamily:"inherit",outline:"none",width:170} }),
+                      n.jsx("button",{ onClick:addCustomSeoKw, style:{padding:"4px 12px",borderRadius:20,border:"none",background:"#6B40D8",color:"white",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}, children:"Ajouter" }),
+                      n.jsx("button",{ onClick:()=>{setShowAddSeoKw(false);setNewSeoKwInput("");}, style:{padding:"4px 8px",borderRadius:20,border:"1px solid #E5E7EB",background:"white",color:"#9CA3AF",fontSize:11,cursor:"pointer",fontFamily:"inherit"}, children:"✕" }),
+                    ]})
+                  : n.jsx("button",{ onClick:()=>setShowAddSeoKw(true), style:{padding:"4px 12px",borderRadius:20,border:"1.5px dashed #a78bfa",background:"#faf5ff",color:"#7c3aed",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}, children:"＋ Ajouter un mot-clé" }),
+              ]}),
+            ]}),
+            n.jsx("button", {
+              onClick:generateReply, disabled:replyLoading||(!replyAvisText.trim()&&!replyAuthor.trim())||!apiKeyLocal,
+              style:{padding:"10px 24px",borderRadius:9,border:"none",background:replyLoading||(!replyAvisText.trim()&&!replyAuthor.trim())||!apiKeyLocal?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)",color:replyLoading||(!replyAvisText.trim()&&!replyAuthor.trim())||!apiKeyLocal?"#9CA3AF":"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"},
+              children:replyLoading?"⏳ Rédaction en cours…":"✨ Générer la réponse",
             }),
-          ],
-        }),
+            !apiKeyLocal && n.jsx("div", { style:{fontSize:11,color:"#E85A30",marginTop:6}, children:"⚠️ Clé API requise (Mon Espace → Paramètres)" }),
+          ]}),
+          // Résultat
+          replyResult && n.jsxs("div", { style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",borderTop:"3px solid #059669",padding:"20px 22px"}, children:[
+            n.jsxs("div", { style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}, children:[
+              n.jsx("div", { style:{fontWeight:700,fontSize:14,color:"#1E1B30"}, children:"✅ Réponse générée" }),
+              n.jsx("button", {
+                onClick:()=>{navigator.clipboard.writeText(replyResult);setReplyCopied(true);setTimeout(()=>setReplyCopied(false),2000);},
+                style:{padding:"7px 16px",borderRadius:8,border:"1.5px solid #059669",background:replyCopied?"#059669":"white",color:replyCopied?"white":"#059669",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                children:replyCopied?"✓ Copié !":"📋 Copier",
+              }),
+            ]}),
+            n.jsx("textarea", { value:replyResult, onChange:ev=>setReplyResult(ev.target.value), rows:6, style:{width:"100%",border:"1px solid #E5E7EB",borderRadius:9,padding:"12px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.6,boxSizing:"border-box",color:"#1E1B30"} }),
+            n.jsx("div", { style:{fontSize:11,color:"#9CA3AF",marginTop:8}, children:"💡 Copiez et collez sur votre fiche Google Business Profile." }),
+          ]}),
+        ]});
+      })(),
+
+
       m === "analyse" &&
         n.jsxs("div", {
           children: [
@@ -18553,12 +18944,12 @@ function ManualEditModal({
             n.jsxs("div", {
               children: [
                 n.jsx("div", {
-                  style: { ...ke, fontSize: 20, color: "var(--ink)" },
+                  style: { fontSize: 16, fontWeight: 800, color: "#1E1B30" },
                   children: "Modifier la fiche",
                 }),
                 n.jsxs("div", {
                   style: { fontSize: 12, color: "var(--ink4)", marginTop: 2 },
-                  children: [e.name, " · sans relancer un audit IA"],
+                  children: [e.name, " · sans relancer un audit complet"],
                 }),
               ],
             }),
@@ -18914,6 +19305,365 @@ function ManualEditModal({
     }),
   });
 }
+function EReputationPage({ clients: e, upd: t, go: i }) {
+  const [r, o] = D.useState(null);
+  const s = r ? e.find((c) => c.id === r) : null;
+  if (s)
+    return n.jsxs("div", {
+      style: { padding: "32px 36px", background: "#F4F5FA", minHeight: "100%", overflowY: "auto" },
+      className: "fade",
+      children: [
+        n.jsxs("div", {
+          style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 18, cursor: "pointer" },
+          onClick: () => o(null),
+          children: [
+            n.jsx("span", { style: { fontSize: 13, color: "#6B40D8", fontWeight: 700 }, children: "← Tous les clients" }),
+            n.jsx("span", { style: { fontSize: 13, color: "var(--ink4)" }, children: `· ${s.name}` }),
+          ],
+        }),
+        n.jsx(EReputationTab, { client: s, clients: e, upd: (patch) => t(e.map((c) => (c.id === s.id ? { ...c, ...patch } : c))) }),
+      ],
+    });
+  return n.jsxs("div", {
+    style: { padding: "32px 36px", background: "#F4F5FA", minHeight: "100%", overflowY: "auto" },
+    className: "fade",
+    children: [
+      n.jsxs("div", { style: { marginBottom: 24 }, children: [
+        n.jsx("div", { style: { ...ke, fontSize: 28, color: "var(--ink)", letterSpacing: "-.02em", marginBottom: 4 }, children: "🔗 E-réputation" }),
+        n.jsx("div", { style: { fontSize: 13.5, color: "var(--ink3)" }, children: "Sélectionnez un client pour gérer la collecte d'avis Google : lien direct, QR code et messages prêts à l'emploi." }),
+      ]}),
+      e.length === 0
+        ? n.jsx("div", {
+            style: { background: "white", borderRadius: 12, padding: 24, border: "1px solid #E5E7EB", color: "var(--ink4)", fontSize: 13 },
+            children: "Aucun client pour le moment.",
+          })
+        : n.jsx("div", {
+            style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: 14 },
+            children: e.map((c) =>
+              n.jsxs(
+                "div",
+                {
+                  onClick: () => o(c.id),
+                  style: {
+                    background: "white",
+                    borderRadius: 12,
+                    padding: "16px 18px",
+                    border: "1px solid #E5E7EB",
+                    cursor: "pointer",
+                    transition: "all .15s",
+                  },
+                  children: [
+                    n.jsxs("div", {
+                      style: { display: "flex", alignItems: "center", gap: 7, fontWeight: 700, fontSize: 14, color: "#1E1B30", marginBottom: 4 },
+                      children: [
+                        n.jsx("span", {
+                          title: ((c.avisData || {}).lienGoogle) ? "Lien Google configuré" : "Lien Google à configurer",
+                          style: { fontSize: 12, color: ((c.avisData || {}).lienGoogle) ? "#059669" : "#D97706", flexShrink: 0 },
+                          children: ((c.avisData || {}).lienGoogle) ? "✓" : "⚠",
+                        }),
+                        n.jsx("span", { children: c.name }),
+                      ],
+                    }),
+                    n.jsx("div", { style: { fontSize: 12, color: "var(--ink4)" }, children: c.city || "—" }),
+                  ],
+                },
+                c.id,
+              ),
+            ),
+          }),
+    ],
+  });
+}
+function EReputationTab({ client: e, clients: t, upd: i }) {
+  const [c, u] = D.useState(null);
+  const U = (e.avisData || {}).lienGoogle || "";
+  return n.jsxs("div", { className: "fade", children: [
+    n.jsxs("div", { style: { marginBottom: 18 }, children: [
+      n.jsx("div", { style: { fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 3 }, children: "🔗 Collecter des avis" }),
+      n.jsx("div", { style: { fontSize: 12, color: "var(--ink4)" }, children: "Lien direct, QR code et messages prêts à l'emploi pour récolter plus d'avis Google" }),
+    ]}),
+            n.jsxs("div", {
+              style: {
+                background: "white",
+                borderRadius: 12,
+                padding: "20px",
+                marginBottom: 14,
+                border: "1px solid #E5E7EB",
+                borderTop: "3px solid #6B40D8",
+              },
+              children: [
+                n.jsx("div", {
+                  style: {
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: "#1E1B30",
+                    marginBottom: 12,
+                  },
+                  children: "🔗 Lien direct vers vos avis Google",
+                }),
+                U
+                  ? n.jsxs("div", {
+                      children: [
+                        n.jsxs("div", {
+                          style: { display: "flex", gap: 8, marginBottom: 14 },
+                          children: [
+                            n.jsx("input", {
+                              className: "inp",
+                              value: U,
+                              readOnly: !0,
+                              style: {
+                                flex: 1,
+                                fontSize: 12,
+                                color: "#6B7280",
+                                margin: 0,
+                              },
+                            }),
+                            n.jsx("button", {
+                              onClick: () => {
+                                (navigator.clipboard.writeText(U),
+                                  u("lien"),
+                                  setTimeout(() => u(null), 2e3));
+                              },
+                              style: {
+                                padding: "9px 16px",
+                                borderRadius: 8,
+                                border: "1px solid #E5E7EB",
+                                background: c === "lien" ? "#059669" : "white",
+                                color: c === "lien" ? "white" : "#374151",
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                fontWeight: 600,
+                                fontSize: 13,
+                                transition: "all .18s",
+                                flexShrink: 0,
+                              },
+                              children:
+                                c === "lien" ? "✓ Copié !" : "📋 Copier",
+                            }),
+                            n.jsx("a", {
+                              href: U,
+                              target: "_blank",
+                              rel: "noreferrer",
+                              style: {
+                                padding: "9px 16px",
+                                borderRadius: 8,
+                                border: "none",
+                                background:
+                                  "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
+                                color: "white",
+                                textDecoration: "none",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                flexShrink: 0,
+                              },
+                              children: "Ouvrir →",
+                            }),
+                          ],
+                        }),
+                        n.jsxs("div", {
+                          style: {
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 16,
+                          },
+                          children: [
+                            n.jsx("img", {
+                              src: `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(U)}`,
+                              alt: "QR Code",
+                              style: {
+                                width: 100,
+                                height: 100,
+                                borderRadius: 8,
+                                border: "1px solid #E5E7EB",
+                              },
+                            }),
+                            n.jsxs("div", {
+                              children: [
+                                n.jsx("div", {
+                                  style: {
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                    color: "#1E1B30",
+                                    marginBottom: 6,
+                                  },
+                                  children: "QR Code à imprimer",
+                                }),
+                                n.jsx("div", {
+                                  style: {
+                                    fontSize: 12.5,
+                                    color: "#6B7280",
+                                    lineHeight: 1.7,
+                                    marginBottom: 8,
+                                  },
+                                  children:
+                                    "Caisse, factures, cartes de visite — vos clients scannent et laissent un avis.",
+                                }),
+                                n.jsx("a", {
+                                  href: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(U)}`,
+                                  target: "_blank",
+                                  rel: "noreferrer",
+                                  style: {
+                                    fontSize: 12,
+                                    padding: "5px 12px",
+                                    borderRadius: 8,
+                                    border: "1px solid #E5E7EB",
+                                    background: "white",
+                                    color: "#6B40D8",
+                                    textDecoration: "none",
+                                    fontWeight: 600,
+                                  },
+                                  children: "⬇️ HD",
+                                }),
+                              ],
+                            }),
+                          ],
+                        }),
+                      ],
+                    })
+                  : n.jsxs("div", {
+                      style: {
+                        background: "#FFF7ED",
+                        borderRadius: 10,
+                        padding: "14px",
+                        border: "1px solid #FED7AA",
+                        fontSize: 13,
+                        color: "#92400e",
+                      },
+                      children: [
+                        "Configurez d'abord le lien Google dans ",
+                        n.jsx("strong", { children: "Configurer les KPIs" }),
+                        " (onglet Répondre aux avis).",
+                      ],
+                    }),
+              ],
+            }),
+            n.jsx("div", {
+              style: {
+                fontWeight: 700,
+                fontSize: 14,
+                color: "#1E1B30",
+                marginBottom: 12,
+              },
+              children: "📨 Templates de collecte",
+            }),
+            n.jsx("div", {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              },
+              children: [
+                {
+                  icon: "💬",
+                  label: "SMS",
+                  text: `Bonjour [Prénom] 👋
+
+Merci pour votre confiance !
+Votre avis nous aiderait beaucoup 🙏
+
+👉 ${U || "[lien]"}
+
+1 minute suffit — merci !`,
+                },
+                {
+                  icon: "📧",
+                  label: "Email",
+                  text: `Objet : Votre avis compte beaucoup pour nous ⭐
+
+Bonjour [Prénom],
+
+Nous espérons que vous êtes satisfait(e) de nos services. Un avis Google nous aiderait enormément à nous faire connaître.
+
+👉 ${U || "[lien]"}
+
+Merci !`,
+                },
+                {
+                  icon: "💚",
+                  label: "WhatsApp",
+                  text: `Bonjour [Prénom] 😊 Merci de nous avoir fait confiance ! Un petit avis Google ferait vraiment la différence 🙏 → ${U || "[lien]"}`,
+                },
+                {
+                  icon: "🧾",
+                  label: "Facture / Carte de visite",
+                  text: `Vous êtes satisfait(e) ?
+Laissez-nous un avis Google ⭐
+
+[QR Code]
+
+Merci de votre confiance !`,
+                },
+              ].map((v, A) =>
+                n.jsxs(
+                  "div",
+                  {
+                    style: {
+                      background: "white",
+                      borderRadius: 12,
+                      padding: "16px",
+                      border: "1px solid #E5E7EB",
+                    },
+                    children: [
+                      n.jsxs("div", {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          marginBottom: 10,
+                        },
+                        children: [
+                          n.jsxs("div", {
+                            style: {
+                              fontWeight: 700,
+                              fontSize: 13,
+                              color: "#1E1B30",
+                            },
+                            children: [v.icon, " ", v.label],
+                          }),
+                          n.jsx("button", {
+                            onClick: () => {
+                              (navigator.clipboard.writeText(v.text),
+                                u(`tpl${A}`),
+                                setTimeout(() => u(null), 2e3));
+                            },
+                            style: {
+                              fontSize: 11.5,
+                              padding: "4px 10px",
+                              borderRadius: 7,
+                              border: "1px solid #E5E7EB",
+                              background: c === `tpl${A}` ? "#059669" : "white",
+                              color: c === `tpl${A}` ? "white" : "#374151",
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              fontWeight: 600,
+                              transition: "all .18s",
+                            },
+                            children: c === `tpl${A}` ? "✓ Copié" : "Copier",
+                          }),
+                        ],
+                      }),
+                      n.jsx("div", {
+                        style: {
+                          fontSize: 12,
+                          color: "#374151",
+                          lineHeight: 1.7,
+                          background: "#F4F5FA",
+                          borderRadius: 8,
+                          padding: "10px",
+                          whiteSpace: "pre-wrap",
+                          fontFamily: "monospace",
+                        },
+                        children: v.text,
+                      }),
+                    ],
+                  },
+                  A,
+                ),
+              ),
+            }),
+  ]});
+}
+
 function HistoriqueTab({ data: e, client: t, clients: i, upd: r }) {
   const o = (e == null ? void 0 : e.extracted) || {},
     s = o.secondaryCategories || {},
@@ -18936,12 +19686,67 @@ function HistoriqueTab({ data: e, client: t, clients: i, upd: r }) {
     [genPrd, setGenPrd] = D.useState(!1),
     [savedSvcIdx, setSavedSvcIdx] = D.useState(null),
     [savedPrdIdx, setSavedPrdIdx] = D.useState(null),
+    [zoneSuggestions, setZoneSuggestions] = D.useState([]),
+    [genZones, setGenZones] = D.useState(false),
     j = (t == null ? void 0 : t.manualCategories) || [],
     manualServices = (t == null ? void 0 : t.manualServices) || [],
     manualProducts = (t == null ? void 0 : t.manualProducts) || [],
-    I = (z) => r(i.map((g) => (g.id === t.id ? { ...g, ...z } : g)));
+    I = (z) => {
+      // Si on met à jour manualZones, on synchronise aussi le score service_area
+      const update = { ...z };
+      if ("manualZones" in z) {
+        const hasZones = (z.manualZones || []).length > 0;
+        update.manualOverrides = { ...(t.manualOverrides || {}), service_area: hasZones };
+      }
+      r(i.map((g) => (g.id === t.id ? { ...g, ...update } : g)));
+    };
 
   const apiKey = localStorage.getItem("bto_apikey") || "";
+
+  // Génération de suggestions de zones par secteur + ville
+  const generateZoneSuggestions = async () => {
+    if (!apiKey) return;
+    const city = t.city || (o.city || "");
+    const category = t.category || (o.category || "");
+    if (!city && !category) return;
+    setGenZones(true);
+    setZoneSuggestions([]);
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "x-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 300,
+          messages: [{
+            role: "user",
+            content: `Tu es un expert en SEO local France.
+Pour un établissement de type "${category}" situé à "${city}", propose exactement 12 zones géographiques à renseigner dans Google Business Profile (communes, quartiers, zones d'intervention réalistes pour ce secteur).
+
+Règles :
+- Commence par la ville principale "${city}"
+- Inclure les communes proches (rayon 20-30km max selon le secteur)
+- Adapter au secteur : artisan/service à domicile = rayon large, commerce/restaurant = quartiers + communes proches
+- Vraies communes françaises uniquement, pas de noms génériques
+- Format : une zone par ligne, juste le nom, sans numérotation ni explication
+
+Réponds UNIQUEMENT avec les 12 noms, un par ligne.`
+          }],
+        }),
+      });
+      const data = await resp.json();
+      const text = (data.content || []).map(c => c.text || "").join("").trim();
+      const zones = text.split("\n").map(z => z.trim()).filter(z => z.length > 0 && z.length < 50).slice(0, 12);
+      setZoneSuggestions(zones);
+    } catch(err) {}
+    setGenZones(false);
+  };
+
   const generateSEO = async (type) => {
     if (!apiKey) return;
     const name = type === "service" ? newSvcName : newPrdName;
@@ -18969,6 +19774,52 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
     type === "service" ? setGenSvc(!1) : setGenPrd(!1);
   };
 
+  /* ── Édition des infos client ── */
+  const [editInfos, setEditInfos] = D.useState(false);
+  const [infoForm, setInfoForm] = D.useState({
+    name:     t.name || "",
+    address:  t.address || o.address || "",
+    city:     t.city || o.city || "",
+    category: t.category || o.category || "",
+    phone:    t.phone || o.phone || "",
+    website:  t.website || o.website || "",
+    icon:     t.icon || "",
+  });
+  D.useEffect(() => {
+    setInfoForm({
+      name:     t.name || "",
+      address:  t.address || o.address || "",
+      city:     t.city || o.city || "",
+      category: t.category || o.category || "",
+      phone:    t.phone || o.phone || "",
+      website:  t.website || o.website || "",
+      icon:     t.icon || "",
+    });
+  }, [t.id]);
+  const saveInfos = () => {
+    I({
+      name:     infoForm.name.trim(),
+      city:     infoForm.city.trim(),
+      address:  infoForm.address.trim(),
+      category: infoForm.category.trim(),
+      phone:    infoForm.phone.trim(),
+      website:  infoForm.website.trim(),
+      icon:     infoForm.icon.trim(),
+      data: {
+        ...(t.data || {}),
+        extracted: {
+          ...(t.data?.extracted || {}),
+          address:  infoForm.address.trim(),
+          city:     infoForm.city.trim(),
+          phone:    infoForm.phone.trim(),
+          website:  infoForm.website.trim(),
+          category: infoForm.category.trim(),
+        }
+      }
+    });
+    setEditInfos(false);
+  };
+
   const saveService = () => {
     if (!newSvcTitle.trim()) return;
     const newList = [...manualServices, { name: newSvcTitle, description: newSvcDesc }];
@@ -18988,6 +19839,58 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
   return n.jsxs("div", {
     className: "fade",
     children: [
+
+      /* ── PANNEAU INFOS CLIENT ÉDITABLES ── */
+      n.jsxs("div",{style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"16px 20px",marginBottom:20,boxShadow:"0 1px 4px rgba(0,0,0,.05)"},children:[
+        n.jsxs("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: editInfos ? 16 : 0},children:[
+          n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10},children:[
+            editInfos
+              ? n.jsx("input",{
+                  value:infoForm.icon,
+                  maxLength:4,
+                  placeholder:"📋",
+                  title:"Émoji de l'entreprise",
+                  onChange:ev=>setInfoForm(f=>({...f,icon:ev.target.value})),
+                  style:{width:32,height:32,borderRadius:8,border:"1.5px solid #6B40D8",fontSize:16,textAlign:"center",fontFamily:"inherit",outline:"none",padding:0,boxSizing:"border-box"},
+                })
+              : n.jsx("div",{style:{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#6B40D8,#C03080)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16},children:t.icon||"📋"}),
+            n.jsxs("div",{children:[
+              n.jsx("div",{style:{fontWeight:700,fontSize:14,color:"#1E1B30"},children:t.name||"—"}),
+              n.jsxs("div",{style:{fontSize:12,color:"#6B7280"},children:[t.city||o.city||"", (t.category||o.category) ? ` · ${t.category||o.category}` : ""]}),
+            ]}),
+          ]}),
+          n.jsx("button",{
+            onClick:()=>{ if(!editInfos){setInfoForm({name:t.name||"",address:t.address||o.address||"",city:t.city||o.city||"",category:t.category||o.category||"",phone:t.phone||o.phone||"",website:t.website||o.website||""});} setEditInfos(v=>!v); },
+            style:{fontSize:12,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${editInfos?"#dc2626":"#6B40D8"}`,background:editInfos?"#FEF2F2":"#F5F3FF",color:editInfos?"#dc2626":"#6B40D8",fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+            children: editInfos ? "✕ Annuler" : "✏️ Modifier",
+          }),
+        ]}),
+        editInfos && n.jsxs("div",{children:[
+          n.jsx("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14},children:[
+            {k:"name",    label:"🏢 Nom",     full:true},
+            {k:"address", label:"📍 Adresse", full:true},
+            {k:"city",    label:"🏙️ Ville"},
+            {k:"category",label:"🏷️ Catégorie"},
+            {k:"phone",   label:"📞 Téléphone"},
+            {k:"website", label:"🌐 Site web"},
+          ].map(({k,label,full})=>n.jsxs("div",{key:k,style:{gridColumn:full?"1 / -1":"auto"},children:[
+            n.jsx("label",{style:{display:"block",fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:4,textTransform:"uppercase",letterSpacing:".5px"},children:label}),
+            n.jsx("input",{
+              value:infoForm[k],
+              onChange:ev=>setInfoForm(f=>({...f,[k]:ev.target.value})),
+              style:{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #E5E7EB",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"},
+            }),
+          ]}))
+        }),
+          n.jsx("button",{
+            onClick:saveInfos,
+            style:{width:"100%",padding:"10px",borderRadius:9,border:"none",background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",fontWeight:700,fontSize:14,cursor:"pointer",fontFamily:"inherit"},
+            children:"💾 Enregistrer",
+          }),
+          n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:8,textAlign:"center"},children:"Ces informations remplacent les données de l'audit sans les effacer."}),
+        ]}),
+      ]}),
+
       n.jsxs("div", {
         style: {
           display: "flex",
@@ -19001,21 +19904,15 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
               width: 4,
               height: 28,
               borderRadius: 2,
-              background:
-                "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
+              background: "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
               marginRight: 14,
               flexShrink: 0,
             },
           }),
-          n.jsx("div", {
-            style: {
-              fontSize: 17,
-              fontWeight: 800,
-              color: "#1E1B30",
-              letterSpacing: "-.01em",
-            },
-            children: "Catégories & Services",
-          }),
+          n.jsxs("div", { children:[
+            n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"var(--ink)", marginBottom:2 }, children:"Catégories & Services" }),
+            n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)" }, children:"Catégorie principale, secondaires et services proposés sur la fiche" }),
+          ]}),
         ],
       }),
       n.jsxs("div", {
@@ -19411,49 +20308,25 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
       }),
       /* ── ZONES DESSERVIES ── */
       n.jsxs("div", {
-        style: { background: "white", borderRadius: 18, border: "1px solid #E5E7EB", padding: "22px 24px", marginTop: 18 },
+        style: { background: "white", borderRadius: 12, border: "1px solid var(--border)", borderTop: "3px solid #0891b2", padding: "20px 22px", marginTop: 18 },
         children: [
-          n.jsxs("div", {
-            style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
-            children: [
-              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
-                n.jsx("div", { style: { width: 4, height: 24, borderRadius: 2, background: "linear-gradient(135deg,#0891b2,#06b6d4)", flexShrink: 0 } }),
-                n.jsxs("div", {}, { children: [] }),
-                n.jsx("div", { style: { fontSize: 15, fontWeight: 800, color: "#1E1B30" }, children: "🗺️ Zones desservies" }),
-              ]}),
-              n.jsx("span", { style: { fontSize: 11, color: "#6B7280", background: "#F3F4F6", borderRadius: 20, padding: "3px 10px" }, children: `${(t.manualZones||[]).length}/12 zones` }),
-            ],
-          }),
-          n.jsx("div", {
-            style: { display: "flex", flexWrap: "wrap", gap: 8, marginBottom: (t.manualZones||[]).length < 12 ? 14 : 0 },
-            children: (t.manualZones || []).map((z, gi) =>
-              n.jsxs("div", {
-                key: "zone"+gi,
-                style: { display: "inline-flex", alignItems: "center", gap: 6, background: "#EFF6FF", border: "1.5px solid #BFDBFE", borderRadius: 20, padding: "5px 12px", fontSize: 12.5, fontWeight: 600, color: "#1D4ED8" },
-                children: [
-                  n.jsx("span", { children: z }),
-                  n.jsx("button", {
-                    onClick: () => I({ manualZones: (t.manualZones||[]).filter((_, fi) => fi !== gi) }),
-                    style: { background: "none", border: "none", color: "#93C5FD", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 },
-                    children: "×",
-                  }),
-                ],
-              })
-            ),
-          }),
-          (t.manualZones||[]).length < 12 && n.jsxs("div", {
-            style: { display: "flex", gap: 8, alignItems: "center" },
-            children: [
+          // Header titre
+          n.jsxs("div", { style:{ marginBottom:12 }, children:[
+            n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }, children:[
+              n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"var(--ink)" }, children:"Zones desservies" }),
+              n.jsx("span", { style:{ fontSize:11, color:"var(--ink4)" }, children:`${(t.manualZones||[]).length}/12 zones` }),
+            ]}),
+            n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginBottom:12 }, children:"Améliore la visibilité locale sur Google Maps" }),
+            // Input en dessous du titre
+            (t.manualZones||[]).length < 12 && n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center" }, children:[
               n.jsx("input", {
                 id: "zone-input",
-                placeholder: "Ajouter une zone (ville, quartier…)",
-                style: { flex: 1, padding: "9px 14px", borderRadius: 9, border: "1.5px solid #BFDBFE", fontSize: 13, fontFamily: "inherit", outline: "none" },
+                placeholder: "Ajouter une ville, un quartier…",
+                style:{ flex:1, padding:"8px 12px", borderRadius:8, border:"1.5px solid var(--border)", fontSize:13, fontFamily:"inherit", outline:"none" },
                 onKeyDown: (ev) => {
                   if (ev.key === "Enter" && ev.target.value.trim()) {
                     const val = ev.target.value.trim();
-                    if (!(t.manualZones||[]).includes(val) && (t.manualZones||[]).length < 12) {
-                      I({ manualZones: [...(t.manualZones||[]), val] });
-                    }
+                    if (!(t.manualZones||[]).includes(val)) I({ manualZones: [...(t.manualZones||[]), val] });
                     ev.target.value = "";
                   }
                 },
@@ -19463,21 +20336,54 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
                   const inp = document.getElementById("zone-input");
                   if (inp && inp.value.trim()) {
                     const val = inp.value.trim();
-                    if (!(t.manualZones||[]).includes(val) && (t.manualZones||[]).length < 12) {
-                      I({ manualZones: [...(t.manualZones||[]), val] });
-                    }
+                    if (!(t.manualZones||[]).includes(val)) I({ manualZones: [...(t.manualZones||[]), val] });
                     inp.value = "";
                   }
                 },
-                style: { padding: "9px 18px", borderRadius: 9, border: "none", background: "#1D4ED8", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" },
-                children: "+ Ajouter",
+                style:{ padding:"7px 14px", borderRadius:8, border:"none", background:"#0891b2", color:"white", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" },
+                children:"+ Ajouter",
               }),
-            ],
-          }),
-          (t.manualZones||[]).length === 0 && n.jsx("div", {
-            style: { textAlign: "center", padding: "20px", color: "#9CA3AF", fontSize: 13 },
-            children: "Aucune zone desservie renseignée. Ajoutez jusqu'à 12 zones.",
-          }),
+            ]}),
+          ]}),
+          // Zones existantes
+          (t.manualZones||[]).length === 0
+            ? n.jsx("div", { style:{ color:"var(--ink4)", fontSize:13, fontStyle:"italic", marginBottom:10 }, children:"Aucune zone — ajoutez vos villes et zones d'intervention." })
+            : n.jsx("div", { style:{ display:"flex", flexWrap:"wrap", gap:7, marginBottom:10 }, children:
+              (t.manualZones||[]).map((z, gi) => n.jsxs("div", {
+                key:"z"+gi,
+                style:{ display:"inline-flex", alignItems:"center", gap:5, background:"#EFF6FF", border:"1.5px solid #BFDBFE", borderRadius:20, padding:"4px 12px", fontSize:12.5, fontWeight:600, color:"#1D4ED8" },
+                children:[
+                  n.jsx("span", { children:z }),
+                  n.jsx("button", { onClick:()=>I({ manualZones:(t.manualZones||[]).filter((_,fi)=>fi!==gi) }), style:{ background:"none", border:"none", color:"#93C5FD", cursor:"pointer", fontSize:14, lineHeight:1, padding:0, marginLeft:2 }, children:"×" }),
+                ],
+              }))
+            }),
+
+          // Bouton suggestions IA
+          n.jsxs("div", { style:{ marginTop:10 }, children:[
+            n.jsx("button", {
+              onClick: generateZoneSuggestions,
+              disabled: genZones || !apiKey,
+              style:{ padding:"6px 14px", borderRadius:8, border:"1.5px solid var(--indigo2)", background:"white", color:"var(--indigo2)", fontSize:12, fontWeight:700, cursor: genZones||!apiKey ? "not-allowed" : "pointer", fontFamily:"inherit", opacity: genZones||!apiKey ? .5 : 1 },
+              children: genZones ? "⏳ Génération..." : "Suggestions de zones par secteur",
+            }),
+            zoneSuggestions.length > 0 && n.jsxs("div", { style:{ marginTop:10 }, children:[
+              n.jsx("div", { style:{ fontSize:11, color:"var(--ink4)", marginBottom:6, fontWeight:600 }, children:"Cliquez pour ajouter :" }),
+              n.jsx("div", { style:{ display:"flex", flexWrap:"wrap", gap:6 }, children:
+                zoneSuggestions
+                  .filter(z => !(t.manualZones||[]).includes(z))
+                  .map((z, si) => n.jsx("button", {
+                    key:si,
+                    onClick:()=>{
+                      if ((t.manualZones||[]).length < 12) I({ manualZones: [...(t.manualZones||[]), z] });
+                    },
+                    disabled: (t.manualZones||[]).length >= 12,
+                    style:{ padding:"4px 11px", borderRadius:20, border:"1.5px dashed #C4B5FD", background:"white", color:"var(--indigo2)", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" },
+                    children:"+ " + z,
+                  }))
+              }),
+            ]}),
+          ]}),
         ],
       }),
     ],
@@ -19903,10 +20809,9 @@ function InfosTab({ client: e, clients: t, upd: i, calcScore: r, getLvl: o }) {
                     children: [
                       n.jsx("div", {
                         style: {
-                          fontSize: 17,
+                          fontSize: 16,
                           fontWeight: 800,
                           color: "#1E1B30",
-                          letterSpacing: "-.01em",
                         },
                         children: "Performance & Évolution",
                       }),
@@ -20309,57 +21214,6 @@ function InfosTab({ client: e, clients: t, upd: i, calcScore: r, getLvl: o }) {
                     ],
                   });
                 })(),
-              (!y.monthly || y.monthly.length === 0) &&
-                !y.interactions &&
-                !y.vues &&
-                n.jsxs("div", {
-                  style: {
-                    background: "#F4F5FA",
-                    borderRadius: 14,
-                    padding: "32px",
-                    textAlign: "center",
-                    border: "1px solid #E5E7EB",
-                  },
-                  children: [
-                    n.jsx("div", {
-                      style: { fontSize: 32, marginBottom: 12 },
-                      children: "📊",
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        fontWeight: 700,
-                        fontSize: 15,
-                        marginBottom: 8,
-                        color: "#1E1B30",
-                      },
-                      children: "Aucune donnée de performance",
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 13,
-                        color: "#6B7280",
-                        marginBottom: 16,
-                      },
-                      children:
-                        "Colle les statistiques depuis ton tableau de bord Google Business pour voir l'évolution mensuelle.",
-                    }),
-                    n.jsx("button", {
-                      onClick: () => c(!0),
-                      style: {
-                        padding: "10px 20px",
-                        borderRadius: 9,
-                        border: "none",
-                        background: "linear-gradient(135deg,#3B5BDB,#6B40D8)",
-                        color: "white",
-                        fontFamily: "inherit",
-                        fontWeight: 700,
-                        fontSize: 13,
-                        cursor: "pointer",
-                      },
-                      children: "📥 Coller mes stats Google Business",
-                    }),
-                  ],
-                }),
             ],
           }),
         ],
@@ -21156,83 +22010,10 @@ L'IA extrait automatiquement toutes les données.`,
                         ],
                       }),
                   ],
-                })
-              : n.jsxs("div", {
-                  style: {
-                    textAlign: "center",
-                    padding: "40px 0",
-                    color: "var(--ink4)",
-                  },
-                  children: [
-                    n.jsx("div", {
-                      style: { fontSize: 36, marginBottom: 10 },
-                      children: "📊",
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 16,
-                        fontWeight: 700,
-                        color: "#3B5BDB",
-                        marginBottom: 8,
-                      },
-                      children: "Aucune donnée de performance pour l'instant",
-                    }),
-                    n.jsxs("div", {
-                      style: {
-                        fontSize: 13,
-                        color: "#6B40D8",
-                        lineHeight: 1.7,
-                        marginBottom: 16,
-                      },
-                      children: [
-                        "Renseignez vos statistiques mensuelles dans le formulaire ci-dessous — elles se trouvent dans votre tableau de bord ",
-                        n.jsx("strong", {
-                          children: "Google Business Profile",
-                        }),
-                        ` sous l'onglet "Statistiques".`,
-                      ],
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        display: "flex",
-                        gap: 8,
-                        flexWrap: "wrap",
-                        justifyContent: "center",
-                        marginBottom: 16,
-                      },
-                      children: [
-                        "Vues de la fiche",
-                        "Appels reçus",
-                        "Clics site web",
-                        "Demandes itinéraire",
-                      ].map((S) =>
-                        n.jsx(
-                          "span",
-                          {
-                            style: {
-                              fontSize: 12,
-                              background: "white",
-                              color: "#6B40D8",
-                              padding: "4px 12px",
-                              borderRadius: 20,
-                              border: "1px solid #E5E7EB",
-                              fontWeight: 500,
-                            },
-                            children: S,
-                          },
-                          S,
-                        ),
-                      ),
-                    }),
-                    n.jsx("button", {
-                      className: "btn",
-                      onClick: () => c(!0),
-                      children: "Coller mes statistiques GMB",
-                    }),
-                  ],
-                }),
+                }) : null,
           ],
         }),
+      /* Score tab */
       I === "score" &&
         n.jsxs("div", {
           children: [
@@ -21328,16 +22109,6 @@ L'IA extrait automatiquement toutes les données.`,
                           }),
                       ],
                     }),
-                    a.length < 2 &&
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 12,
-                          color: "#9CA3AF",
-                          fontStyle: "italic",
-                          marginLeft: "auto",
-                        },
-                        children: "Faites un 2ème audit pour voir l'évolution",
-                      }),
                   ],
                 }),
                 a.length >= 2 &&
@@ -21348,470 +22119,220 @@ L'IA extrait automatiquement toutes les données.`,
               ],
             }),
             (() => {
-              const S = [
-                  {
-                    k: "identity",
-                    l: "Pertinence",
-                    icon: "🎯",
-                    desc: "Catégorie, description, mots-clés",
-                    c: "#4F46E5",
-                  },
-                  {
-                    k: "contact",
-                    l: "Proximité",
-                    icon: "📍",
-                    desc: "Adresse, zone, horaires, NAP",
-                    c: "#0891b2",
-                  },
-                  {
-                    k: "photos",
-                    l: "Photos",
-                    icon: "📸",
-                    desc: "Qualité et quantité des photos",
-                    c: "#C03080",
-                  },
-                  {
-                    k: "reviews",
-                    l: "Avis",
-                    icon: "⭐",
-                    desc: "Note, nb avis, taux de réponse",
-                    c: "#E85A30",
-                  },
-                  {
-                    k: "posts",
-                    l: "Publications",
-                    icon: "📢",
-                    desc: "Posts, fréquence, CTA",
-                    c: "#059669",
-                  },
-                ],
-                w = d.pillars && Object.keys(d.pillars).length > 0;
+              /* Toujours dériver depuis les données à jour du Résumé
+                 (jamais les anciens scores d'audit, potentiellement obsolètes) */
+              const ext = (e.data && e.data.extracted) || {};
+              const sc = deriveGmbScores(e);
+              // Pertinence : catégorie, description, mots-clés, services
+              const pertCriteria = [
+                {k:"category_primary",w:4},{k:"category_secondary",w:3},
+                {k:"desc_length",w:2},{k:"desc_keywords",w:3},
+                {k:"services_listed",w:3},{k:"products_listed",w:2},
+                {k:"attributes",w:2},{k:"business_name",w:1},
+              ];
+              // Proximité : adresse, zone, horaires, téléphone
+              const proxCriteria = [
+                {k:"address",w:3},{k:"service_area",w:4},
+                {k:"phone",w:2},{k:"hours_regular",w:3},{k:"hours_special",w:1},
+              ];
+              // Proéminence : avis, photos, posts
+              const promCriteria = [
+                {k:"rating",w:4},{k:"review_count",w:4},{k:"response_rate",w:3},
+                {k:"response_quality",w:2},{k:"recent_reviews",w:2},
+                {k:"photo_count",w:2},{k:"photo_cover",w:1},{k:"photo_logo",w:1},
+                {k:"photo_interior",w:1},{k:"photo_team",w:1},{k:"photo_recent",w:2},
+                {k:"posts_frequency",w:2},{k:"posts_cta",w:1},{k:"posts_offers",w:1},
+              ];
+              const calcPillar = (criteria) => {
+                const total = criteria.reduce((s,c)=>s+c.w,0);
+                const got = criteria.reduce((s,c)=>s+(sc[c.k]?c.w:0),0);
+                return total > 0 ? Math.round(got/total*100) : 0;
+              };
+              const pillars3 = [
+                { id:"pertinence", l:"Pertinence", icon:"🎯", c:"#4F46E5",
+                  score: calcPillar(pertCriteria),
+                  desc:"Catégorie, description, mots-clés, services",
+                  detail: "Mesure la correspondance de votre fiche avec les recherches des internautes. Basé sur : catégorie principale/secondaires, description, services listés, attributs." },
+                { id:"proximite", l:"Proximité", icon:"📍", c:"#0891b2",
+                  score: calcPillar(proxCriteria),
+                  desc:"Adresse, zone de service, horaires",
+                  detail: "Mesure la précision de votre localisation. Basé sur : adresse complète, zone de service configurée, horaires renseignés, téléphone." },
+                { id:"prominence", l:"Proéminence", icon:"🏆", c:"#C03080",
+                  score: calcPillar(promCriteria),
+                  desc:"Avis, photos, publications GMB",
+                  detail: "Mesure votre autorité et popularité locale. Basé sur : note Google, nombre d'avis, taux de réponse, photos, fréquence des posts." },
+              ];
+              const hasData = !!(e.name || ext.category || ext.rating || ext.reviewCount);
+              const labelFor = s => s >= 80 ? "Très bon" : s >= 65 ? "Bon" : s >= 45 ? "Moyen" : "Faible";
+              const colorFor = s => s >= 80 ? "#059669" : s >= 65 ? "#3B5BDB" : s >= 45 ? "#d97706" : "#dc2626";
+
+              /* Historique des piliers depuis les audits passés */
+              const pillarHistory = (() => {
+                const hist = (e.history || []).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+                return hist.map(h => {
+                  const hs = h.scores || {};
+                  const calc = (crit) => { const tot=crit.reduce((s,c)=>s+c.w,0); const got=crit.reduce((s,c)=>s+(hs[c.k]?c.w:0),0); return tot>0?Math.round(got/tot*100):0; };
+                  return { date: h.date, pert: calc(pertCriteria), prox: calc(proxCriteria), prom: calc(promCriteria) };
+                }).filter(h => h.pert||h.prox||h.prom);
+              })();
+
               return n.jsxs("div", {
-                style: {
-                  background: "white",
-                  borderRadius: 14,
-                  padding: "22px 24px",
-                  border: "1px solid #E5E7EB",
-                  borderTop: "3px solid #6B40D8",
-                },
-                children: [
-                  n.jsx("div", {
-                    style: {
-                      fontWeight: 700,
-                      fontSize: 14,
-                      color: "#1E1B30",
-                      marginBottom: 16,
-                    },
-                    children: "Les 5 piliers de la visibilité Google",
-                  }),
-                  n.jsx("div", {
-                    style: {
-                      display: "grid",
-                      gridTemplateColumns: "repeat(5,1fr)",
-                      gap: 10,
-                      marginBottom: 16,
-                    },
-                    children: S.map((W) => {
-                      let L, $;
-                      if (w) {
-                        const te = {
-                            identity: "pertinence",
-                            contact: "proximite",
-                            photos: "prominence",
-                            reviews: "avis",
-                            posts: "completion",
-                          }[W.k],
-                          Q = d.pillars[te] || d.pillars[W.k];
-                        ((L = (Q == null ? void 0 : Q.score) || 0),
-                          ($ = (Q == null ? void 0 : Q.label) || ""),
-                          Q != null && Q.details);
-                      } else ((L = 0), ($ = "—"));
-                      const X = o(L);
-                      return n.jsxs(
-                        "div",
-                        {
-                          style: { textAlign: "center" },
-                          children: [
-                            n.jsxs("div", {
-                              style: {
-                                position: "relative",
-                                width: 60,
-                                height: 60,
-                                margin: "0 auto 8px",
-                              },
-                              children: [
-                                n.jsxs("svg", {
-                                  width: 60,
-                                  height: 60,
-                                  viewBox: "0 0 60 60",
-                                  children: [
-                                    n.jsx("circle", {
-                                      cx: 30,
-                                      cy: 30,
-                                      r: 24,
-                                      fill: "none",
-                                      stroke: "#F4F5FA",
-                                      strokeWidth: "5",
-                                    }),
-                                    n.jsx("circle", {
-                                      cx: 30,
-                                      cy: 30,
-                                      r: 24,
-                                      fill: "none",
-                                      stroke: X.color,
-                                      strokeWidth: "5",
-                                      strokeLinecap: "round",
-                                      strokeDasharray: `${2 * Math.PI * 24}`,
-                                      strokeDashoffset: `${2 * Math.PI * 24 * (1 - L / 100)}`,
-                                      transform: "rotate(-90 30 30)",
-                                      style: {
-                                        transition:
-                                          "stroke-dashoffset 1.2s ease",
-                                      },
-                                    }),
-                                  ],
-                                }),
-                                n.jsx("div", {
-                                  style: {
-                                    position: "absolute",
-                                    inset: 0,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 14,
-                                    fontWeight: 800,
-                                    color: X.color,
-                                  },
-                                  children: L,
-                                }),
-                              ],
-                            }),
-                            n.jsxs("div", {
-                              style: {
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: "#1E1B30",
-                                marginBottom: 2,
-                              },
-                              children: [W.icon, " ", W.l],
-                            }),
-                            n.jsx("div", {
-                              style: {
-                                fontSize: 10,
-                                color: X.color,
-                                fontWeight: 600,
-                              },
-                              children: $,
-                            }),
-                          ],
-                        },
-                        W.k,
-                      );
+                style:{ background:"white", borderRadius:14, padding:"20px 24px", border:"1px solid #E5E7EB", marginBottom:16 },
+                children:[
+                  n.jsxs("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16},children:[
+                    n.jsx("div",{style:{fontWeight:800,fontSize:14,color:"#1E1B30"},children:"Les 3 piliers Google Business Profile"}),
+                    n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:hasData?"Calculé depuis les critères réels de la fiche":"Faites un audit pour voir les piliers"}),
+                  ]}),
+                  n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14},children:
+                        pillars3.map(p2 => n.jsxs("div",{key:p2.id,style:{textAlign:"center",padding:"16px 12px",background:"#F8F9FB",borderRadius:12,border:`2px solid ${p2.c}20`},children:[
+                          n.jsx("div",{style:{fontSize:28,marginBottom:6},children:p2.icon}),
+                          n.jsx("div",{style:{fontWeight:800,fontSize:13,color:"#1E1B30",marginBottom:8},children:p2.l}),
+                          /* Cercle score */
+                          n.jsxs("div",{style:{position:"relative",width:72,height:72,margin:"0 auto 8px"},children:[
+                            n.jsxs("svg",{width:72,height:72,viewBox:"0 0 72 72",children:[
+                              n.jsx("circle",{cx:36,cy:36,r:30,fill:"none",stroke:"#F3F4F6",strokeWidth:6}),
+                              n.jsx("circle",{cx:36,cy:36,r:30,fill:"none",stroke:colorFor(p2.score),strokeWidth:6,
+                                strokeDasharray:`${p2.score*1.885} 188.5`,strokeLinecap:"round",
+                                transform:"rotate(-90 36 36)",style:{transition:"stroke-dasharray .6s ease"}}),
+                            ]}),
+                            n.jsxs("div",{style:{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"},children:[
+                              n.jsx("div",{style:{fontSize:18,fontWeight:900,color:colorFor(p2.score),lineHeight:1},children:p2.score}),
+                              n.jsx("div",{style:{fontSize:9,color:"#9CA3AF"},children:"/100"}),
+                            ]}),
+                          ]}),
+                          n.jsx("div",{style:{fontSize:11,fontWeight:700,color:colorFor(p2.score),marginBottom:6},children:labelFor(p2.score)}),
+                          n.jsx("div",{style:{fontSize:10,color:"#9CA3AF",lineHeight:1.4},children:p2.desc}),
+                        ]},p2.id)
+                      )
                     }),
-                  }),
-                  n.jsx("div", {
-                    style: { display: "grid", gap: 6 },
-                    children: S.map((W) => {
-                      if (!w) return null;
-                      const L = {
-                          identity: "pertinence",
-                          contact: "proximite",
-                          photos: "prominence",
-                          reviews: "avis",
-                          posts: "completion",
-                        }[W.k],
-                        $ = d.pillars[L] || d.pillars[W.k];
-                      if (!($ != null && $.details)) return null;
-                      const X = o($.score || 0);
-                      return n.jsxs(
-                        "div",
-                        {
-                          style: {
-                            padding: "10px 14px",
-                            background: "#F4F5FA",
-                            borderRadius: 10,
-                            border: "1px solid #E5E7EB",
-                            borderLeft: `3px solid ${X.color}`,
-                          },
-                          children: [
-                            n.jsxs("div", {
-                              style: {
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 10,
-                                marginBottom: 5,
-                              },
-                              children: [
-                                n.jsxs("span", {
-                                  style: {
-                                    fontWeight: 700,
-                                    fontSize: 13,
-                                    color: "#1E1B30",
-                                  },
-                                  children: [W.icon, " ", W.l],
-                                }),
-                                n.jsx("div", {
-                                  style: {
-                                    flex: 1,
-                                    height: 4,
-                                    background: "#E5E7EB",
-                                    borderRadius: 2,
-                                    overflow: "hidden",
-                                  },
-                                  children: n.jsx("div", {
-                                    style: {
-                                      height: "100%",
-                                      width: `${$.score || 0}%`,
-                                      background: X.color,
-                                      borderRadius: 2,
-                                      transition: "width 1s",
-                                    },
-                                  }),
-                                }),
-                                n.jsxs("span", {
-                                  style: {
-                                    fontSize: 13,
-                                    fontWeight: 800,
-                                    color: X.color,
-                                    flexShrink: 0,
-                                  },
-                                  children: [$.score || 0, "/100"],
-                                }),
-                              ],
-                            }),
-                            n.jsx("div", {
-                              style: {
-                                fontSize: 12.5,
-                                color: "#374151",
-                                lineHeight: 1.6,
-                              },
-                              children: $.details,
-                            }),
-                          ],
-                        },
-                        W.k,
-                      );
+                  /* Explication des détails */
+                  hasData && n.jsx("div",{style:{marginTop:14,display:"grid",gap:6},children:
+                    pillars3.map(p2 => n.jsxs("div",{key:p2.id+"d",style:{padding:"10px 14px",background:"#F4F5FA",borderRadius:10,borderLeft:`3px solid ${p2.c}`,display:"flex",alignItems:"flex-start",gap:12},children:[
+                      n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:6,minWidth:120},children:[
+                        n.jsx("span",{children:p2.icon}),
+                        n.jsx("span",{style:{fontWeight:700,fontSize:12,color:"#1E1B30"},children:p2.l}),
+                        n.jsxs("span",{style:{fontSize:12,fontWeight:800,color:colorFor(p2.score)},children:[p2.score,"/100"]}),
+                      ]}),
+                      n.jsx("div",{style:{fontSize:12,color:"#374151",flex:1,lineHeight:1.5},children:p2.detail}),
+                    ]},p2.id)
+                  )}),
+
+                  /* Évolution des piliers dans le temps */
+                  pillarHistory.length > 0 && n.jsxs("div",{style:{marginTop:16,borderTop:"1px solid #F3F4F6",paddingTop:14},children:[
+                    n.jsx("div",{style:{fontWeight:700,fontSize:12,color:"#6B7280",marginBottom:10},children:"📈 Évolution des piliers"}),
+                    n.jsx("div",{style:{overflowX:"auto"},children:
+                      n.jsxs("div",{style:{display:"flex",gap:0,alignItems:"flex-end",height:80,minWidth:pillarHistory.length*60},children:[
+                        ...pillarHistory.map((h,idx)=> {
+                          const isLast = idx===pillarHistory.length-1;
+                          return n.jsxs("div",{key:idx,style:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:56},children:[
+                            /* Barres des 3 piliers */
+                            n.jsxs("div",{style:{display:"flex",gap:2,alignItems:"flex-end",height:60},children:[
+                              ...[ {v:h.pert,c:"#4F46E5"},{v:h.prox,c:"#0891b2"},{v:h.prom,c:"#C03080"} ].map((bar,bi)=>
+                                n.jsxs("div",{key:bi,style:{display:"flex",flexDirection:"column",alignItems:"center",gap:1},children:[
+                                  n.jsx("span",{style:{fontSize:9,fontWeight:700,color:bar.c},children:bar.v}),
+                                  n.jsx("div",{style:{width:10,height:Math.max(4,bar.v*0.55)+"px",background:bar.c,borderRadius:"3px 3px 0 0",opacity:isLast?1:.7}}),
+                                ]},bi)
+                              ),
+                            ]}),
+                            n.jsx("div",{style:{fontSize:9,color:"#9CA3AF",textAlign:"center",marginTop:2,whiteSpace:"nowrap"},children:new Date(h.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}),
+                          ]},idx);
+                        }),
+                      ]}),
                     }),
-                  }),
+                    /* Légende */
+                    n.jsx("div",{style:{display:"flex",gap:14,marginTop:8,justifyContent:"center"},children:
+                      [{c:"#4F46E5",l:"Pertinence"},{c:"#0891b2",l:"Proximité"},{c:"#C03080",l:"Proéminence"}].map(lg=>
+                        n.jsxs("div",{key:lg.l,style:{display:"flex",alignItems:"center",gap:4},children:[
+                          n.jsx("div",{style:{width:10,height:10,borderRadius:2,background:lg.c}}),
+                          n.jsx("span",{style:{fontSize:10,color:"#6B7280"},children:lg.l}),
+                        ]})
+                      )
+                    }),
+                  ]}),
                 ],
               });
             })(),
           ],
         }),
-      I === "ranking" &&
-        Object.keys(p).length > 0 &&
-        p.estimatedPosition &&
-        !["3-5", "—", ""].includes(String(p.estimatedPosition || "")) &&
-        n.jsx("div", {
-          children: n.jsxs("div", {
-            style: {
-              background: "var(--surface)",
-              borderRadius: 20,
-              padding: "22px 24px",
-              border: "1px solid var(--border)",
-              marginBottom: 16,
-              boxShadow: "var(--shadow-sm)",
-            },
-            children: [
-              n.jsx("div", {
-                style: { fontWeight: 700, fontSize: 13, marginBottom: 14 },
-                children: "Positionnement concurrentiel estimé",
-              }),
-              n.jsxs("div", {
-                style: {
-                  display: "flex",
-                  gap: 14,
-                  alignItems: "center",
-                  marginBottom: 14,
-                  flexWrap: "wrap",
-                },
-                children: [
-                  n.jsxs("div", {
-                    style: {
-                      background: "#fef2f2",
-                      borderRadius: 14,
-                      padding: "16px 24px",
-                      textAlign: "center",
-                      border: "1px solid #fecaca",
-                      flexShrink: 0,
-                    },
-                    children: [
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 10,
-                          color: "var(--ink4)",
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          marginBottom: 4,
-                        },
-                        children: "Position estimée",
-                      }),
-                      n.jsx("div", {
-                        style: {
-                          fontSize: 34,
-                          fontWeight: 800,
-                          color: "#dc2626",
-                        },
-                        children: p.estimatedPosition || "—",
-                      }),
-                      n.jsx("div", {
-                        style: { fontSize: 11, color: "var(--ink4)" },
-                        children: "sur Google Maps",
-                      }),
-                    ],
-                  }),
-                  n.jsxs("div", {
-                    style: { flex: 1, minWidth: 200 },
-                    children: [
-                      p.rankingOpportunity &&
-                        !p.rankingOpportunity.includes("concrètement") &&
-                        n.jsx("p", {
-                          style: {
-                            fontSize: 13,
-                            color: "var(--ink2)",
-                            lineHeight: 1.7,
-                            marginBottom: 8,
-                          },
-                          children: p.rankingOpportunity,
-                        }),
-                      p.marketShareEstimate &&
-                        n.jsxs("span", {
-                          style: {
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "var(--indigo2)",
-                            background: "#F4F5FA",
-                            border: "1px solid #ddd6fe",
-                            borderRadius: 20,
-                            padding: "4px 12px",
-                          },
-                          children: [
-                            "Part de marché estimée : ",
-                            p.marketShareEstimate,
-                          ],
-                        }),
-                    ],
-                  }),
-                ],
-              }),
-              (p.rankingFactors || []).length > 0 &&
-                n.jsx("div", {
-                  style: { overflowX: "auto" },
-                  children: n.jsxs("table", {
-                    style: {
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: 12.5,
-                    },
-                    children: [
-                      n.jsx("thead", {
-                        children: n.jsx("tr", {
-                          style: { background: "#F4F5FA" },
-                          children: [
-                            "Facteur",
-                            "Votre fiche",
-                            "Concurrents",
-                            "Écart",
-                            "Impact",
-                          ].map((S) =>
-                            n.jsx(
-                              "th",
-                              {
-                                style: {
-                                  padding: "8px 11px",
-                                  textAlign: "left",
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  color: "var(--ink3)",
-                                  borderBottom: "1px solid var(--border)",
-                                },
-                                children: S,
-                              },
-                              S,
-                            ),
-                          ),
-                        }),
-                      }),
-                      n.jsx("tbody", {
-                        children: (p.rankingFactors || []).map((S, w) => {
-                          var W;
-                          return n.jsxs(
-                            "tr",
-                            {
-                              style: {
-                                borderBottom: "1px solid var(--ground)",
-                              },
-                              children: [
-                                n.jsx("td", {
-                                  style: {
-                                    padding: "9px 11px",
-                                    fontWeight: 600,
-                                  },
-                                  children: S.factor,
-                                }),
-                                n.jsx("td", {
-                                  style: {
-                                    padding: "9px 11px",
-                                    color: "var(--ink2)",
-                                  },
-                                  children: S.ourValue,
-                                }),
-                                n.jsx("td", {
-                                  style: {
-                                    padding: "9px 11px",
-                                    color: "var(--ink3)",
-                                  },
-                                  children: S.avgCompetitor,
-                                }),
-                                n.jsx("td", {
-                                  style: {
-                                    padding: "9px 11px",
-                                    fontWeight: 700,
-                                    color:
-                                      ((W = S.gap) != null &&
-                                        W.startsWith("-")) ||
-                                      S.gap === "Absent"
-                                        ? "#dc2626"
-                                        : "#059669",
-                                  },
-                                  children: S.gap,
-                                }),
-                                n.jsx("td", {
-                                  style: { padding: "9px 11px" },
-                                  children: n.jsx("span", {
-                                    style: {
-                                      padding: "2px 8px",
-                                      borderRadius: 20,
-                                      fontSize: 10.5,
-                                      fontWeight: 700,
-                                      background:
-                                        S.impact === "Fort"
-                                          ? "#fef2f2"
-                                          : S.impact === "Moyen"
-                                            ? "#fffbeb"
-                                            : "#ffffff",
-                                      color:
-                                        S.impact === "Fort"
-                                          ? "#dc2626"
-                                          : S.impact === "Moyen"
-                                            ? "#d97706"
-                                            : "#059669",
-                                    },
-                                    children: S.impact,
-                                  }),
-                                }),
-                              ],
-                            },
-                            w,
-                          );
-                        }),
-                      }),
-                    ],
-                  }),
-                }),
-            ],
-          }),
-        }),
+      /* ── Tableau de positions des mots-clés (scans réels) ── */
+      I === "ranking" && (() => {
+        const geoGrid2 = (e == null ? void 0 : e.geoGrid) || {};
+        const cityRx2 = e.city ? new RegExp(`[,\\s]+${e.city.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s*$`,'i') : null;
+        const stripCity2 = kw => cityRx2 ? (kw||"").replace(cityRx2,'').trim() : (kw||"").trim();
+        const customSeoKws2 = (e.customSeoKeywords || e.customKeywords || []);
+        const auditKws2 = [...((r == null ? void 0 : r.primary) || []), ...((r == null ? void 0 : r.secondary) || [])];
+        const customMapKws2 = (e.customMapKeywords || []).map(stripCity2).filter(Boolean);
+
+        // Reconstituer allKws avec scan data
+        const getMapData2 = (kwCarte) => {
+          const data = geoGrid2[kwCarte]; if (!data) return null;
+          const scans = data.scans || []; if (!scans.length) return null;
+          const allPts = scans.map(sc => { const vc=(sc.cells||[]).filter(c=>c!=null); return vc.length?{date:sc.date,position:Math.round(vc.reduce((a,b)=>a+b,0)/vc.length)}:null; }).filter(Boolean);
+          return allPts.length ? { avgRank: allPts.at(-1).position, scanHistory: allPts, kwCarte } : null;
+        };
+        const findMap2 = (kwSeo) => {
+          const low = (kwSeo||"").toLowerCase();
+          let md = getMapData2(kwSeo); if (md) return md;
+          for (const kc of Object.keys(geoGrid2).filter(k=>k!=='center')) {
+            const kcl = kc.toLowerCase();
+            if (low.startsWith(kcl) || kcl.startsWith(low)) { const d2=getMapData2(kc); if(d2) return d2; }
+          }
+          return null;
+        };
+        const rCol2 = p2 => !p2?"#94A3B8":p2<=3?"#059669":p2<=10?"#E85A30":"#DC2626";
+        const rBg2  = p2 => !p2?"#F4F5FA":p2<=3?"#F0FDF4":p2<=10?"#FFF7ED":"#FEF2F2";
+
+        const allKws2 = [
+          ...auditKws2.map(k => { const md=findMap2(k.kw); return md?{...k,position:md.avgRank,fromMap:true,scanHistory:md.scanHistory}:k; }),
+          ...customSeoKws2.map(k => { const md=findMap2(k); return {kw:k,position:md?.avgRank||null,fromMap:!!md,scanHistory:md?.scanHistory||[]}; }),
+          ...customMapKws2.filter(k=>!auditKws2.some(a=>a.kw.toLowerCase().includes(k.toLowerCase()))&&!customSeoKws2.some(s=>(s||"").toLowerCase().includes(k.toLowerCase()))).map(k => { const md=getMapData2(k); return md?{kw:k,position:md.avgRank,fromMap:true,scanHistory:md.scanHistory}:null; }).filter(Boolean),
+        ].filter((k,i2,arr) => arr.findIndex(a=>a.kw===k.kw)===i2);
+
+        const sorted = [...allKws2].sort((a,b)=>(a.position||999)-(b.position||999));
+        const allDates = [...new Set(sorted.flatMap(k=>(k.scanHistory||[]).map(pt=>(pt.date||"").slice(0,10))))].filter(Boolean).sort();
+
+        if (sorted.length === 0) return null;
+
+        return n.jsxs("div", { style:{background:"white",borderRadius:14,border:"1px solid #E5E7EB",padding:"18px 20px",marginBottom:16}, children:[
+          n.jsxs("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14},children:[
+            n.jsx("div",{style:{fontWeight:800,fontSize:14,color:"#1E1B30"},children:"🏆 Positionnement — Mots-clés"}),
+            n.jsxs("div",{style:{fontSize:11,color:"#9CA3AF"},children:[sorted.filter(k=>k.fromMap).length," scannés · ",sorted.length," au total"]}),
+          ]}),
+          allDates.length > 0
+            ? n.jsxs("div",{style:{overflowX:"auto"},children:[
+              n.jsxs("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12.5},children:[
+                n.jsx("thead",{children:n.jsxs("tr",{style:{background:"#F8F9FB"},children:[
+                  n.jsx("th",{style:{padding:"9px 14px",textAlign:"left",fontWeight:700,color:"#374151",borderBottom:"2px solid #E5E7EB",minWidth:160},children:"Mot-clé"}),
+                  ...allDates.map(dt=>n.jsx("th",{key:dt,style:{padding:"9px 10px",textAlign:"center",fontWeight:600,color:"#6B7280",fontSize:11,borderBottom:"2px solid #E5E7EB",whiteSpace:"nowrap"},children:new Date(dt).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})},dt)),
+                  n.jsx("th",{style:{padding:"9px 10px",textAlign:"center",fontWeight:700,color:"#1E1B30",borderBottom:"2px solid #E5E7EB",background:"#EEF2FF"},children:"Tendance"}),
+                ]})}),
+                n.jsx("tbody",{children:sorted.map((h,ri)=>{
+                  const ptsByDate=Object.fromEntries((h.scanHistory||[]).map(pt=>[(pt.date||"").slice(0,10),pt.position]));
+                  const lastPos=h.scanHistory?.at(-1)?.position;
+                  const firstPos=h.scanHistory?.[0]?.position;
+                  const trend=firstPos&&lastPos&&h.scanHistory.length>1?firstPos-lastPos:0;
+                  return n.jsxs("tr",{style:{background:ri%2===0?"white":"#FAFAFA",borderTop:"1px solid #F3F4F6"},children:[
+                    n.jsxs("td",{style:{padding:"9px 14px",fontWeight:600,color:"#1E1B30"},children:[
+                      h.kw,
+                      h.fromMap&&n.jsx("span",{style:{marginLeft:4,background:"#E0E7FF",color:"#3730A3",borderRadius:3,padding:"1px 4px",fontSize:9,fontWeight:700},children:"🗺️"}),
+                    ]}),
+                    ...allDates.map(dt=>{
+                      const pos=ptsByDate[dt];
+                      return n.jsx("td",{key:dt,style:{padding:"9px 8px",textAlign:"center"},children:
+                        pos?n.jsxs("span",{style:{display:"inline-block",minWidth:32,padding:"2px 6px",borderRadius:6,background:rBg2(pos),color:rCol2(pos),fontWeight:800,fontSize:12},children:["#",pos]}):n.jsx("span",{style:{color:"#CBD5E1"},children:"—"})
+                      },dt);
+                    }),
+                    n.jsx("td",{style:{padding:"9px 8px",textAlign:"center",background:"#EEF2FF"},children:
+                      trend===0?n.jsx("span",{style:{color:"#9CA3AF"},children:"→"}):n.jsxs("span",{style:{color:trend>0?"#059669":"#DC2626",fontWeight:800,fontSize:12},children:[trend>0?"↑":"↓"," ",Math.abs(trend)]}),
+                    }),
+                  ]},h.kw);
+                })}),
+              ]}),
+            ]})
+            : n.jsx("div",{style:{textAlign:"center",padding:"20px",color:"#9CA3AF",fontSize:13},children:"Lancez des scans dans l'onglet 🗺️ Carte pour voir les positions"}),
+        ]});
+      })(),
+
       I === "ranking" &&
         Object.keys(p).length === 0 &&
         n.jsxs("div", {
@@ -21865,13 +22386,13 @@ function MarcheSidebar({
     const u = setInterval(() => I((m) => Math.min(m + 1, h.length - 1)), 1100);
     return () => clearInterval(u);
   }, [b]);
-  const f = a(e.scores || {}),
+  const f = a({ ...(e.scores || {}), ...(e.manualOverrides || {}) }),
     c = async () => {
       var u, m, C, B;
       if (d.trim()) {
         (g(""), x("loading"), I(0));
         try {
-          const k = await $c(e.name, d, o),
+          const k = await $c(e.name, d, o, e.manualZones || []),
             R = { ...Oc() };
           Object.entries(k.scores || {}).forEach(([V, G]) => {
             V in R && (R[V] = G);
@@ -21960,8 +22481,8 @@ function MarcheSidebar({
             n.jsxs("div", {
               children: [
                 n.jsx("div", {
-                  style: { ...ke, fontSize: 20 },
-                  children: "Mettre à jour via IA",
+                  style: { fontSize: 16, fontWeight: 800, color: "#1E1B30" },
+                  children: "Mettre à jour la fiche",
                 }),
                 n.jsxs("div", {
                   style: { fontSize: 12, color: "var(--ink4)", marginTop: 2 },
@@ -22282,7 +22803,7 @@ function CalendrierGrid({
 }) {
   const l = r || "";
   getLvl(t);
-  const [a, d] = D.useState({ ...e.scores }),
+  const [a, d] = D.useState({ ...(e.scores||{}), ...(e.manualOverrides||{}) }),
     [p, b] = D.useState(!1),
     [x, j] = D.useState(!1),
     [I, z] = D.useState([]),
@@ -23418,17 +23939,55 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
         ]}),
 
         // Bouton CTA
-        n.jsxs("div", { children:[
-          n.jsx("label", { style:labelStyle, children:"Bouton d'action (optionnel)" }),
-          n.jsx("div", { style:{ display:"flex", flexWrap:"wrap", gap:6, marginBottom: ctaType && ctaType !== "CALL" ? 10 : 0 }, children:
-            CTA_OPTS.map(opt => n.jsx("button", {
-              key:opt.id,
-              onClick:()=>setCtaType(opt.id),
-              style:{ padding:"6px 14px", borderRadius:20, border:`1.5px solid ${ctaType===opt.id ? "#4285F4" : "#E5E7EB"}`, background:ctaType===opt.id ? "#EFF6FF" : "white", color:ctaType===opt.id ? "#1D4ED8" : "#374151", fontSize:12, fontWeight:ctaType===opt.id ? 700 : 500, cursor:"pointer", fontFamily:"inherit", transition:"all .15s" },
-              children:opt.label,
-            }, opt.id))
+        n.jsxs("div", { style:{ background:"#F8FAFF", border:"1.5px solid #DBEAFE", borderRadius:12, padding:"14px 16px" }, children:[
+          n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }, children:[
+            n.jsxs("div", { children:[
+              n.jsx("div", { style:{ fontSize:12, fontWeight:800, color:"#1E40AF" }, children:"🔗 Bouton d'action (CTA)" }),
+              n.jsx("div", { style:{ fontSize:11, color:"#6B7280", marginTop:1 }, children:"Ajoute un bouton cliquable sur votre post Google" }),
+            ]}),
+            ctaType && n.jsx("button", { onClick:()=>{ setCtaType(""); setCtaUrl(""); }, style:{ background:"none", border:"none", color:"#9CA3AF", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit", padding:"2px 6px", borderRadius:5 }, children:"✕ Effacer" }),
+          ]}),
+          // Grille des CTA
+          n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6, marginBottom: ctaType ? 12 : 0 }, children:
+            CTA_OPTS.map(opt => {
+              const icons = { BOOK:"📅", ORDER:"🛒", SHOP:"🏪", LEARN_MORE:"📖", SIGN_UP:"✍️", CALL:"📞" };
+              const sel = ctaType === opt.id;
+              return n.jsxs("button", {
+                key:opt.id,
+                onClick:()=>setCtaType(sel ? "" : opt.id),
+                style:{
+                  padding:"9px 8px", borderRadius:9, cursor:"pointer", fontFamily:"inherit", transition:"all .15s",
+                  border:`1.5px solid ${sel ? "#2563EB" : "#DBEAFE"}`,
+                  background: sel ? "#2563EB" : "white",
+                  color: sel ? "white" : "#374151",
+                  fontSize:11.5, fontWeight: sel ? 700 : 500,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:4,
+                  textAlign:"center",
+                },
+                children:[ n.jsx("span", { children: icons[opt.id] }), opt.label ],
+              }, opt.id);
+            })
           }),
-          ctaType && ctaType !== "CALL" && n.jsx("input", { type:"url", value:ctaUrl, onChange:ev=>setCtaUrl(ev.target.value), placeholder:"URL du bouton (ex : https://monsite.fr/reserver)", style:inputStyle }),
+          // Champ URL (tous sauf CALL)
+          ctaType && ctaType !== "CALL" && n.jsxs("div", { children:[
+            n.jsx("label", { style:{ ...labelStyle, color:"#1E40AF" }, children:"URL du bouton *" }),
+            n.jsx("input", {
+              type:"url", value:ctaUrl, onChange:ev=>setCtaUrl(ev.target.value),
+              placeholder:"https://monsite.fr/reserver",
+              style:{ ...inputStyle, border:"1.5px solid #93C5FD" },
+            }),
+            n.jsx("div", { style:{ fontSize:10.5, color:"#6B7280", marginTop:4 }, children:"L'URL s'ouvrira quand un internaute clique sur le bouton de votre post" }),
+          ]}),
+          // Champ téléphone (CALL uniquement)
+          ctaType === "CALL" && n.jsxs("div", { children:[
+            n.jsx("label", { style:{ ...labelStyle, color:"#1E40AF" }, children:"Numéro de téléphone" }),
+            n.jsx("input", {
+              type:"tel", value:ctaUrl, onChange:ev=>setCtaUrl(ev.target.value),
+              placeholder:"Ex : 0033612345678 (format international recommandé)",
+              style:{ ...inputStyle, border:"1.5px solid #93C5FD" },
+            }),
+            n.jsx("div", { style:{ fontSize:10.5, color:"#6B7280", marginTop:4 }, children:"Laissez vide pour utiliser le numéro déjà renseigné sur votre fiche Google" }),
+          ]}),
         ]}),
 
         // Champs Offre spécifiques
@@ -23508,11 +24067,24 @@ function PublicationsTab({ client: e, clients: t, upd: i, hasEnvKey: r, apiKey: 
   // AI Generator state
   const [genTitle, setGenTitle] = D.useState("");
   const [genType, setGenType] = D.useState("Realisation");
+  const [genGmbType, setGenGmbType] = D.useState("STANDARD"); // STANDARD | EVENT | OFFER
   const [genInfos, setGenInfos] = D.useState("");
   const [genKw, setGenKw] = D.useState("");
+  // Champs spécifiques Événement/Offre
+  const [genEventTitle, setGenEventTitle] = D.useState("");
+  const [genStartDate, setGenStartDate] = D.useState("");
+  const [genEndDate, setGenEndDate] = D.useState("");
+  const [genCoupon, setGenCoupon] = D.useState("");
   const [genResult, setGenResult] = D.useState("");
   const [genLoading, setGenLoading] = D.useState(false);
   const [copied, setCopied] = D.useState(false);
+  const [genHistory, setGenHistory] = D.useState(e.genHistory || []);
+  const [showHistory, setShowHistory] = D.useState(false);
+  const [ideaFilter, setIdeaFilter] = D.useState("Tous");
+  const [postTemplates, setPostTemplates] = D.useState(e.postTemplates || []);
+  const [showTemplates, setShowTemplates] = D.useState(false);
+  // Re-sync si le client change sans démontage du composant
+  D.useEffect(() => { setGenHistory(e.genHistory || []); setPostTemplates(e.postTemplates || []); }, [e.id]);
   const [copiedIdeaIdx, setCopiedIdeaIdx] = D.useState(null);
   const [editingPost, setEditingPost] = D.useState(null); // "gen" | ideaIdx | null
   const [editedText, setEditedText] = D.useState("");
@@ -23544,32 +24116,50 @@ function PublicationsTab({ client: e, clients: t, upd: i, hasEnvKey: r, apiKey: 
     setGenLoading(true);
     setGenResult("");
     try {
-      const systemPrompt = `Tu es un expert en référencement Google My Business. Tu génères des publications GMB optimisées pour améliorer la visibilité locale d'un établissement.
+      const estabAddress = e.address || extracted.address || "";
+      const estabDesc = e.description || extracted.description || "";
+      const systemPrompt = `Je publie un Google Post pour ma fiche Google My Business et tu rédiges le texte à ma place, comme si j'étais le gérant qui s'adresse directement à mes clients.
 
-Règles strictes pour les publications GMB :
-- Longueur idéale : 150 à 300 mots
-- Commence directement par l'accroche, sans titre ni introduction
-- Utilise un ton professionnel mais chaleureux, proche du client
-- Inclus naturellement le mot-clé si fourni (sans forcer)
-- Mentionne la ville / zone géographique de façon naturelle
-- Ajoute un appel à l'action clair et concret à la fin (ex : "Appelez-nous", "Prenez rendez-vous", "Contactez-nous")
-- Pas de hashtags au milieu du texte — maximum 3 hashtags pertinents à la toute fin
-- Pas de markdown (pas de gras, pas de listes à puces, pas de titres)
-- Structure : Accroche percutante → Corps (fait concret, bénéfice client) → CTA
+Ton et style :
+- Écris comme un professionnel passionné qui parle à ses clients, pas comme un rédacteur marketing.
+- Sois concret, ancré dans la réalité du métier : vocabulaire du terrain, situations vécues, détails que seul un expert connaît.
+- Chaque phrase doit apporter de la valeur (un fait, un conseil, une nuance) — rien de remplissage.
 
-Informations sur l'établissement :
+Structure :
+- Accroche en première phrase : pose un problème, une question ou un fait concret — jamais une présentation générique.
+- Corps : développe avec mon expertise sur le sujet, alterne phrases courtes percutantes et phrases plus développées.
+- Fermeture : une ouverture naturelle qui donne envie d'agir (visiter, appeler, se renseigner) sans appel à l'action explicite.
+
+Contraintes techniques :
+- Longueur cible : 1200 caractères (entre 1100 et 1300, jamais au-dessus de 1400).
+- Termine OBLIGATOIREMENT par une phrase complète (point, point d'exclamation ou point d'interrogation). Jamais d'idée en suspens.
+- Aucun markdown : pas de gras, pas de listes à puces, pas de titres, pas d'émojis
+- Pas de liens, pas de numéro de téléphone, pas de prix dans le texte.
+
+Mon établissement :
 - Nom : ${e.name || ""}
 - Activité : ${e.category || extracted.category || ""}
-- Ville : ${e.city || extracted.city || ""}
+- Adresse : ${estabAddress}
 - Téléphone : ${extracted.phone || ""}
-- Site web : ${extracted.website || ""}`;
+- Site web : ${extracted.website || ""}
+- Description : ${estabDesc}`;
 
-      const userMsg = `Type de publication : ${genType}
+      const gmbTypeLabel = genGmbType === "EVENT" ? "Événement" : genGmbType === "OFFER" ? "Offre promotionnelle" : "Actualité (Standard)";
+      const gmbTypeInstr = genGmbType === "EVENT"
+        ? `C'est un post ÉVÉNEMENT. Mets en avant la date${genStartDate ? ` (du ${genStartDate}${genEndDate ? " au " + genEndDate : ""})` : ""}, crée l'envie de participer, sans appel à l'action explicite — juste une ouverture naturelle vers la présence/inscription.`
+        : genGmbType === "OFFER"
+        ? `C'est une OFFRE promotionnelle.${genCoupon ? ` Code promo : ${genCoupon}.` : ""} Mets en avant la valeur, l'urgence, la date limite${genEndDate ? ` (jusqu'au ${genEndDate})` : ""}, avec une fermeture qui donne envie d'agir sans CTA explicite.`
+        : "C'est un post ACTUALITÉ standard. Structure : accroche concrète → corps avec expertise terrain → fermeture qui ouvre vers l'action sans CTA explicite.";
+      const userMsg = `Format GMB : ${gmbTypeLabel}
+Catégorie éditoriale : ${genType}
 Titre / sujet : ${genTitle}
-${genInfos ? `Informations complémentaires : ${genInfos}` : ""}
-${genKw ? `Mot-clé à intégrer naturellement : ${genKw}` : ""}
+${gmbTypeInstr}
 
-Rédige la publication GMB optimisée.`;
+Consignes spécifiques :
+${genInfos ? genInfos : "(aucune consigne supplémentaire)"}
+${genKw ? `\nMot-clé à intégrer naturellement dans le texte : ${genKw}` : ""}
+
+Rédige la publication GMB.`;
 
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -23581,14 +24171,20 @@ Rédige la publication GMB optimisée.`;
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 600,
+          max_tokens: 1000,
           system: systemPrompt,
           messages: [{ role: "user", content: userMsg }],
         }),
       });
       const data = await resp.json();
+      if (!resp.ok || data.error) { setGenResult(`Erreur API : ${data.error?.message || data.error || resp.status}`); setGenLoading(false); return; }
       const text = (data.content || []).map(c => c.text || "").join("").trim();
       setGenResult(text);
+      // Sauvegarder dans l'historique
+      const histEntry = { id: Date.now(), text, title: genTitle, type: genType, gmbType: genGmbType, date: new Date().toISOString().slice(0,10) };
+      const updatedHist = [histEntry, ...(e.genHistory || [])].slice(0, 20);
+      setGenHistory(updatedHist);
+      i(t.map(cl => cl.id === e.id ? { ...cl, genHistory: updatedHist } : cl));
     } catch(err) { setGenResult("Erreur lors de la génération. Vérifiez votre clé API."); }
     setGenLoading(false);
   };
@@ -23689,7 +24285,7 @@ Rédige la publication GMB optimisée.`;
   };
 
   const tabs2 = [
-    { id: "generator", label: "✨ Créer & Publier" },
+    { id: "generator", label: "✨ Générateur de posts" },
     { id: "calendar", label: `📅 Calendrier (${allCalPosts.length + Object.values(e.calPosts||{}).flat().length})` },
   ];
 
@@ -23716,17 +24312,32 @@ Rédige la publication GMB optimisée.`;
         ]})
       }),
 
-      // Bandeau succès publication Google
-      // Sub-tabs
-      n.jsx("div", {
-        style: { display: "flex", gap: 4, padding: "14px 24px 0", borderBottom: "1px solid #F3F4F6", overflowX: "auto" },
-        children: tabs2.map(tb => n.jsx("button", {
-          key: tb.id,
-          onClick: () => setSubTab(tb.id),
-          style: { background: "none", border: "none", borderBottom: subTab === tb.id ? "2px solid #6B40D8" : "2px solid transparent", color: subTab === tb.id ? "#6B40D8" : "#6B7280", fontWeight: subTab === tb.id ? 700 : 500, fontSize: 13, padding: "8px 14px 10px", cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" },
-          children: tb.label,
-        })),
-      }),
+      // ── TITRE + TABS style Visibilité ──
+      n.jsxs("div", { style:{ padding:"18px 24px 0" }, children:[
+        // Header
+        n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:0, marginBottom:14 }, children:[
+          n.jsx("div", { style:{ width:4, height:28, borderRadius:2, background:"linear-gradient(135deg,var(--indigo2),#C03080)", marginRight:14, flexShrink:0 } }),
+          n.jsxs("div", { children:[
+            n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"var(--ink)" }, children:"Publications" }),
+            n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginTop:2 }, children:"Générez vos posts GMB — copiez et publiez directement sur Google Business Profile" }),
+          ]}),
+        ]}),
+        // Segmented tabs (style Visibilité)
+        n.jsx("div", { style:{ display:"flex", gap:4, background:"#F4F5FA", borderRadius:10, padding:"4px" }, children:
+          tabs2.map(tb => n.jsx("button", {
+            key: tb.id,
+            onClick: () => setSubTab(tb.id),
+            style:{ flex:1, padding:"8px 12px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit",
+              fontWeight: subTab===tb.id ? 700 : 500, fontSize:13,
+              background: subTab===tb.id ? "white" : "transparent",
+              color: subTab===tb.id ? "var(--indigo2)" : "var(--ink4)",
+              boxShadow: subTab===tb.id ? "0 1px 4px rgba(0,0,0,.1)" : "none",
+              transition:"all .15s",
+            },
+            children: tb.label,
+          }))
+        }),
+      ]}),
 
       // Content
       n.jsxs("div", {
@@ -23735,65 +24346,145 @@ Rédige la publication GMB optimisée.`;
 
           // ── GÉNÉRATEUR IA ──
           subTab === "generator" && n.jsxs("div", { className: "fade", children: [
-            n.jsxs("div", { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }, children: [
-              n.jsxs("div", { children: [
-                n.jsx("div", { style: { fontSize: 17, fontWeight: 800, color: "#1E1B30" }, children: "Générateur de publications IA" }),
-                n.jsx("div", { style: { fontSize: 12, color: "#6B7280", marginTop: 2 }, children: "Décrivez votre sujet → Claude génère un post GMB optimisé pour Google" }),
-              ]}),
-              !hasKey && n.jsx("div", { style: { background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#92400E" }, children: "⚠️ Clé API requise (Mon Espace → Paramètres)" }),
-            ]}),
 
-            n.jsxs("div", { style: { background: "white", border: "1.5px solid #E5E7EB", borderRadius: 16, padding: "22px 24px", marginBottom: 20 }, children: [
-              // Type + Title
-              n.jsxs("div", { style: { display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }, children: [
-                n.jsxs("div", { style: { flex: "0 0 auto" }, children: [
-                  n.jsx("label", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".4px" }, children: "Type de post" }),
+            n.jsxs("div", { style: { background: "white", border: "1px solid var(--border)", borderTop: "3px solid var(--indigo2)", borderRadius: 12, padding: "22px 24px", marginBottom: 20 }, children: [
+              // Bandeau titre
+              n.jsxs("div", { style: { display:"flex", alignItems:"center", gap:14, marginBottom:22, padding:"15px 18px", borderRadius:14, background:"linear-gradient(135deg,#F5F3FF,#FDF2F8)", border:"1px solid #E9D5FF" }, children:[
+                n.jsx("div", { style:{ width:42, height:42, borderRadius:12, background:"linear-gradient(135deg,#6B40D8,#C03080)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, boxShadow:"0 4px 14px rgba(107,64,216,.3)" }, children:"✨" }),
+                n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                  n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"#1E1B30", marginBottom:2 }, children:"Générateur de publications" }),
+                  n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"Décrivez votre sujet, l'IA rédige un post GMB optimisé pour Google en quelques secondes" }),
+                ]}),
+                !hasKey && n.jsx("div", { style:{ background:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:8, padding:"6px 12px", fontSize:11.5, color:"#92400E", fontWeight:600, flexShrink:0, whiteSpace:"nowrap" }, children:"⚠️ Clé API requise" }),
+              ]}),
+
+              // ── SÉLECTION TYPE GMB (segmented control) ──
+              n.jsxs("div", { style: { marginBottom: 18 }, children: [
+                n.jsx("label", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" }, children: "Type de publication Google" }),
+                n.jsx("div", { style: { display: "flex", gap: 6, background:"#F9FAFB", borderRadius:12, padding:5, border:"1px solid #F0F0F5" }, children:
+                  [
+                    { id: "STANDARD", icon: "📢", label: "Actualité", color: "#6B40D8" },
+                    { id: "EVENT",    icon: "🎉", label: "Événement", color: "#0891b2" },
+                    { id: "OFFER",    icon: "🏷️", label: "Offre",     color: "#059669" },
+                  ].map(opt => n.jsxs("button", {
+                    key: opt.id,
+                    onClick: () => setGenGmbType(opt.id),
+                    style: {
+                      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, whiteSpace: "nowrap",
+                      padding: "7px 10px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", transition: "all .15s", border: "none",
+                      background: genGmbType === opt.id ? "white" : "transparent",
+                      boxShadow: genGmbType === opt.id ? "0 1px 6px rgba(0,0,0,.08)" : "none",
+                      color: genGmbType === opt.id ? opt.color : "#9CA3AF",
+                      fontWeight: genGmbType === opt.id ? 800 : 600,
+                    },
+                    children: [
+                      n.jsx("span", { style: { fontSize: 13 }, children: opt.icon }),
+                      n.jsx("span", { style: { fontSize: 12 }, children: opt.label }),
+                    ],
+                  }, opt.id))
+                }),
+              ]}),
+
+              // ── CHAMPS CONDITIONNELS EVENT ──
+              genGmbType === "EVENT" && n.jsxs("div", { style: { background: "#ECFEFF", border: "1.5px solid #A5F3FC", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }, children: [
+                n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#0891b2", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }, children: "🎉 Infos événement" }),
+                n.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }, children: [
+                  n.jsxs("div", { style: { flex: 2, minWidth: 180 }, children: [
+                    n.jsx("label", { style: { fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }, children: "Titre de l'événement" }),
+                    n.jsx("input", { type: "text", value: genEventTitle, onChange: ev => setGenEventTitle(ev.target.value), placeholder: "Ex : Journée portes ouvertes, Atelier gratuit...", style: { width: "100%", padding: "8px 10px", border: "1.5px solid #A5F3FC", borderRadius: 8, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" } }),
+                  ]}),
+                ]}),
+                n.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" }, children: [
+                  n.jsxs("div", { style: { flex: 1, minWidth: 140 }, children: [
+                    n.jsx("label", { style: { fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }, children: "Date de début" }),
+                    n.jsx("input", { type: "date", value: genStartDate, onChange: ev => setGenStartDate(ev.target.value), style: { width: "100%", padding: "8px 10px", border: "1.5px solid #A5F3FC", borderRadius: 8, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" } }),
+                  ]}),
+                  n.jsxs("div", { style: { flex: 1, minWidth: 140 }, children: [
+                    n.jsx("label", { style: { fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }, children: "Date de fin" }),
+                    n.jsx("input", { type: "date", value: genEndDate, onChange: ev => setGenEndDate(ev.target.value), style: { width: "100%", padding: "8px 10px", border: "1.5px solid #A5F3FC", borderRadius: 8, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" } }),
+                  ]}),
+                ]}),
+              ]}),
+
+              // ── CHAMPS CONDITIONNELS OFFER ──
+              genGmbType === "OFFER" && n.jsxs("div", { style: { background: "#ECFDF5", border: "1.5px solid #6EE7B7", borderRadius: 10, padding: "14px 16px", marginBottom: 14 }, children: [
+                n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#059669", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".4px" }, children: "🏷️ Infos offre" }),
+                n.jsxs("div", { style: { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }, children: [
+                  n.jsxs("div", { style: { flex: 1, minWidth: 160 }, children: [
+                    n.jsx("label", { style: { fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }, children: "Code promo (optionnel)" }),
+                    n.jsx("input", { type: "text", value: genCoupon, onChange: ev => setGenCoupon(ev.target.value), placeholder: "Ex : ETE20, BIENVENUE10...", style: { width: "100%", padding: "8px 10px", border: "1.5px solid #6EE7B7", borderRadius: 8, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" } }),
+                  ]}),
+                  n.jsxs("div", { style: { flex: 1, minWidth: 140 }, children: [
+                    n.jsx("label", { style: { fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }, children: "Valable jusqu'au" }),
+                    n.jsx("input", { type: "date", value: genEndDate, onChange: ev => setGenEndDate(ev.target.value), style: { width: "100%", padding: "8px 10px", border: "1.5px solid #6EE7B7", borderRadius: 8, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" } }),
+                  ]}),
+                  n.jsxs("div", { style: { flex: 1, minWidth: 140 }, children: [
+                    n.jsx("label", { style: { fontSize: 11, fontWeight: 600, color: "#374151", display: "block", marginBottom: 4 }, children: "Date de début" }),
+                    n.jsx("input", { type: "date", value: genStartDate, onChange: ev => setGenStartDate(ev.target.value), style: { width: "100%", padding: "8px 10px", border: "1.5px solid #6EE7B7", borderRadius: 8, fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" } }),
+                  ]}),
+                ]}),
+              ]}),
+
+              // ── Ligne 2 : Titre + Catégorie ──
+              n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, marginBottom:14 }, children:[
+                n.jsxs("div", { children:[
+                  n.jsx("label", { style:{ fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px" }, children:"Titre / Sujet *" }),
+                  n.jsx("input", {
+                    type:"text", value:genTitle, onChange:ev=>setGenTitle(ev.target.value),
+                    placeholder: genGmbType==="EVENT" ? "Ex : Journée portes ouvertes, soirée lancement..." : genGmbType==="OFFER" ? "Ex : -20% sur nos prestations, pack découverte..." : "Ex : Rénovation salle de bain, nouveau service...",
+                    style:{ width:"100%", padding:"11px 14px", border:`2px solid ${genTitle.trim()?"#6B40D8":"#E5E7EB"}`, borderRadius:10, fontSize:14, boxSizing:"border-box", fontFamily:"inherit", outline:"none", transition:"border .15s" },
+                  }),
+                ]}),
+                n.jsxs("div", { children:[
+                  n.jsx("label", { style:{ fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px" }, children:"Catégorie" }),
                   n.jsx("select", {
-                    value: genType,
-                    onChange: ev => setGenType(ev.target.value),
-                    style: { padding: "9px 12px", border: "1.5px solid #E5E7EB", borderRadius: 9, fontSize: 13, fontFamily: "inherit", background: "white", cursor: "pointer" },
-                    children: postTypes.map(pt => n.jsx("option", { value: pt, children: `${typeIcons[pt]} ${pt}` }, pt)),
-                  }),
-                ]}),
-                n.jsxs("div", { style: { flex: 1, minWidth: 200 }, children: [
-                  n.jsx("label", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".4px" }, children: "Titre / Sujet *" }),
-                  n.jsx("input", {
-                    type: "text", value: genTitle, onChange: ev => setGenTitle(ev.target.value),
-                    placeholder: "Ex : Rénovation salle de bain, Promo été, Nouveau service...",
-                    style: { width: "100%", padding: "9px 12px", border: "1.5px solid #E5E7EB", borderRadius: 9, fontSize: 13, boxSizing: "border-box" },
+                    value:genType, onChange:ev=>setGenType(ev.target.value),
+                    style:{ padding:"11px 10px", border:"2px solid var(--border)", borderRadius:10, fontSize:12, fontFamily:"inherit", background:"white", cursor:"pointer", minWidth:130 },
+                    children: postTypes.map(pt => n.jsx("option",{value:pt,children:`${typeIcons[pt]} ${pt}`},pt)),
                   }),
                 ]}),
               ]}),
-              // Infos + KW
-              n.jsxs("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }, children: [
-                n.jsxs("div", { style: { flex: 2, minWidth: 200 }, children: [
-                  n.jsx("label", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".4px" }, children: "Informations complémentaires" }),
+
+              // ── Ligne 3 : Infos + KW ──
+              n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:20 }, children:[
+                n.jsxs("div", { children:[
+                  n.jsx("label", { style:{ fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px" }, children:"Informations complémentaires" }),
                   n.jsx("textarea", {
-                    value: genInfos, onChange: ev => setGenInfos(ev.target.value), rows: 3,
-                    placeholder: "Ex : Avant/après, matériaux utilisés, durée du chantier, détails de l'offre, témoignage client...",
-                    style: { width: "100%", padding: "9px 12px", border: "1.5px solid #E5E7EB", borderRadius: 9, fontSize: 13, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" },
+                    value:genInfos, onChange:ev=>setGenInfos(ev.target.value), rows:4,
+                    placeholder: genGmbType==="EVENT" ? "Programme, intervenants, lieu, modalités..." : genGmbType==="OFFER" ? "Conditions, produits concernés, valeur, validité..." : "Avant/après, matériaux, durée, témoignage client...",
+                    style:{ width:"100%", padding:"11px 14px", border:"2px solid #E5E7EB", borderRadius:10, fontSize:13, boxSizing:"border-box", resize:"vertical", fontFamily:"inherit", outline:"none", lineHeight:1.5 },
                   }),
                 ]}),
-                n.jsxs("div", { style: { flex: 1, minWidth: 160 }, children: [
-                  n.jsx("label", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".4px" }, children: "Mot-clé SEO (optionnel)" }),
+                n.jsxs("div", { children:[
+                  n.jsx("label", { style:{ fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:6,textTransform:"uppercase",letterSpacing:".5px" }, children:"Mot-clé SEO" }),
                   n.jsx("input", {
-                    type: "text", value: genKw, onChange: ev => setGenKw(ev.target.value),
-                    placeholder: "Ex : plombier Lyon",
-                    style: { width: "100%", padding: "9px 12px", border: "1.5px solid #E5E7EB", borderRadius: 9, fontSize: 13, boxSizing: "border-box" },
+                    type:"text", value:genKw, onChange:ev=>setGenKw(ev.target.value),
+                    placeholder:"Ex : plombier Lyon, coiffeur Nantes...",
+                    style:{ width:"100%", padding:"11px 14px", border:"2px solid #E5E7EB", borderRadius:10, fontSize:13, boxSizing:"border-box", fontFamily:"inherit", outline:"none" },
                   }),
-                  n.jsx("div", { style: { fontSize: 11, color: "#9CA3AF", marginTop: 6, lineHeight: 1.4 }, children: "Intégré naturellement dans le post pour booster la visibilité" }),
+                  n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:8, lineHeight:1.5, background:"#F9FAFB", borderRadius:8, padding:"8px 10px" }, children:"💡 Le mot-clé sera intégré naturellement dans le post pour améliorer votre positionnement Google local." }),
                 ]}),
               ]}),
+
+              // ── Bouton générer ──
               n.jsx("button", {
-                onClick: generatePost,
+                onClick:generatePost,
                 disabled: genLoading || !hasKey || !genTitle.trim(),
-                style: {
-                  background: genLoading || !hasKey || !genTitle.trim() ? "#E5E7EB" : "linear-gradient(135deg,#6B40D8,#C03080)",
-                  color: genLoading || !hasKey || !genTitle.trim() ? "#9CA3AF" : "white",
-                  border: "none", borderRadius: 10, padding: "11px 28px", fontSize: 14, fontWeight: 700, cursor: genLoading || !hasKey || !genTitle.trim() ? "not-allowed" : "pointer", fontFamily: "inherit",
-                  display: "flex", alignItems: "center", gap: 8,
+                style:{
+                  width:"100%", padding:"10px", borderRadius:10,
+                  background: genLoading||!hasKey||!genTitle.trim() ? "#E5E7EB" : "linear-gradient(135deg,#6B40D8,#C03080)",
+                  color: genLoading||!hasKey||!genTitle.trim() ? "#9CA3AF" : "white",
+                  border:"none", fontSize:13, fontWeight:800, cursor: genLoading||!hasKey||!genTitle.trim() ? "not-allowed" : "pointer",
+                  fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                  boxShadow: genLoading||!hasKey||!genTitle.trim() ? "none" : "0 3px 14px rgba(107,64,216,.3)",
+                  transition:"all .2s",
                 },
-                children: genLoading ? "⏳ Génération en cours..." : "✨ Générer la publication",
+                children: genLoading
+                  ? n.jsxs(n.Fragment,{children:[n.jsx("span",{style:{fontSize:15},children:"⏳"}), "Génération en cours..."]})
+                  : n.jsxs(n.Fragment,{children:[
+                      n.jsx("span",{style:{fontSize:15},children:"✨"}),
+                      `Générer mon post — ${genGmbType==="EVENT"?"Événement":genGmbType==="OFFER"?"Offre":"Actualité"}`,
+                    ]}),
               }),
             ]}),
 
@@ -23807,9 +24498,9 @@ Rédige la publication GMB optimisée.`;
                   n.jsx("span", { style: { background: typeColors[genType] || "#6B40D8", color: "white", borderRadius: 20, padding: "2px 10px", fontSize: 10, fontWeight: 700 }, children: genType }),
                 ]}),
                 n.jsxs("div", { style: { display: "flex", gap: 16, fontSize: 11 }, children: [
-                  { label: "Longueur", value: `${genResult.length} car.`, ok: genResult.length >= 150 && genResult.length <= 1500 },
-                  { label: "CTA", value: /contactez|appelez|prenez rendez|visitez|découvrez/i.test(genResult) ? "✅" : "⚠️", ok: true },
-                  { label: "Hashtags", value: (genResult.match(/#\w+/g) || []).length + "/3", ok: (genResult.match(/#\w+/g) || []).length <= 3 },
+                  { label: "Longueur", value: `${genResult.length} car.`, ok: genResult.length >= 1100 && genResult.length <= 1400 },
+                  { label: "Fin", value: /[.!?]\s*$/.test(genResult.trim()) ? "✅" : "⚠️", ok: /[.!?]\s*$/.test(genResult.trim()) },
+                  { label: "Émojis/# ", value: /[\u{1F300}-\u{1FAFF}☀-➿]|#\w+/u.test(genResult) ? "⚠️" : "✅", ok: !/[\u{1F300}-\u{1FAFF}☀-➿]|#\w+/u.test(genResult) },
                 ].map(m => n.jsxs("span", { key: m.label, style: { color: m.ok ? "#059669" : "#d97706", fontWeight: 600 }, children: [m.label, ": ", m.value] })) }),
               ]}),
               // Texte (éditable)
@@ -23828,62 +24519,108 @@ Rédige la publication GMB optimisée.`;
                 // Ajouter au calendrier
                 n.jsx("button", { onClick: () => { setAddToCalPayload({ text: genResult, title: genTitle, type: genType }); setAddToCalDate(new Date().toISOString().slice(0,10)); setShowAddToCalModal(true); }, style: { padding: "7px 14px", borderRadius: 8, border: "1.5px solid var(--indigo2)", background: "white", color: "var(--indigo2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }, children: "📅 Calendrier" }),
                 // Programmer
-                n.jsx("button", { onClick: () => openComposer("schedule", genResult, genType === "Offre" ? "OFFER" : "STANDARD"), style: { padding: "7px 14px", borderRadius: 8, border: "1.5px solid #6B40D8", background: "white", color: "#6B40D8", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }, children: "⏰ Programmer" }),
+                n.jsx("button", { onClick: () => openComposer("schedule", genResult, genGmbType), style: { padding: "7px 14px", borderRadius: 8, border: "1.5px solid #6B40D8", background: "white", color: "#6B40D8", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }, children: "⏰ Programmer" }),
                 // Publier
-                n.jsx("button", { onClick: () => openComposer("publish", genResult, genType === "Offre" ? "OFFER" : "STANDARD"), style: { padding: "7px 14px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#4285F4,#34A853)", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }, children: "🚀 Publier" }),
+                n.jsx("button", { onClick: () => openComposer("publish", genResult, genGmbType), style: { padding: "7px 14px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#4285F4,#34A853)", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }, children: "🚀 Publier" }),
                 // Copier
                 n.jsx("button", { onClick: () => { navigator.clipboard.writeText(genResult); setCopied(true); setTimeout(() => setCopied(false), 2000); }, style: { marginLeft: "auto", padding: "7px 14px", borderRadius: 8, border: "1px solid #E5E7EB", background: copied ? "#059669" : "white", color: copied ? "white" : "#6B7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }, children: copied ? "✓ Copié !" : "📋 Copier" }),
+                n.jsx("button", {
+                  onClick: () => {
+                    const tpl = { id: Date.now(), text: genResult, title: genTitle, type: genType, gmbType: genGmbType, date: new Date().toISOString().slice(0,10) };
+                    const updatedTpl = [tpl, ...(e.postTemplates || [])].slice(0, 30);
+                    setPostTemplates(updatedTpl);
+                    i(t.map(cl => cl.id === e.id ? { ...cl, postTemplates: updatedTpl } : cl));
+                    alert("✅ Sauvegardé comme modèle !");
+                  },
+                  style: { padding: "7px 14px", borderRadius: 8, border: "1.5px solid #059669", background: "white", color: "#059669", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+                  children: "💾 Modèle",
+                }),
               ]}),
             ]}),
 
             // ── IDÉES AUDIT (sous le générateur) ──
             n.jsxs("div", { style: { marginTop: 24 }, children: [
-              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }, children: [
-                n.jsx("div", { style: { width: 4, height: 22, borderRadius: 2, background: "linear-gradient(135deg,#6B40D8,#C03080)", flexShrink: 0 } }),
-                n.jsxs("div", { children: [
-                  n.jsx("div", { style: { fontSize: 14, fontWeight: 800, color: "#1E1B30" }, children: "💡 Idées de publications (audit)" }),
-                  n.jsx("div", { style: { fontSize: 11, color: "#6B7280" }, children: "Générées lors du dernier audit · cliquez sur une action pour l'utiliser" }),
-                ]}),
+              n.jsxs("div", { style: { marginBottom: 14 }, children: [
+                n.jsx("div", { style: { fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 3 }, children: "Idées de publications (audit)" }),
+                n.jsx("div", { style: { fontSize: 12, color: "var(--ink4)" }, children: "Générées lors du dernier audit · utilisez les boutons pour programmer ou publier" }),
               ]}),
+              (P.postIdeas || []).length > 0 && n.jsx("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }, children:
+                ["Tous", ...new Set((P.postIdeas||[]).map(idea => idea.type))].map(ft => {
+                  const vtE = ft === "Tous" ? null : (vt.find(v2 => v2.id === ft) || vt[0]);
+                  const isActive = ideaFilter === ft;
+                  const cnt = ft === "Tous" ? (P.postIdeas||[]).length : (P.postIdeas||[]).filter(idea => idea.type === ft).length;
+                  return n.jsxs("button", {
+                    key: ft,
+                    onClick: () => setIdeaFilter(ft),
+                    style: {
+                      display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
+                      border: `1.5px solid ${isActive ? (vtE ? vtE.color : "#6B40D8") : "#E5E7EB"}`,
+                      background: isActive ? (vtE ? vtE.color : "#6B40D8") : "white",
+                      color: isActive ? "white" : "#6B7280",
+                      fontSize: 12, fontWeight: 700,
+                    },
+                    children: [
+                      ft !== "Tous" && n.jsx("span", { style: { fontSize: 13 }, children: typeIcons[ft] || "📝" }),
+                      n.jsx("span", { children: ft === "Tous" ? "Tous" : (vtE ? vtE.label : ft) }),
+                      n.jsx("span", { style: { fontSize: 10, opacity: .8 }, children: `(${cnt})` }),
+                    ],
+                  }, ft);
+                })
+              }),
               (P.postIdeas || []).length === 0
                 ? n.jsxs("div", { style: { background: "#F9FAFB", borderRadius: 12, padding: "28px 20px", textAlign: "center", border: "1.5px dashed #E5E7EB" }, children: [
                     n.jsx("div", { style: { fontSize: 32, marginBottom: 8 }, children: "✍️" }),
                     n.jsx("div", { style: { fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 4 }, children: "Aucune idée d'audit disponible" }),
                     n.jsx("div", { style: { fontSize: 12, color: "#9CA3AF" }, children: "Relancez un audit complet pour générer des idées personnalisées." }),
                   ]})
-                : n.jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 12 }, children:
-                    (P.postIdeas || []).map((idea, Z) => {
+                : n.jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }, children:
+                    (P.postIdeas || []).map((idea, Z) => ({ idea, Z })).filter(({idea}) => ideaFilter === "Tous" || idea.type === ideaFilter).map(({idea, Z}) => {
                       const vtEntry = vt.find(v2 => v2.id === idea.type) || vt[0];
                       const isEditing = editingPost === Z;
+                      const gmbType = idea.type === "Offre" ? "OFFER" : "STANDARD";
                       return n.jsxs("div", {
                         key: Z,
-                        style: { background: "white", borderRadius: 13, border: `1.5px solid ${isEditing ? "var(--indigo2)" : "#E5E7EB"}`, overflow: "hidden", display: "flex", flexDirection: "column", transition: "border-color .15s" },
+                        style: { background: "white", borderRadius: 12, border: `1px solid var(--border)`, borderTop: `3px solid ${vtEntry.color||"#6B40D8"}`, overflow: "hidden", transition: "border-color .15s" },
                         children: [
-                          // Header
-                          n.jsxs("div", { style: { background: vtEntry.bg || "#F5F3FF", padding: "10px 14px 8px", borderBottom: `2px solid ${vtEntry.color}25` }, children: [
-                            n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 7, marginBottom: 5 }, children: [
-                              n.jsx("span", { style: { fontSize: 16 }, children: typeIcons[idea.type] || "📝" }),
-                              n.jsx("span", { style: { background: vtEntry.color, color: "white", borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 700 }, children: idea.type }),
-                              idea.week && n.jsxs("span", { style: { marginLeft: "auto", background: "#F4F5FA", color: "#6B7280", borderRadius: 20, padding: "1px 8px", fontSize: 10, fontWeight: 600 }, children: ["S", idea.week] }),
+                          // Corps (sans barre gauche — couleur en haut via borderTop)
+                          n.jsxs("div", { style: { display: "flex", gap: 0 }, children: [
+                            n.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                              // Header
+                              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px 8px", background: vtEntry.bg || "#F9FAFB" }, children: [
+                                n.jsx("span", { style: { fontSize: 15 }, children: typeIcons[idea.type] || "📝" }),
+                                n.jsx("span", { style: { fontSize: 13, fontWeight: 800, color: "#1E1B30", flex: 1 }, children: idea.title }),
+                                idea.week && n.jsxs("span", { style: { background: "#F4F5FA", color: "#6B7280", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700 }, children: ["Semaine ", idea.week] }),
+                                n.jsx("span", { style: { background: vtEntry.color, color: "white", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700 }, children: idea.type }),
+                              ]}),
+                              // Contenu
+                              isEditing
+                                ? n.jsx("textarea", { autoFocus: true, value: editedText, onChange: ev => setEditedText(ev.target.value), style: { width: "100%", padding: "10px 14px", fontSize: 12.5, lineHeight: 1.7, border: "none", borderTop: "1px solid #E5E7EB", resize: "vertical", minHeight: 100, fontFamily: "inherit", outline: "none", boxSizing: "border-box" } })
+                                : n.jsx("div", { style: { padding: "10px 14px" }, children: n.jsx("p", { style: { fontSize: 12.5, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line", margin: 0 }, children: idea.content }) }),
                             ]}),
-                            n.jsx("div", { style: { fontSize: 12.5, fontWeight: 700, color: "#1E1B30" }, children: idea.title }),
                           ]}),
-                          // Contenu (éditable)
-                          isEditing
-                            ? n.jsx("textarea", { autoFocus: true, value: editedText, onChange: ev => setEditedText(ev.target.value), style: { flex: 1, padding: "10px 14px", fontSize: 12, lineHeight: 1.7, border: "none", resize: "vertical", minHeight: 100, fontFamily: "inherit", outline: "none", borderBottom: "1px solid #E5E7EB" } })
-                            : n.jsx("div", { style: { padding: "10px 14px", flex: 1 }, children: n.jsx("p", { style: { fontSize: 12, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line", margin: 0 }, children: idea.content }) }),
-                          // Boutons actions
-                          n.jsxs("div", { style: { padding: "8px 12px", borderTop: "1px solid #F3F4F6", background: "#FAFAFA", display: "flex", gap: 5, flexWrap: "wrap" }, children: [
+                          // ── Barre d'actions complète ──
+                          n.jsxs("div", { style: { padding: "10px 14px", borderTop: "1px solid #F3F4F6", background: "#F9FAFB", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }, children: [
                             isEditing
                               ? n.jsxs(n.Fragment, { children: [
-                                  n.jsx("button", { onClick: () => setEditingPost(null), style: { flex: 1, padding: "6px", borderRadius: 7, border: "none", background: "#059669", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "✅ OK" }),
-                                  n.jsx("button", { onClick: () => setEditingPost(null), style: { padding: "6px 8px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }, children: "✕" }),
+                                  n.jsx("button", { onClick: () => setEditingPost(null), style: { padding: "7px 16px", borderRadius: 7, border: "none", background: "#059669", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "✅ Valider" }),
+                                  n.jsx("button", { onClick: () => setEditingPost(null), style: { padding: "7px 12px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }, children: "Annuler" }),
                                 ]})
                               : n.jsxs(n.Fragment, { children: [
-                                  n.jsx("button", { onClick: () => { setEditingPost(Z); setEditedText(idea.content); }, style: { padding: "5px 9px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "white", color: "#374151", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }, children: "✏️" }),
-                                  n.jsx("button", { onClick: () => { setAddToCalPayload({ text: idea.content, title: idea.title, type: idea.type }); setAddToCalDate(new Date().toISOString().slice(0,10)); setShowAddToCalModal(true); }, style: { padding: "5px 9px", borderRadius: 6, border: "1.5px solid var(--indigo2)", background: "white", color: "var(--indigo2)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "📅" }),
-                                  n.jsx("button", { onClick: () => openComposer("schedule", idea.content, idea.type === "Offre" ? "OFFER" : "STANDARD"), style: { padding: "5px 9px", borderRadius: 6, border: "1.5px solid #6B40D8", background: "white", color: "#6B40D8", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "⏰" }),
-                                  n.jsx("button", { onClick: () => openComposer("publish", idea.content, idea.type === "Offre" ? "OFFER" : "STANDARD"), disabled: !isGoogleConnected, style: { flex: 1, padding: "5px", borderRadius: 6, border: "none", background: isGoogleConnected ? "linear-gradient(135deg,#4285F4,#34A853)" : "#E5E7EB", color: isGoogleConnected ? "white" : "#9CA3AF", fontSize: 11, fontWeight: 700, cursor: isGoogleConnected ? "pointer" : "not-allowed", fontFamily: "inherit" }, children: "🚀 Publier" }),
+                                  // Modifier
+                                  n.jsx("button", { onClick: () => { setEditingPost(Z); setEditedText(idea.content); }, style: { padding: "7px 14px", borderRadius: 7, border: "1.5px solid #E5E7EB", background: "white", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display:"flex", alignItems:"center", gap:5 }, children: "✏️ Modifier" }),
+                                  // Ajouter au calendrier éditorial
+                                  n.jsx("button", { onClick: () => { setAddToCalPayload({ text: idea.content, title: idea.title, type: idea.type }); setAddToCalDate(new Date().toISOString().slice(0,10)); setShowAddToCalModal(true); }, style: { padding: "7px 12px", borderRadius: 7, border: "1.5px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }, children: "📅" }),
+                                  // Copier
+                                  n.jsx("button", { onClick: () => navigator.clipboard.writeText(idea.content), style: { padding: "7px 12px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }, children: "📋" }),
+                                  // Supprimer
+                                  n.jsx("button", {
+                                    onClick: () => {
+                                      const updated = { ...P, postIdeas: (P.postIdeas||[]).filter((_,idx2)=>idx2!==Z) };
+                                      i(t.map(cl=>cl.id===e.id?{...cl,data:{...(cl.data||{}),postIdeas:updated.postIdeas}}:cl));
+                                    },
+                                    style: { marginLeft:"auto", padding: "7px 10px", borderRadius: 7, border: "1px solid #FCA5A5", background: "white", color: "#EF4444", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
+                                    children: "🗑",
+                                  }),
                                 ]}),
                           ]}),
                         ],
@@ -23893,10 +24630,182 @@ Rédige la publication GMB optimisée.`;
             ]}),
           ]}),
 
-          /* ideas tab removed — merged into generator below */
+          // ── HISTORIQUE DES POSTS GÉNÉRÉS ──
+          subTab === "generator" && genHistory.length > 0 && n.jsxs("div", { style: { marginTop: 24 }, children: [
+            n.jsxs("button", {
+              onClick: () => setShowHistory(v => !v),
+              style: { display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 12, fontFamily: "inherit" },
+              children: [
+                n.jsx("div", { style: { width: 4, height: 22, borderRadius: 2, background: "#D97706", flexShrink: 0 } }),
+                n.jsx("div", { style: { fontSize: 14, fontWeight: 800, color: "#1E1B30" }, children: `🕑 Historique des générations (${genHistory.length})` }),
+                n.jsx("div", { style: { fontSize: 11, color: "#9CA3AF", marginLeft: 4 }, children: showHistory ? "▲ masquer" : "▼ voir" }),
+              ],
+            }),
+            showHistory && n.jsx("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children:
+              genHistory.map((h, hi) => n.jsxs("div", {
+                key: h.id,
+                style: { background: "white", border: "1.5px solid #E5E7EB", borderRadius: 12, overflow: "hidden" },
+                children: [
+                  n.jsxs("div", { style: { background: "#FFFBEB", padding: "10px 14px", borderBottom: "1px solid #FDE68A", display: "flex", alignItems: "center", gap: 8 }, children: [
+                    n.jsx("span", { style: { fontSize: 13 }, children: typeIcons[h.type] || "📝" }),
+                    n.jsx("span", { style: { fontSize: 12.5, fontWeight: 700, color: "#1E1B30", flex: 1 }, children: h.title }),
+                    n.jsx("span", { style: { background: "#FEF3C7", color: "#D97706", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700 }, children: h.gmbType === "EVENT" ? "🎉 Événement" : h.gmbType === "OFFER" ? "🏷️ Offre" : "📢 Actualité" }),
+                    n.jsx("span", { style: { fontSize: 11, color: "#9CA3AF" }, children: h.date }),
+                  ]}),
+                  n.jsx("div", { style: { padding: "12px 14px", fontSize: 12.5, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line", maxHeight: 120, overflow: "hidden", maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }, children: h.text }),
+                  n.jsxs("div", { style: { padding: "8px 12px", background: "#F9FAFB", borderTop: "1px solid #F3F4F6", display: "flex", gap: 6 }, children: [
+                    n.jsx("button", { onClick: () => { setGenResult(h.text); setGenTitle(h.title); setGenType(h.type); setGenGmbType(h.gmbType || "STANDARD"); window.scrollTo(0,0); }, style: { padding: "5px 12px", borderRadius: 7, border: "1.5px solid #D97706", background: "white", color: "#D97706", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "↩️ Réutiliser" }),
+                    n.jsx("button", { onClick: () => { navigator.clipboard.writeText(h.text); }, style: { padding: "5px 10px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }, children: "📋 Copier" }),
+                    n.jsx("button", { onClick: () => openComposer("schedule", h.text, h.gmbType || "STANDARD"), style: { padding: "5px 10px", borderRadius: 7, border: "1.5px solid #6B40D8", background: "white", color: "#6B40D8", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "⏰" }),
+                    n.jsx("button", {
+                      onClick: () => {
+                        const tpl = { id: Date.now(), text: h.text, title: h.title, type: h.type, gmbType: h.gmbType || "STANDARD", date: new Date().toISOString().slice(0,10) };
+                        const updatedTpl = [tpl, ...(e.postTemplates || [])].slice(0, 30);
+                        setPostTemplates(updatedTpl);
+                        i(t.map(cl => cl.id === e.id ? { ...cl, postTemplates: updatedTpl } : cl));
+                        alert("✅ Sauvegardé comme modèle !");
+                      },
+                      style: { padding: "5px 10px", borderRadius: 7, border: "1.5px solid #059669", background: "white", color: "#059669", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+                      children: "💾",
+                    }),
+                    n.jsx("button", {
+                      onClick: () => {
+                        const updatedHist = genHistory.filter((_, i2) => i2 !== hi);
+                        setGenHistory(updatedHist);
+                        i(t.map(cl => cl.id === e.id ? { ...cl, genHistory: updatedHist } : cl));
+                      },
+                      style: { marginLeft: "auto", padding: "5px 8px", borderRadius: 7, border: "1px solid #FCA5A5", background: "white", color: "#EF4444", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
+                      children: "🗑",
+                    }),
+                  ]}),
+                ],
+              }, h.id))
+            }),
+          ]}),
+
+          // ── MODÈLES RÉUTILISABLES ──
+          subTab === "generator" && postTemplates.length > 0 && n.jsxs("div", { style: { marginTop: 24 }, children: [
+            n.jsxs("button", {
+              onClick: () => setShowTemplates(v => !v),
+              style: { display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 12, fontFamily: "inherit" },
+              children: [
+                n.jsx("div", { style: { width: 4, height: 22, borderRadius: 2, background: "#059669", flexShrink: 0 } }),
+                n.jsx("div", { style: { fontSize: 14, fontWeight: 800, color: "#1E1B30" }, children: `💾 Mes modèles (${postTemplates.length})` }),
+                n.jsx("div", { style: { fontSize: 11, color: "#9CA3AF", marginLeft: 4 }, children: showTemplates ? "▲ masquer" : "▼ voir" }),
+              ],
+            }),
+            showTemplates && n.jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px,1fr))", gap: 10 }, children:
+              postTemplates.map((tpl, ti) => n.jsxs("div", {
+                key: tpl.id,
+                style: { background: "white", border: "1.5px solid #D1FAE5", borderRadius: 12, overflow: "hidden" },
+                children: [
+                  n.jsxs("div", { style: { background: "#ECFDF5", padding: "10px 14px", borderBottom: "1px solid #A7F3D0", display: "flex", alignItems: "center", gap: 8 }, children: [
+                    n.jsx("span", { style: { fontSize: 13 }, children: typeIcons[tpl.type] || "📝" }),
+                    n.jsx("span", { style: { fontSize: 12.5, fontWeight: 700, color: "#065F46", flex: 1 }, children: tpl.title }),
+                    n.jsx("span", { style: { background: "#BBF7D0", color: "#059669", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700 }, children: tpl.gmbType === "EVENT" ? "🎉 Événement" : tpl.gmbType === "OFFER" ? "🏷️ Offre" : "📢 Actualité" }),
+                  ]}),
+                  n.jsx("div", { style: { padding: "10px 14px", fontSize: 12, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line", maxHeight: 100, overflow: "hidden", maskImage: "linear-gradient(to bottom, black 50%, transparent 100%)" }, children: tpl.text }),
+                  n.jsxs("div", { style: { padding: "8px 12px", background: "#F9FAFB", borderTop: "1px solid #D1FAE5", display: "flex", gap: 6 }, children: [
+                    n.jsx("button", { onClick: () => { setGenResult(tpl.text); setGenTitle(tpl.title); setGenType(tpl.type); setGenGmbType(tpl.gmbType || "STANDARD"); }, style: { flex: 1, padding: "6px", borderRadius: 7, border: "none", background: "#059669", color: "white", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "↩️ Utiliser ce modèle" }),
+                    n.jsx("button", { onClick: () => openComposer("schedule", tpl.text, tpl.gmbType || "STANDARD"), style: { padding: "6px 10px", borderRadius: 7, border: "1.5px solid #6B40D8", background: "white", color: "#6B40D8", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "⏰" }),
+                    n.jsx("button", {
+                      onClick: () => {
+                        const updatedTpl = postTemplates.filter((_, i2) => i2 !== ti);
+                        setPostTemplates(updatedTpl);
+                        i(t.map(cl => cl.id === e.id ? { ...cl, postTemplates: updatedTpl } : cl));
+                      },
+                      style: { padding: "6px 8px", borderRadius: 7, border: "1px solid #FCA5A5", background: "white", color: "#EF4444", fontSize: 11, cursor: "pointer", fontFamily: "inherit" },
+                      children: "🗑",
+                    }),
+                  ]}),
+                ],
+              }, tpl.id))
+            }),
+          ]}),
 
           // ── CALENDRIER ÉDITORIAL — style CalendrierView ──
           subTab === "calendar" && n.jsxs("div", { className: "fade", style:{ display:"flex", flexDirection:"column", gap:0, margin:"0 -2px" }, children: [
+
+            // Stats rapides du mois (simple, pas de titre dupliqué)
+            n.jsxs("div", { style:{ display:"flex", gap:16, marginBottom:16, flexWrap:"wrap" }, children:[
+              [{v:calMonthTotal,l:"posts ce mois",c:"var(--indigo2)"},{v:calMonthDone,l:"publiés",c:"#059669"},{v:scheduledPosts.filter(p=>p.status!=="published").length,l:"en attente Google",c:"#4285F4"}].map(s=>
+                n.jsxs("div",{key:s.l,style:{display:"flex",alignItems:"center",gap:6},children:[
+                  n.jsx("span",{style:{fontSize:16,fontWeight:900,color:s.c},children:s.v}),
+                  n.jsx("span",{style:{fontSize:11,color:"var(--ink4)"},children:s.l}),
+                ]})
+              ),
+            ]}),
+
+            // ── POSTS PROGRAMMÉS GOOGLE (liste détaillée) ──
+            scheduledPosts.filter(p=>p.status!=="published").length > 0 && n.jsxs("div", {
+              style:{ marginBottom:16 },
+              children:[
+                n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:10 }, children:[
+                  n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8 }, children:[
+                    n.jsx("div", { style:{ width:4, height:18, borderRadius:2, background:"#4285F4", flexShrink:0 } }),
+                    n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"var(--ink)" }, children:[
+                      "Posts programmés Google (",
+                      scheduledPosts.filter(p=>p.status!=="published").length,
+                      ")"
+                    ]}),
+                  ]}),
+                  n.jsx("button", { onClick:()=>openComposer("schedule","","STANDARD"), style:{ padding:"5px 12px", borderRadius:7, border:"1.5px solid var(--indigo2)", background:"white", color:"var(--indigo2)", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"+ Programmer" }),
+                ]}),
+                n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:8 }, children:
+                  scheduledPosts
+                    .filter(p=>p.status!=="published")
+                    .sort((a,b)=>new Date(a.date)-new Date(b.date))
+                    .map(p => {
+                      const isOverdue = p.date && p.date < new Date().toISOString().slice(0,10);
+                      const topicLabels = { STANDARD:"📢 Actualité", EVENT:"🎉 Événement", OFFER:"🏷️ Offre" };
+                      const ctaLabels = { BOOK:"Réserver", ORDER:"Commander", SHOP:"Acheter", LEARN_MORE:"En savoir plus", SIGN_UP:"S'inscrire", CALL:"Appeler" };
+                      return n.jsxs("div", {
+                        key:p.id,
+                        style:{
+                          background:"white", border:`1.5px solid ${isOverdue?"#FECACA":"#BFDBFE"}`,
+                          borderRadius:12, padding:"14px 16px",
+                          borderLeft:`4px solid ${isOverdue?"#DC2626":"#4285F4"}`,
+                        },
+                        children:[
+                          // Header : date + heure + type
+                          n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8, marginBottom:8, flexWrap:"wrap" }, children:[
+                            n.jsxs("span", { style:{ fontSize:12, fontWeight:800, color: isOverdue?"#DC2626":"#1D4ED8", background: isOverdue?"#FEE2E2":"#EFF6FF", borderRadius:6, padding:"3px 9px" }, children:[
+                              isOverdue ? "⚠️ En retard — " : "📅 ",
+                              p.date ? new Date(p.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "—",
+                              p.time ? ` à ${p.time}` : "",
+                            ]}),
+                            n.jsx("span", { style:{ fontSize:11, fontWeight:700, background:"#F0F4FF", color:"#4285F4", borderRadius:6, padding:"2px 8px" }, children: topicLabels[p.topic||p.topicType||"STANDARD"] || "📢 Actualité" }),
+                            n.jsx("span", { style:{ fontSize:11, fontWeight:700, background:"#D1FAE5", color:"#065F46", borderRadius:6, padding:"2px 8px" }, children:"✅ Programmé" }),
+                            p.ctaType && n.jsxs("span", { style:{ fontSize:11, background:"#F5F3FF", color:"var(--indigo2)", borderRadius:6, padding:"2px 8px", fontWeight:600 }, children:["🔗 ", ctaLabels[p.ctaType]||p.ctaType] }),
+                            p.ctaUrl && n.jsx("a", { href:p.ctaUrl, target:"_blank", rel:"noopener", style:{ fontSize:10, color:"var(--ink4)", textDecoration:"underline", maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"inline-block" }, children:p.ctaUrl }),
+                          ]}),
+                          // Texte du post
+                          n.jsx("div", { style:{ fontSize:12.5, color:"#374151", lineHeight:1.6, background:"#F9FAFB", borderRadius:8, padding:"10px 12px", marginBottom:8, maxHeight:80, overflow:"hidden", maskImage:"linear-gradient(to bottom, black 60%, transparent 100%)" }, children: p.text||p.summary||"—" }),
+                          // Actions
+                          n.jsxs("div", { style:{ display:"flex", gap:8, flexWrap:"wrap" }, children:[
+                            n.jsx("button", { onClick:()=>openComposer("schedule", p.text||p.summary||"", p.topic||"STANDARD"), style:{ padding:"5px 12px", borderRadius:7, border:"1.5px solid var(--indigo2)", background:"white", color:"var(--indigo2)", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"✏️ Voir & Modifier" }),
+                            isGoogleConnected && n.jsx("button", {
+                              onClick:()=>openComposer("publish", p.text||p.summary||"", p.topic||"STANDARD"),
+                              style:{ padding:"5px 12px", borderRadius:7, border:"none", background:"linear-gradient(135deg,#4285F4,#34A853)", color:"white", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+                              children:"🚀 Publier maintenant"
+                            }),
+                            n.jsx("button", {
+                              onClick:()=>deleteScheduledPost(p.id),
+                              style:{ padding:"5px 10px", borderRadius:7, border:"1px solid #FCA5A5", background:"white", color:"#EF4444", fontSize:11, cursor:"pointer", fontFamily:"inherit" },
+                              children:"🗑 Supprimer"
+                            }),
+                          ]}),
+                        ],
+                      }, p.id);
+                    })
+                }),
+              ]
+            }),
+
+            // ── CALENDRIER DES PUBLICATIONS ──
+            n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }, children:[
+              n.jsx("div", { style:{ fontSize:13, fontWeight:800, color:"var(--ink)" }, children:"Calendrier des publications" }),
+            ]}),
 
             // ── BARRE DE NAVIGATION ──
             n.jsxs("div", {
@@ -23962,35 +24871,81 @@ Rédige la publication GMB optimisée.`;
                 // Cellules
                 n.jsx("div", { style:{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3 }, children:
                   calCells.map((day, ci) => {
-                    if (!day) return n.jsx("div", { key:"e"+ci, style:{ minHeight:80 } });
+                    // Cellule vide (jours hors mois)
+                    if (!day) {
+                      const isWeekend = ci % 7 >= 5;
+                      return n.jsx("div", { key:"e"+ci, style:{ minHeight:96, borderRadius:10, background: isWeekend?"#FAFAFA":"transparent" } });
+                    }
                     const key = calDayKey(calYear, calMonth, day);
                     const dayPosts = getCalDayPosts(calYear, calMonth, day);
                     const isToday = day===calToday.getDate() && calMonth===calToday.getMonth() && calYear===calToday.getFullYear();
                     const isSelected = calSelectedDay===day;
+                    const isPast = new Date(calYear, calMonth, day) < new Date(calToday.getFullYear(), calToday.getMonth(), calToday.getDate());
+                    const isWeekend = ci % 7 >= 5;
+                    const donePosts = dayPosts.filter(p2=>p2.done).length;
+                    const allDone = dayPosts.length > 0 && donePosts === dayPosts.length;
+                    const hasOverdue = isPast && dayPosts.some(p2=>!p2.done);
+
                     return n.jsxs("div", {
                       key:"d"+day,
                       onClick:()=>{ setCalSelectedDay(isSelected?null:day); setCalSelectedPost(null); setCalAddMode(false); setCalAddTitle(""); },
-                      style:{ minHeight:80, border:`1.5px solid ${isSelected?"var(--indigo2)":isToday?"#FBCFE8":"#F4F5FA"}`, borderRadius:10, padding:"6px 7px", background:isSelected?"#f0edff":isToday?"#fff":"#fff", cursor:"pointer", transition:"all .15s" },
+                      style:{
+                        minHeight:96,
+                        border: isSelected ? "2px solid #6B40D8" : isToday ? "2px solid #C03080" : hasOverdue ? "1.5px solid #FCA5A5" : `1.5px solid ${isWeekend?"#F0F0F0":"#EBEBEB"}`,
+                        borderRadius:10,
+                        padding:"6px 7px",
+                        background: isSelected?"#F5F3FF" : isToday?"#FDF2F8" : hasOverdue?"#FEF2F2" : allDone?"#F0FDF4" : isWeekend?"#FAFAFA" : "white",
+                        cursor:"pointer",
+                        transition:"all .12s",
+                        position:"relative",
+                        boxShadow: isSelected?"0 0 0 3px #6B40D822":isToday?"0 0 0 3px #C0308022":"none",
+                      },
                       children:[
-                        n.jsxs("div", { style:{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3 }, children:[
-                          n.jsx("span", { style:{ fontSize:11.5,fontWeight:isToday?800:600,color:isToday?"var(--indigo2)":"#374151",width:20,height:20,borderRadius:5,background:isToday?"#ffffff":"transparent",display:"flex",alignItems:"center",justifyContent:"center" }, children:day }),
-                          dayPosts.length > 0 && n.jsxs("span", { style:{ fontSize:9,color:"var(--indigo2)",fontWeight:700,background:"#F4F5FA",borderRadius:4,padding:"1px 4px" }, children:[ dayPosts.filter(p2=>p2.done).length, "/", dayPosts.length ] }),
+                        // En-tête cellule
+                        n.jsxs("div", { style:{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }, children:[
+                          // Numéro du jour
+                          n.jsx("span", {
+                            style:{
+                              fontSize:12, fontWeight:isToday?900:600,
+                              color: isToday?"#C03080" : isSelected?"#6B40D8" : isPast?"#9CA3AF" : "#374151",
+                              width:22, height:22, borderRadius:6,
+                              background: isToday?"#FDF2F8" : "transparent",
+                              display:"flex", alignItems:"center", justifyContent:"center",
+                            },
+                            children: day
+                          }),
+                          // Badge done/total
+                          dayPosts.length > 0 && n.jsxs("span", {
+                            style:{ fontSize:9, fontWeight:700, borderRadius:5, padding:"1px 5px",
+                              background: allDone?"#D1FAE5" : hasOverdue?"#FEE2E2" : "#EEF2FF",
+                              color: allDone?"#065F46" : hasOverdue?"#DC2626" : "#4338CA"
+                            },
+                            children:[ donePosts, "/", dayPosts.length ]
+                          }),
                         ]}),
+                        // Posts du jour
                         dayPosts.slice(0,3).map((p2, pi) => {
                           const vtEntry = vt.find(v2=>v2.id===p2.type) || vt[0];
-                          const isGoogle = p2._src==="google";
+                          const isGoogle = p2._src==="google" || p2._src==="published";
                           const isDone = p2.done;
+                          const dotColor = isDone ? "#22C55E" : isGoogle ? "#4285F4" : (vtEntry.color||"#6B40D8");
+                          const pillBg = isDone ? "#F0FDF4" : isGoogle ? "#EFF6FF" : (vtEntry.bg||"#F5F3FF");
                           return n.jsxs("div", {
                             key:pi,
                             onClick:ev=>{ ev.stopPropagation(); setCalSelectedDay(day); setCalSelectedPost(p2); setCalAddMode(false); },
-                            style:{ display:"flex",alignItems:"center",gap:3,padding:"2px 5px",borderRadius:4,background:isDone?"#f0fdf4":isGoogle?"#F0F4FF":vtEntry.bg||"#f5f3ff",marginBottom:2,cursor:"pointer" },
+                            style:{ display:"flex",alignItems:"center",gap:3,padding:"2px 5px",borderRadius:5,background:pillBg,marginBottom:2,cursor:"pointer",border:`1px solid ${dotColor}22` },
                             children:[
-                              n.jsx("div", { style:{ width:5,height:5,borderRadius:2,background:isDone?"#22C55E":isGoogle?"#4285F4":vtEntry.color,flexShrink:0 } }),
-                              n.jsx("span", { style:{ fontSize:10,fontWeight:600,color:isDone?"#15803d":isGoogle?"#1D4ED8":vtEntry.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textDecoration:isDone?"line-through":"none" }, children: (isGoogle?"🚀 ":"") + (p2.title||"").slice(0,18) }),
+                              n.jsx("div", { style:{ width:5,height:5,borderRadius:"50%",background:dotColor,flexShrink:0 } }),
+                              n.jsx("span", { style:{ fontSize:10,fontWeight:600,color:isDone?"#15803d":isGoogle?"#1D4ED8":(vtEntry.color||"#6B40D8"),overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,textDecoration:isDone?"line-through":"none" }, children: (isGoogle&&!isDone?"🚀 ":"") + (p2.title||"").slice(0,16) }),
                             ],
                           }, pi);
                         }),
-                        dayPosts.length > 3 && n.jsx("div", { style:{ fontSize:9.5,color:"var(--indigo2)",fontWeight:700,marginTop:2,paddingLeft:4 }, children:`+${dayPosts.length-3} de plus` }),
+                        dayPosts.length > 3 && n.jsxs("div", { style:{ fontSize:9,color:"#6B40D8",fontWeight:700,marginTop:2,paddingLeft:4 }, children:["+", dayPosts.length-3, " autres"] }),
+                        // Barre de progression en bas si posts présents
+                        dayPosts.length > 0 && n.jsx("div", {
+                          style:{ position:"absolute",bottom:0,left:4,right:4,height:3,borderRadius:"0 0 8px 8px",background:"#E5E7EB",overflow:"hidden" },
+                          children: n.jsx("div", { style:{ height:"100%",width:`${Math.round(donePosts/dayPosts.length*100)}%`,background:allDone?"#22C55E":"#6B40D8",borderRadius:99,transition:"width .3s" } })
+                        }),
                       ],
                     }, "d"+day);
                   })
@@ -24022,21 +24977,53 @@ Rédige la publication GMB optimisée.`;
                         const isGoogle = p2._src==="google";
                         const isSelected2 = calSelectedPost?.id === p2.id;
                         const key = calDayKey(calYear, calMonth, calSelectedDay);
+                        const raw = p2._raw || {};
+                        const ctaLabels = { BOOK:"Réserver", ORDER:"Commander", SHOP:"Acheter", LEARN_MORE:"En savoir plus", SIGN_UP:"S'inscrire", CALL:"Appeler" };
+                        const topicLabels = { STANDARD:"📢 Actualité", EVENT:"🎉 Événement", OFFER:"🏷️ Offre" };
                         return n.jsxs("div", {
                           key:pi,
                           onClick:()=>setCalSelectedPost(isSelected2?null:p2),
-                          style:{ background:isSelected2?"#f0edff":"#FAFAFA",border:`1.5px solid ${isSelected2?"var(--indigo2)":"#F0F0F0"}`,borderRadius:9,padding:"8px 10px",marginBottom:6,cursor:"pointer",transition:"all .15s" },
+                          style:{ background:isSelected2?"#F5F3FF":"#FAFAFA", border:`1.5px solid ${isSelected2?"#6B40D8":"#F0F0F0"}`, borderRadius:10, padding:"10px 12px", marginBottom:8, cursor:"pointer", transition:"all .15s" },
                           children:[
-                            n.jsxs("div", { style:{ display:"flex",alignItems:"center",gap:7,marginBottom:isSelected2?6:0 }, children:[
-                              n.jsx("div", { style:{ width:8,height:8,borderRadius:3,background:isGoogle?"#4285F4":vtEntry.color,flexShrink:0 } }),
-                              n.jsx("span", { style:{ flex:1,fontSize:12,fontWeight:700,color:"#1E1B30",textDecoration:p2.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }, children:(isGoogle?"🚀 ":"")+(p2.title||"") }),
-                              n.jsx("span", { style:{ fontSize:10,background:p2.done?"#D1FAE5":"#F0F0F0",color:p2.done?"#065F46":"#9CA3AF",borderRadius:4,padding:"1px 6px",fontWeight:700 }, children:p2.done?"✓ Fait":"À faire" }),
+                            // Header : point coloré + titre complet + badge statut
+                            n.jsxs("div", { style:{ display:"flex",alignItems:"flex-start",gap:7,marginBottom:6 }, children:[
+                              n.jsx("div", { style:{ width:8,height:8,borderRadius:3,background:isGoogle?"#4285F4":vtEntry.color,flexShrink:0,marginTop:4 } }),
+                              n.jsxs("div", { style:{ flex:1,minWidth:0 }, children:[
+                                // Titre complet (pas tronqué)
+                                n.jsx("div", { style:{ fontSize:12.5,fontWeight:700,color:"#1E1B30",textDecoration:p2.done?"line-through":"none",lineHeight:1.4,wordBreak:"break-word" }, children:(isGoogle?"🚀 ":"")+(p2.title||raw.text?.slice(0,60)||"Post sans titre") }),
+                                // Badges type + statut
+                                n.jsxs("div", { style:{ display:"flex",gap:4,marginTop:5,flexWrap:"wrap" }, children:[
+                                  isGoogle && n.jsx("span", { style:{ fontSize:10,background:"#EFF6FF",color:"#1D4ED8",borderRadius:5,padding:"1px 6px",fontWeight:700 }, children: topicLabels[raw.topic||raw.topicType||"STANDARD"]||"📢 Actualité" }),
+                                  n.jsx("span", { style:{ fontSize:10,background:p2.done?"#D1FAE5":"#F3F4F6",color:p2.done?"#065F46":"#6B7280",borderRadius:5,padding:"1px 6px",fontWeight:700 }, children:p2.done?"✅ Publié":"⏳ Programmé" }),
+                                ]}),
+                              ]}),
                             ]}),
-                            isSelected2 && n.jsxs("div", { style:{ display:"flex",gap:5,flexWrap:"wrap" }, children:[
-                              !isGoogle && p2._src==="cal" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();calToggleDone(key,p2.id);}, style:{ flex:1,padding:"5px",borderRadius:6,border:"none",background:p2.done?"#FEF3C7":"#D1FAE5",color:p2.done?"#92400E":"#065F46",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:p2.done?"↩ Remettre en cours":"✓ Marquer fait" }),
-                              !isGoogle && p2._src==="cal" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();calDeletePost(key,p2.id);}, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"🗑" }),
-                              isGoogle && p2._src==="google" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();deleteScheduledPost(p2.id);}, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"Supprimer" }),
-                              isGoogle && p2._src==="published" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();deletePost(p2.id);}, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"Supprimer" }),
+                            // Infos supplémentaires si sélectionné
+                            isSelected2 && n.jsxs("div", { style:{ marginTop:8,display:"flex",flexDirection:"column",gap:6 }, children:[
+                              // Date + heure
+                              (raw.date||p2._raw?.date) && n.jsxs("div", { style:{ fontSize:11,color:"#374151",display:"flex",alignItems:"center",gap:5 }, children:[
+                                n.jsx("span",{ style:{color:"#6B7280"}, children:"📅" }),
+                                n.jsx("span",{ style:{fontWeight:600}, children: new Date((raw.date||"")+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}) }),
+                                raw.time && n.jsxs("span",{ style:{color:"#6B40D8",fontWeight:700}, children:[" à ", raw.time] }),
+                              ]}),
+                              // Texte complet
+                              (raw.text||raw.summary||p2.content) && n.jsx("div", { style:{ fontSize:11.5,color:"#374151",lineHeight:1.6,background:"white",borderRadius:7,padding:"8px 10px",border:"1px solid #E5E7EB",maxHeight:80,overflow:"auto" }, children: raw.text||raw.summary||p2.content }),
+                              // CTA + URL
+                              raw.ctaType && n.jsxs("div", { style:{ fontSize:11,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap" }, children:[
+                                n.jsxs("span", { style:{ background:"#F5F3FF",color:"#6B40D8",borderRadius:5,padding:"2px 8px",fontWeight:700,fontSize:11 }, children:["🔗 ", ctaLabels[raw.ctaType]||raw.ctaType] }),
+                                raw.ctaUrl && n.jsx("a", { href:raw.ctaUrl,target:"_blank",rel:"noopener",style:{ fontSize:10,color:"#4285F4",textDecoration:"underline",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block" }, children:raw.ctaUrl }),
+                              ]}),
+                              // Photo
+                              (raw.photoUrl||raw.photo_url) && n.jsx("img", { src:raw.photoUrl||raw.photo_url, alt:"", style:{ width:"100%",maxHeight:100,objectFit:"cover",borderRadius:7,border:"1px solid #E5E7EB" } }),
+                              // Boutons action
+                              n.jsxs("div", { style:{ display:"flex",gap:5,flexWrap:"wrap",marginTop:2 }, children:[
+                                !isGoogle && p2._src==="cal" && n.jsx("button", { onClick:ev=>{ev.stopPropagation();calToggleDone(key,p2.id);}, style:{ flex:1,padding:"5px",borderRadius:6,border:"none",background:p2.done?"#FEF3C7":"#D1FAE5",color:p2.done?"#92400E":"#065F46",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:p2.done?"↩ En cours":"✓ Marquer fait" }),
+                                n.jsx("button", { onClick:ev=>{ev.stopPropagation();
+                                  if(p2._src==="google") deleteScheduledPost(p2.id);
+                                  else if(p2._src==="published") deletePost(p2.id);
+                                  else calDeletePost(key,p2.id);
+                                }, style:{ padding:"5px 8px",borderRadius:6,border:"none",background:"#FEF2F2",color:"#DC2626",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit" }, children:"🗑" }),
+                              ]}),
                             ]}),
                           ],
                         }, pi);
@@ -24079,6 +25066,7 @@ Rédige la publication GMB optimisée.`;
             n.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }, children: [
               n.jsxs("div", { children: [
                 n.jsx("div", { style: { fontSize: 16, fontWeight: 800, color: "#1E1B30", marginBottom: 4 }, children: "Journal des publications" }),
+
                 n.jsx("div", { style: { fontSize: 12, color: "#6B7280" }, children: "Historique des posts publiés sur la fiche Google My Business" }),
               ]}),
               n.jsx("button", {
@@ -24229,15 +25217,53 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
   const typeColors = { Realisation:"#6B40D8",Conseil:"#0891b2",Offre:"#059669",Temoignage:"#d97706",Actualite:"#C03080",Coulisses:"#7c3aed",Question:"#dc2626" };
   const updateFields = ["Catégorie principale","Catégories secondaires","Description","Horaires","Téléphone","Site web","Adresse","Photos","Services","Produits","Attributs","Questions/Réponses","Autre"];
   const [showAddPost, setShowAddPost] = D.useState(false);
-  const [newPost, setNewPost] = D.useState({ title:"", type:"Realisation", date:new Date().toISOString().slice(0,10), photoCount:0, note:"" });
+  const [newPost, setNewPost] = D.useState({ title:"", type:"Realisation", date:new Date().toISOString().slice(0,10), photoCount:0, note:"", photoUrl:"", photoType:"" });
+  const [selectedIdeaIdx, setSelectedIdeaIdx] = D.useState("");
+  const [postPhotoPreview, setPostPhotoPreview] = D.useState("");
+  const [postPhotoUploading, setPostPhotoUploading] = D.useState(false);
+  const handlePostPhotoFile = async (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setPostPhotoPreview(URL.createObjectURL(file));
+    setPostPhotoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const resp = await fetch("/api/gmb/upload-photo", { method:"POST", body:formData });
+      const data = await resp.json();
+      if (data.url) setNewPost(p2=>({...p2, photoUrl:data.url, photoCount: p2.photoCount > 0 ? p2.photoCount : 1}));
+    } catch (err) { /* upload silencieux */ }
+    finally { setPostPhotoUploading(false); }
+  };
   const [showAddUpdate, setShowAddUpdate] = D.useState(false);
   const [newUpdate, setNewUpdate] = D.useState({ date:new Date().toISOString().slice(0,10), field:"", change:"", note:"" });
 
   // GMB Stats (stored per month)
   const gmbStatsAll = e.gmbStats || {};
-  const gmbStats = gmbStatsAll[CM] || {};
+  // Mois ciblé pour la saisie/consultation des stats Google (par défaut le mois en cours,
+  // mais on peut choisir un autre mois pour compléter un mois précédent ou manquant)
+  const [statsMonth, setStatsMonth] = D.useState(CM);
+  const statsMonthOptions = (() => {
+    const opts = [];
+    const now = new Date();
+    for (let k=0; k<13; k++) {
+      const dt = new Date(now.getFullYear(), now.getMonth()-k, 1);
+      const key = dt.toISOString().slice(0,7);
+      opts.push({ key, label: dt.toLocaleDateString("fr-FR",{month:"long",year:"numeric"}) });
+    }
+    Object.keys(gmbStatsAll).forEach(key => { if (!opts.find(o=>o.key===key)) {
+      const [y,m] = key.split("-");
+      opts.push({ key, label: new Date(parseInt(y), parseInt(m)-1, 1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"}) });
+    }});
+    return opts.sort((a,b)=> b.key.localeCompare(a.key));
+  })();
+  const statsMonthLabel = (statsMonthOptions.find(o=>o.key===statsMonth) || {}).label || statsMonth;
+  const gmbStats = gmbStatsAll[statsMonth] || {};
   const [editingGmb, setEditingGmb] = D.useState(false);
-  const [gmbForm, setGmbForm] = D.useState({ vuesRecherche:"", vuesMaps:"", appels:"", clicsWeb:"", itineraires:"", vuesPhotos:"", prevVuesRecherche:"", prevVuesMaps:"", prevAppels:"", prevClicsWeb:"", prevItineraires:"", prevVuesPhotos:"" });
+  const [gmbForm, setGmbForm] = D.useState({ vuesRecherche:"", vuesMaps:"", appels:"", reservations:"", clicsWeb:"", itineraires:"", vuesPhotos:"", prevVuesRecherche:"", prevVuesMaps:"", prevAppels:"", prevReservations:"", prevClicsWeb:"", prevItineraires:"", prevVuesPhotos:"" });
+  const [evoMonthsCount, setEvoMonthsCount] = D.useState(6);
+  const [gmbPasteText, setGmbPasteText] = D.useState("");
+  const [gmbParsed, setGmbParsed] = D.useState(null);
+  const [showGmbPaste, setShowGmbPaste] = D.useState(false);
 
   // Conclusion & next steps
   const conclusionAll = e.monthlyConclusion || {};
@@ -24263,10 +25289,31 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
   const [gmbLocations, setGmbLocations] = D.useState([]);
   const [loadingLocations, setLoadingLocations] = D.useState(false);
   const [locationsError, setLocationsError] = D.useState(null);
+  const [monthlySharing, setMonthlySharing] = D.useState(false);
+  const [monthlyShareLink, setMonthlyShareLink] = D.useState(null);
+  const [monthlyShareCopied, setMonthlyShareCopied] = D.useState(false);
 
   // Google tokens
   const googleTokens = e.googleTokens || null;
   const isGoogleConnected = !!(googleTokens && googleTokens.access_token);
+
+  // Auto-ouvrir la modale de liaison si on vient de connecter OAuth pour ce client
+  const autoLinkRef = D.useRef(false);
+  D.useEffect(() => {
+    if (autoLinkRef.current) return;
+    try {
+      const pendingId = localStorage.getItem("bto_pending_link");
+      if (pendingId && parseInt(pendingId) === e.id && googleTokens?.access_token && !e.gmbLocationName) {
+        localStorage.removeItem("bto_pending_link");
+        autoLinkRef.current = true;
+        setTimeout(() => {
+          setShowLinkFiche(true);
+          setGmbLocations([]);
+          setLocationsError(null);
+        }, 400);
+      }
+    } catch {}
+  }, [e.id, googleTokens?.access_token]);
 
   // Récupère un access_token valide (refresh si expiré)
   const getValidToken = async () => {
@@ -24303,7 +25350,7 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
       // Stats du mois courant
       const [insRes, photoRes] = await Promise.all([
         fetch(`/api/gmb/insights?location_name=${encodeURIComponent(locationName)}&month=${CM}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/gmb/photos?location_name=${encodeURIComponent(locationName)}`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/gmb/insights?location_name=${encodeURIComponent(locationName)}&month=${CM}&photos=1`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const ins = await insRes.json();
       const photos = await photoRes.json();
@@ -24344,7 +25391,32 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
 
   // Current data
   const extracted = (e.data || {}).extracted || {};
-  const currentScore = r({ ...(e.scores||{}), ...(e.manualOverrides||{}) });
+  const postIdeas = (e.data || {}).postIdeas || [];
+  // Score = EXACTEMENT le même calcul que l'onglet Résumé : calcScore sur
+  // {...scores, ...manualOverrides}. On garde ainsi des chiffres identiques
+  // partout (Résumé / Bilan / Évolution).
+  const _Mscore = { ...(e.scores || {}), ...(e.manualOverrides || {}) };
+  const currentScore = r(_Mscore);
+  const pillarsRecap = [
+    { label:"Pertinence", icon:"🎯", cats:["identity","description"], desc:"Catégorie, description, mots-clés", col:"var(--indigo2)", bg:"#ffffff", b:"#FBCFE8" },
+    { label:"Proximité",  icon:"📍", cats:["contact"], desc:"Adresse, zone, horaires, NAP", col:"#0891b2", bg:"#ecfeff", b:"#a5f3fc" },
+    { label:"Notoriété",  icon:"⭐", cats:["reviews","photos","posts"], desc:"Avis, photos, publications", col:"#d97706", bg:"#fffbeb", b:"#fde68a" },
+  ].map(pd => {
+    const K = CATS.filter(c => pd.cats.includes(c.id));
+    const tot = K.flatMap(c=>c.criteria).reduce((s,c)=>s+c.points,0);
+    const got = K.flatMap(c=>c.criteria).reduce((s,c)=> _Mscore[c.id]===true ? s+c.points : s, 0);
+    const pct = tot>0 ? Math.round(got/tot*100) : 0;
+    const lvl = getLvl(pct);
+    const prevSnap = (e.history||[]).length > 0 ? e.history[e.history.length-1] : null;
+    const prevPct = prevSnap ? (() => {
+      const prevScores = prevSnap.scores || {};
+      const prevGot = K.flatMap(c=>c.criteria).reduce((s,c)=> prevScores[c.id]===true ? s+c.points : s, 0);
+      return tot>0 ? Math.round(prevGot/tot*100) : 0;
+    })() : null;
+    const delta = prevPct !== null ? pct - prevPct : null;
+    return { ...pd, pct, lvl, delta };
+  });
+  const toImproveCount = ALL_CRITERIA.filter(c => _Mscore[c.id] === false).length;
   const geoGrid = e.geoGrid || {};
   const lastSnap = snapshots.length > 0 ? snapshots[snapshots.length-1] : null;
 
@@ -24436,7 +25508,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setReplyText(data.content?.[0]?.text || "");
@@ -24485,7 +25557,9 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     setShowLinkFiche(true);
     setGmbLocations([]);
     setLocationsError(null);
-    if (!isGoogleConnected) return;
+    // Seul le token est requis (pas besoin que gmbLocationName soit déjà défini)
+    const hasToken = !!(e.googleTokens?.access_token);
+    if (!hasToken) return;
     setLoadingLocations(true);
     try {
       const token = await getValidToken();
@@ -24497,12 +25571,28 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     setLoadingLocations(false);
   };
 
+  // Charger les locations dès que la modale s'ouvre et qu'on a un token
+  D.useEffect(() => {
+    if (showLinkFiche && googleTokens?.access_token && gmbLocations.length === 0 && !loadingLocations) {
+      openLinkFiche();
+    }
+  }, [showLinkFiche]);
+
+  // Écouter l'événement depuis l'onglet Avis
+  D.useEffect(() => {
+    const handler = (ev) => {
+      if (ev.detail?.clientId === e.id) setShowLinkFiche(true);
+    };
+    window.addEventListener("bto-open-link-fiche", handler);
+    return () => window.removeEventListener("bto-open-link-fiche", handler);
+  }, [e.id]);
+
   // Save functions
   const savePost = () => {
     if (!newPost.title.trim()) return;
     const updated = t.map(cl => cl.id === e.id ? { ...cl, publishedPosts: [...publishedPosts, { ...newPost, id: Date.now() }] } : cl);
     i(updated);
-    setNewPost({ title:"", type:"Realisation", date:new Date().toISOString().slice(0,10), photoCount:0, note:"" });
+    setNewPost({ title:"", type:"Realisation", date:new Date().toISOString().slice(0,10), photoCount:0, note:"", photoUrl:"", photoType:"" });
     setShowAddPost(false);
   };
   const deletePost = (id) => i(t.map(cl => cl.id === e.id ? { ...cl, publishedPosts: publishedPosts.filter(p2 => p2.id !== id) } : cl));
@@ -24521,12 +25611,14 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
       vuesRecherche: gmbStats.vuesRecherche || "",
       vuesMaps: gmbStats.vuesMaps || "",
       appels: gmbStats.appels || "",
+      reservations: gmbStats.reservations || "",
       clicsWeb: gmbStats.clicsWeb || "",
       itineraires: gmbStats.itineraires || "",
       vuesPhotos: gmbStats.vuesPhotos || "",
       prevVuesRecherche: gmbStats.prevVuesRecherche || "",
       prevVuesMaps: gmbStats.prevVuesMaps || "",
       prevAppels: gmbStats.prevAppels || "",
+      prevReservations: gmbStats.prevReservations || "",
       prevClicsWeb: gmbStats.prevClicsWeb || "",
       prevItineraires: gmbStats.prevItineraires || "",
       prevVuesPhotos: gmbStats.prevVuesPhotos || "",
@@ -24534,9 +25626,120 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     setEditingGmb(true);
   };
   const saveGmbStats = () => {
-    const updated = t.map(cl => cl.id === e.id ? { ...cl, gmbStats: { ...(cl.gmbStats||{}), [CM]: { ...gmbForm } } } : cl);
+    const updated = t.map(cl => cl.id === e.id ? { ...cl, gmbStats: { ...(cl.gmbStats||{}), [statsMonth]: { ...(gmbStatsAll[statsMonth]||{}), ...gmbForm } } } : cl);
     i(updated);
     setEditingGmb(false);
+  };
+
+  // ── Coller-coller des stats Google Business : on analyse le texte copié
+  // depuis l'interface Google ("Vue d'ensemble", "Plates-formes et appareils",
+  // "Termes de recherche") et on répartit automatiquement les chiffres dans
+  // les bonnes cases — pas besoin de tout retaper à la main.
+  const parseGmbPaste = (raw) => {
+    const lines = String(raw||"").replace(/\r/g,"").split("\n").map(l=>l.trim()).filter(Boolean);
+    const platforms = [], searchTerms = [], overview = [];
+    const fields = {};
+    const changes = {}; // % d'évolution par rapport à la période de référence affichée par Google (ex: "vs mai 2025")
+    const clean = (s) => s.replace(/[\s.,]/g,"").replace(/^<\s*/,"<");
+
+    // Repère une éventuelle ligne d'évolution juste après une valeur, du type
+    // "+8 % par rapport à mai 2025" / "-12%" / "↑ 8 % vs mai 2025"
+    const pctChangeRe = /^[↑↓▲▼]?\s*([+\-−]?\s*\d+(?:[.,]\d+)?)\s*%(?:\s*(?:par rapport[àa]|vs\.?|comparé[e]?\s*[àa])\s*(.+))?$/i;
+    const grabChange = (startIdx) => {
+      for (let j=startIdx; j<Math.min(startIdx+2, lines.length); j++) {
+        const m = lines[j].match(pctChangeRe);
+        if (m) return { pct: m[1].replace(/\s/g,"").replace(",","."), ref: (m[2]||"").trim(), upTo: j };
+      }
+      return null;
+    };
+
+    // Associe un champ (clé gmbStatFields) + l'évolution % détectée
+    const applyField = (key, val, changeInfo) => {
+      if (!fields[key]) fields[key] = val;
+      if (changeInfo && !changes[key]) changes[key] = changeInfo;
+    };
+
+    const knownLabel = (lbl) => {
+      const s = lbl.toLowerCase();
+      if (/utilisateurs? ont vu|vues? (du|de votre) profil|ont vu (la|votre) fiche|interactions/i.test(s)) return "vuesRecherche";
+      if (/recherches? ont affich/i.test(s)) return "vuesMaps";
+      if (/^appels?\b/.test(s) || /ont appel/i.test(s)) return "appels";
+      if (/^r[ée]servations?\b/.test(s)) return "reservations";
+      if (/itin[ée]raire/i.test(s)) return "itineraires";
+      if (/clic.*site/i.test(s)) return "clicsWeb";
+      if (/^photo/i.test(s) || /vues? des? photos?/i.test(s)) return "vuesPhotos";
+      return null;
+    };
+
+    for (let idx=0; idx<lines.length; idx++) {
+      const l = lines[idx];
+
+      // Plates-formes / appareils : "921·61 %" puis libellé "Recherche Google – mobile"
+      const mPlat = l.match(/^([\d][\d\s.,]*)\s*[·•]\s*([\d.,]+)\s*%$/);
+      if (mPlat && lines[idx+1] && !/^[\d.<]/.test(lines[idx+1])) {
+        platforms.push({ count: clean(mPlat[1]), pct: mPlat[2].replace(",", "."), label: lines[idx+1] });
+        idx++; continue;
+      }
+
+      // Termes de recherche : "1." puis le terme puis le nombre ("132" ou "< 15")
+      const mIdx = l.match(/^(\d{1,2})\.$/);
+      if (mIdx && lines[idx+1] && lines[idx+2] && /^[<\d]/.test(lines[idx+2]) && !/^\d{1,2}\.$/.test(lines[idx+2])) {
+        searchTerms.push({ rank: mIdx[1], term: lines[idx+1], count: clean(lines[idx+2]) });
+        idx += 2; continue;
+      }
+
+      // Valeur isolée ("1 503", "27", "< 15"...) — on regarde la ou les lignes suivantes :
+      // soit une phrase descriptive ("utilisateurs ont vu la fiche..."), soit un % d'évolution, soit les deux.
+      const mNum = l.match(/^([\d][\d\s.,]{0,})$/);
+      if (mNum && lines[idx+1]) {
+        const val = clean(mNum[1]);
+        // Cas "valeur" puis "phrase descriptive" [puis "% évolution"]
+        if (/utilisateur|recherche|vue|affich|appel|itin[ée]raire|clic|r[ée]servation|profil|fiche|interaction/i.test(lines[idx+1]) && !pctChangeRe.test(lines[idx+1])) {
+          const lbl = lines[idx+1];
+          let consumed = idx+1;
+          let changeInfo = null;
+          const ch = grabChange(idx+2);
+          if (ch) { changeInfo = ch; consumed = ch.upTo; }
+          overview.push({ value: val, label: lbl, change: changeInfo });
+          const key = knownLabel(lbl);
+          if (key) applyField(key, val, changeInfo);
+          idx = consumed; continue;
+        }
+        // Cas "valeur" directement suivie d'un "% évolution" (le libellé était déjà donné avant)
+        const chDirect = lines[idx+1].match(pctChangeRe);
+        if (chDirect && idx>0) {
+          const prevLbl = lines[idx-1];
+          const key = knownLabel(prevLbl);
+          const changeInfo = { pct: chDirect[1].replace(/\s/g,"").replace(",","."), ref:(chDirect[2]||"").trim(), upTo: idx+1 };
+          if (key) applyField(key, val, changeInfo);
+          idx = idx+1; continue;
+        }
+      }
+
+      // Libellé connu suivi directement d'un nombre (ex: "Appels" \n "27" [\n "+8 % vs mai 2025"])
+      const mLbl = l.match(/^(appels?|itin[ée]raires?|clics? vers le site web|r[ée]servations?|vues? (?:recherche|maps|photos?)|interactions? avec la fiche.*)$/i);
+      if (mLbl && lines[idx+1] && /^[\d<]/.test(lines[idx+1])) {
+        const val = clean(lines[idx+1]);
+        const key = knownLabel(mLbl[1]);
+        let consumed = idx+1;
+        let changeInfo = null;
+        const ch = grabChange(idx+2);
+        if (ch) { changeInfo = ch; consumed = ch.upTo; }
+        if (key) applyField(key, val, changeInfo);
+        idx = consumed; continue;
+      }
+    }
+    return { fields, changes, platforms, searchTerms, overview };
+  };
+
+  const analyzeGmbPaste = () => setGmbParsed(parseGmbPaste(gmbPasteText));
+
+  const applyGmbPaste = () => {
+    if (!gmbParsed) return;
+    const merged = { ...(gmbStatsAll[statsMonth]||{}), ...gmbParsed.fields, changes: { ...((gmbStatsAll[statsMonth]||{}).changes||{}), ...gmbParsed.changes }, platforms: gmbParsed.platforms, searchTerms: gmbParsed.searchTerms, overview: gmbParsed.overview };
+    const updated = t.map(cl => cl.id === e.id ? { ...cl, gmbStats: { ...(cl.gmbStats||{}), [statsMonth]: merged } } : cl);
+    i(updated);
+    setGmbPasteText(""); setGmbParsed(null); setShowGmbPaste(false);
   };
 
   const saveConclusion = () => {
@@ -24661,114 +25864,516 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     const reviewCount = parseInt(extracted.reviewCount) || null;
     const rating = parseFloat(extracted.rating) || null;
     const prevReviewCount = lastSnap?.reviewCount || null;
-    const photoCount = parseInt(extracted.photoCount) || null;
+    // Photos ajoutées ce mois — calculées à partir des optimisations enregistrées (champ "Photos") et des photos jointes aux publications
+    const _photosFromUpdates = monthUpdates.filter(u2 => /photo/i.test(u2.field||"")).reduce((s,u2) => { const m = (u2.change||"").match(/(\d+)/); return s + (m ? parseInt(m[1]) : 0); }, 0);
+    const _photosFromPosts = monthPosts.reduce((s,p2) => s + (parseInt(p2.photoCount) || 0), 0);
+    const photosAddedThisMonth = _photosFromUpdates + _photosFromPosts;
     const prevPhotoCount = lastSnap?.photoCount || null;
+    const photoCount = parseInt(extracted.photoCount) || (prevPhotoCount != null ? prevPhotoCount + photosAddedThisMonth : (photosAddedThisMonth || null));
 
-    return `<style>
-      *{box-sizing:border-box;margin:0;padding:0;}
-      body,div{font-family:'Helvetica Neue',Arial,sans-serif;}
-      .r-page{background:white;width:100%;overflow:hidden;}
-      .r-cover{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#e63946 100%);color:white;padding:48px 44px;min-height:220px;display:flex;flex-direction:column;justify-content:space-between;}
-      .r-body{padding:36px 44px;}
-      .r-section{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#e63946;margin:28px 0 12px;padding-bottom:8px;border-bottom:2px solid #fde8e8;}
-      .r-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:8px;}
-      .r-kpi{background:#f8fafc;border-radius:10px;padding:14px;text-align:center;border-top:3px solid #e63946;}
-      .r-kpi.blue{border-top-color:#3498db;}.r-kpi.green{border-top-color:#27ae60;}.r-kpi.orange{border-top-color:#f39c12;}
-      .r-kpi-label{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;}
-      .r-kpi-val{font-size:24px;font-weight:900;color:#1a1a2e;}
-      .r-kpi-evo{font-size:11px;font-weight:700;margin-top:4px;}
-      table{width:100%;border-collapse:collapse;}
-      th{background:#1a1a2e;color:white;padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
-      td{font-size:12px;}
-      .r-conclusion{background:#f0f4ff;border-radius:10px;padding:18px;border-left:4px solid #1a1a2e;margin-top:8px;}
-      .r-footer{background:#f8fafc;padding:14px 44px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;}
-      @media print{body{background:white;}.r-page{margin:0;}}
-    </style>
-    <div class="r-page">
-      <div class="r-cover">
+    const scoreBarWidth = Math.round(currentScore);
+    const scoreColor = currentScore >= 70 ? "#059669" : currentScore >= 50 ? "#d97706" : "#dc2626";
+    const scoreBg = currentScore >= 70 ? "#ECFDF5" : currentScore >= 50 ? "#FFFBEB" : "#FEF2F2";
+    const evoColor = scoreDiff == null ? "#94a3b8" : scoreDiff > 0 ? "#059669" : "#dc2626";
+    const evoText = scoreDiff == null ? "Premier bilan" : scoreDiff > 0 ? `↑ +${scoreDiff} pts ce mois` : scoreDiff < 0 ? `↓ ${scoreDiff} pts ce mois` : "→ Stable ce mois";
+
+    // 3 pillars for report
+    const _rSc = e.scores || {};
+    const _rCalc = (crit) => { const tot=crit.reduce((s,c)=>s+c.w,0); const got=crit.reduce((s,c)=>s+(_rSc[c.k]?c.w:0),0); return tot>0?Math.round(got/tot*100):0; };
+    const _rPert = [{k:"category_primary",w:4},{k:"category_secondary",w:3},{k:"desc_length",w:2},{k:"desc_keywords",w:3},{k:"services_listed",w:3},{k:"products_listed",w:2},{k:"attributes",w:2},{k:"business_name",w:1}];
+    const _rProx = [{k:"address",w:3},{k:"service_area",w:4},{k:"phone",w:2},{k:"hours_regular",w:3},{k:"hours_special",w:1}];
+    const _rProm = [{k:"rating",w:4},{k:"review_count",w:4},{k:"response_rate",w:3},{k:"response_quality",w:2},{k:"recent_reviews",w:2},{k:"photo_count",w:2},{k:"photo_cover",w:1},{k:"photo_logo",w:1},{k:"photo_interior",w:1},{k:"photo_team",w:1},{k:"photo_recent",w:2},{k:"posts_frequency",w:2},{k:"posts_cta",w:1},{k:"posts_offers",w:1}];
+    const _rPillars = [
+      { icon:"🎯", l:"Pertinence", s:_rCalc(_rPert), desc:"Catégorie, description, mots-clés, services", c:"#4F46E5" },
+      { icon:"📍", l:"Proximité", s:_rCalc(_rProx), desc:"Adresse, zone, horaires, téléphone", c:"#0891b2" },
+      { icon:"🏆", l:"Proéminence", s:_rCalc(_rProm), desc:"Avis, photos, publications", c:"#C03080" },
+    ];
+    const _rCol = s => s>=80?"#059669":s>=65?"#3B5BDB":s>=45?"#d97706":"#dc2626";
+    const _rLbl = s => s>=80?"Très bon":s>=65?"Bon":s>=45?"Moyen":"Faible";
+    const pillarsHtml = Object.keys(_rSc).length > 0 ? `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+        ${_rPillars.map(p2 => `<div style="background:#F9FAFB;border-radius:12px;padding:18px 14px;text-align:center;border:1.5px solid ${p2.c}22;border-top:3px solid ${p2.c};">
+          <div style="font-size:22px;margin-bottom:6px;">${p2.icon}</div>
+          <div style="font-size:12px;font-weight:800;color:#1E1B30;margin-bottom:10px;">${p2.l}</div>
+          <div style="font-size:30px;font-weight:900;color:${_rCol(p2.s)};line-height:1;">${p2.s}<span style="font-size:14px;opacity:.5;">/100</span></div>
+          <div style="font-size:11px;font-weight:700;color:${_rCol(p2.s)};margin:4px 0 6px;">${_rLbl(p2.s)}</div>
+          <div style="font-size:10px;color:#9CA3AF;line-height:1.4;">${p2.desc}</div>
+        </div>`).join("")}
+      </div>` : `<div style="background:#FFF7ED;border-radius:8px;padding:12px;font-size:12px;color:#856404;">Lancez un audit pour voir les 3 piliers.</div>`;
+
+    // ── ACTIONS RÉALISÉES SUR LA FICHE CE MOIS-CI (réelles, à partir des données saisies) ──
+    const _avisRepondus = allMonthAvis.filter(a => a.reponse || a.response || a.repondu).length;
+    const _actions = [];
+    if (photosAddedThisMonth) _actions.push(`Ajout de <strong>${photosAddedThisMonth} photo${photosAddedThisMonth>1?"s":""}</strong> géolocalisée${photosAddedThisMonth>1?"s":""} sur la fiche`);
+    if (monthPosts.length) _actions.push(`Création de <strong>${monthPosts.length} publication${monthPosts.length>1?"s":""}</strong> Google${monthPosts.length ? `<div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">${monthPosts.map(p2 => `<div style="font-size:11.5px;color:#6B7280;padding-left:4px">— « ${p2.title} »</div>`).join("")}</div>` : ""}`);
+    if (_avisRepondus) _actions.push(`Réponse à <strong>${_avisRepondus} avis client${_avisRepondus>1?"s":""}</strong>`);
+    else if (allMonthAvis.length) _actions.push(`Suivi de <strong>${allMonthAvis.length} ${allMonthAvis.length>1?"nouveaux avis":"nouvel avis"}</strong> reçu${allMonthAvis.length>1?"s":""}`);
+    monthUpdates.filter(u2 => !/photo/i.test(u2.field||"")).forEach(u2 => _actions.push(`<strong>${u2.field}</strong> — ${u2.change}`));
+    const actionsHtml = _actions.length ? `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${_actions.map(a => `<div style="display:flex;align-items:center;gap:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:10px 14px;font-size:12.5px;color:#1E1B30"><span style="font-size:14px;flex-shrink:0">✅</span><span>${a}</span></div>`).join("")}
+      </div>` : `<div style="background:#FFF7ED;border-radius:8px;padding:12px;font-size:12px;color:#856404;">Aucune action enregistrée pour ce mois pour l'instant — renseignez les optimisations, publications et photos dans le suivi mensuel pour qu'elles apparaissent ici.</div>`;
+
+    // ── ÉVOLUTION DES STATISTIQUES GOOGLE (table N derniers mois) + plates-formes + termes de recherche ──
+    const _evoMonths = [];
+    { const now = new Date(); for (let k=evoMonthsCount-1; k>=0; k--) { const dt = new Date(now.getFullYear(), now.getMonth()-k, 1); _evoMonths.push({ key: dt.toISOString().slice(0,7), label: dt.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"}) }); } }
+    const _evoRows = _evoMonths.map(m => ({ ...m, stats: gmbStatsAll[m.key] || null }));
+    const _evoHasAny = _evoRows.some(rw => rw.stats);
+    const statsEvoHtml = _evoHasAny ? `
+      <div style="overflow-x:auto">
+        <table style="min-width:${evoMonthsCount>6?760:480}px">
+          <thead><tr>
+            <th>Indicateur</th>
+            ${_evoRows.map(rw => `<th style="text-align:center">${rw.label}</th>`).join("")}
+          </tr></thead>
+          <tbody>
+            ${gmbStatFields.map(f2 => `<tr>
+              <td style="font-weight:700;white-space:nowrap">${f2.label}</td>
+              ${_evoRows.map((rw,ri) => {
+                const v = rw.stats ? rw.stats[f2.key] : null;
+                const hasV = v!=null && v!=="";
+                const prevRw = ri>0 ? _evoRows[ri-1] : null;
+                const pv = prevRw && prevRw.stats ? prevRw.stats[f2.key] : null;
+                let pct = null;
+                if (hasV && pv!=null && pv!=="" && parseFloat(pv)!==0) pct = Math.round(((parseFloat(v)-parseFloat(pv))/Math.abs(parseFloat(pv)))*100);
+                return `<td style="text-align:center">
+                  <div style="font-weight:800;color:#1E1B30">${hasV?parseInt(v).toLocaleString("fr-FR"):"—"}</div>
+                  ${pct!=null?`<div style="font-size:10px;font-weight:700;color:${pct>0?"#059669":pct<0?"#dc2626":"#9CA3AF"}">${pct>0?"▲ +":pct<0?"▼ ":"→ "}${pct!==0?Math.abs(pct)+"%":"stable"}</div>`:""}
+                </td>`;
+              }).join("")}
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>` : `<div style="background:#FFF7ED;border-radius:8px;padding:12px;font-size:12px;color:#856404">Aucune donnée historique pour l'instant — renseignez les statistiques Google chaque mois pour faire apparaître la courbe d'évolution.</div>`;
+
+    const platformsHtml = (gmbStats.platforms||[]).length ? `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${gmbStats.platforms.map(p2 => `<div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span style="font-weight:600;color:#374151">${p2.label}</span><span style="color:#6B7280"><strong style="color:#1E1B30">${p2.count}</strong> · ${p2.pct}%</span></div>
+          <div style="height:6px;background:#F4F5FA;border-radius:4px;overflow:hidden"><div style="height:100%;border-radius:4px;background:#6B40D8;width:${Math.min(100,parseFloat(p2.pct)||0)}%"></div></div>
+        </div>`).join("")}
+      </div>` : "";
+    const searchTermsHtml = (gmbStats.searchTerms||[]).length ? `
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${gmbStats.searchTerms.map((st,idx) => `<div style="display:flex;align-items:center;gap:10px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:7px 12px">
+          <span style="width:20px;height:20px;border-radius:50%;background:${idx<3?"#6B40D8":"#E5E7EB"};color:${idx<3?"white":"#6B7280"};font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${st.rank||idx+1}</span>
+          <span style="flex:1;font-size:12.5px;color:#1E1B30;font-weight:600">${st.term}</span>
+          <span style="font-size:12px;font-weight:800;color:#6B40D8">${st.count}</span>
+        </div>`).join("")}
+      </div>` : "";
+
+    // ── OBJECTIFS : validation du mois précédent + objectifs du mois prochain ──
+    const _prevCM = (() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7); })();
+    const _prevSteps = nextStepsAll[_prevCM] || [];
+    const _stepRow = (s,idx) => { const pColor = s.priority==="urgent"?"#c0392b":s.priority==="important"?"#d97706":"#2e7d32"; const pLabel = s.priority==="urgent"?"🔴 Urgent":s.priority==="important"?"🟠 Important":"🟢 Standard"; return `<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;padding:11px 12px;background:#F9FAFB;border-radius:10px"><div style="width:26px;height:26px;border-radius:50%;background:#6B40D8;color:white;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${idx+1}</div><div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:#1E1B30">${s.text}</div><div style="font-size:10.5px;font-weight:700;color:${pColor};margin-top:2px">${pLabel}</div></div></div>`; };
+    const objectivesHtml = `
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px">
         <div>
-          <div style="font-size:11px;opacity:.6;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">${agencyName}</div>
-          <div style="font-size:34px;font-weight:900;line-height:1.1;">Rapport mensuel<br>Google My Business</div>
-          <div style="font-size:18px;font-weight:600;opacity:.85;margin-top:10px;">${clientName}</div>
-          <div style="font-size:13px;opacity:.55;margin-top:4px;">${monthLabel}</div>
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:10px">📋 Objectifs du mois précédent</div>
+          ${_prevSteps.length ? _prevSteps.map(_stepRow).join("") : `<div style="color:#9CA3AF;font-size:12.5px;padding:6px 0">Aucun objectif renseigné pour le mois précédent.</div>`}
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:24px;">
-          <div style="background:${trendD.border};color:white;padding:8px 18px;border-radius:20px;font-size:14px;font-weight:700;">${trendD.icon} ${trendD.label}</div>
-          <div style="text-align:right;">
-            <div style="font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:1px;">Score GMB</div>
-            <div style="font-size:52px;font-weight:900;line-height:1;color:${sc};">${currentScore}</div>
-            <div style="font-size:11px;opacity:.5;">/ 100 pts${scoreDiff!=null?` (${scoreDiff>0?"+":""}${scoreDiff} pts)`:""}</div>
+        <div>
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:10px">🎯 Objectifs du mois prochain</div>
+          ${nextSteps.length ? nextSteps.map(_stepRow).join("") : `<div style="color:#9CA3AF;font-size:12.5px;padding:6px 0">Aucun objectif renseigné pour le mois prochain.</div>`}
+        </div>
+      </div>`;
+
+    // ── RÉCAP DES INTERACTIONS QUALIFIÉES CE MOIS-CI ──
+    const _appels = parseInt(gmbStats.appels) || 0;
+    const _itineraires = parseInt(gmbStats.itineraires) || 0;
+    const _clicsWeb = parseInt(gmbStats.clicsWeb) || 0;
+    const _totalInteractions = _appels + _itineraires + _clicsWeb;
+    const recapHtml = `
+      <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border-radius:14px;padding:22px 26px;border:1.5px solid #E9D5FF">
+        <div style="font-size:12px;font-weight:800;color:#6B40D8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px">Ce mois-ci</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px">
+          <div style="text-align:center"><div style="font-size:26px;font-weight:900;color:#1E1B30;line-height:1">${_appels}</div><div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.4px;margin-top:4px">📞 Appels</div></div>
+          <div style="text-align:center"><div style="font-size:26px;font-weight:900;color:#1E1B30;line-height:1">${_itineraires}</div><div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.4px;margin-top:4px">📍 Itinéraires</div></div>
+          <div style="text-align:center"><div style="font-size:26px;font-weight:900;color:#1E1B30;line-height:1">${_clicsWeb}</div><div style="font-size:10px;color:#6B7280;text-transform:uppercase;letter-spacing:.4px;margin-top:4px">🌐 Clics vers le site</div></div>
+        </div>
+        <div style="text-align:center;padding-top:14px;border-top:1px solid #E9D5FF">
+          <span style="font-size:13px;color:#374151">Total : </span><span style="font-size:20px;font-weight:900;color:#6B40D8">${_totalInteractions}</span><span style="font-size:13px;color:#374151"> interactions qualifiées</span>
+        </div>
+      </div>`;
+
+    // ── CARTES MOTS-CLÉS POSITIONNEMENT (jusqu'à 5) + TOP 5 CONCURRENTS PAR MOT-CLÉ (données réelles geoGrid) ──
+    const _kwEntries = Object.keys(geoGrid).filter(k => k !== "center")
+      .map(kw => { const scans = (geoGrid[kw]||{}).scans || []; return scans.length ? { kw, scan: scans[scans.length-1] } : null; })
+      .filter(Boolean)
+      .sort((a,b) => (b.scan.date||"").localeCompare(a.scan.date||""))
+      .slice(0, 5);
+    const kwCardsHtml = _kwEntries.length ? _kwEntries.map(({kw, scan}, _kwIdx) => {
+      const cells = scan.cells || [];
+      const valid = cells.filter(r2 => r2!=null);
+      const rangMoyen = valid.length ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1) : null;
+      const pctTrouve = valid.length ? Math.round(valid.filter(r2=>r2<=20).length/valid.length*100) : 0;
+      const scanDateStr = scan.date ? new Date(scan.date).toLocaleDateString("fr-FR") : "";
+      const _gs = scan.gridSize || Math.round(Math.sqrt(cells.length||1));
+      const _rayonKm = scan.rayon || 20;
+      const _mapElId = `rapport-mensuel-map-${_kwIdx}`;
+      const _carteHtml = `<div style="font-size:13px;font-weight:800;color:#1E1B30;margin-bottom:10px">🗺️ Carte de positionnement local — « ${kw} »${scanDateStr?` <span style="font-weight:500;color:#9CA3AF;font-size:11px">— scan du ${scanDateStr}</span>`:""}</div>
+        <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <div style="display:flex;gap:18px;background:white;border:1px solid #E5E7EB;border-radius:13px;padding:14px 20px">
+            <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#6B40D8;line-height:1">${rangMoyen!=null?rangMoyen:"—"}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Rang moyen</div></div>
+            <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#059669;line-height:1">${pctTrouve}%</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Trouvé top 20</div></div>
+            <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#374151;line-height:1">${valid.length}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Points scannés</div></div>
+          </div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:#6B7280">
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#059669;display:inline-block"></span>Top 3</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#d97706;display:inline-block"></span>Top 10</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#E85A30;display:inline-block"></span>Top 20</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block"></span>Hors top 20</span>
+            <span style="display:flex;align-items:center;gap:4px"><span style="font-size:13px">📍</span>Votre établissement</span>
+          </div>
+        </div>
+        <div id="${_mapElId}" style="height:280px;border-radius:13px;overflow:hidden;border:1px solid #E5E7EB;margin-bottom:10px;background:#F4F5FA"></div>
+        <div style="font-size:11.5px;color:#9CA3AF;margin:0 0 16px;line-height:1.6">Carte du scan géographique réel autour de votre établissement (zone locale de ${_rayonKm} km de rayon, grille ${_gs}×${_gs}${scanDateStr?`, scan du ${scanDateStr}`:""}) — chaque point représente votre position effective sur Google Maps à cet endroit pour « ${kw} ». Ce scan est régénéré régulièrement dans le cadre de notre suivi continu, pour cibler précisément les zones à renforcer en priorité.</div>`;
+      // Top 5 concurrents spécifiques à ce mot-clé (agrégés sur les scans de ce mot-clé)
+      const _agg = {};
+      ((geoGrid[kw]||{}).scans||[]).forEach(sc2 => {
+        (sc2.cellData||[]).forEach(cell => {
+          ((cell && cell.top10)||[]).filter(c=>!c.isMe).forEach(c => {
+            const key = (c.name||"").toLowerCase().trim(); if (!key) return;
+            if (!_agg[key]) _agg[key] = { name:c.name, rating:c.rating, reviews:c.reviews||0, appearances:0, rankSum:0 };
+            _agg[key].appearances++; _agg[key].rankSum += (c.rank||10);
+          });
+        });
+      });
+      const top5 = Object.values(_agg).map(c=>({...c, avgRank: c.appearances>0?Math.round(c.rankSum/c.appearances*10)/10:null})).sort((a,b)=>b.appearances-a.appearances).slice(0,5);
+      return `<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:14px;padding:18px 20px;margin-bottom:16px">
+        ${_carteHtml}
+        ${top5.length ? `
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:8px">Top 5 concurrents sur ce mot-clé</div>
+        <table style="margin:0">
+          <thead><tr><th>Établissement</th><th style="text-align:center;width:80px">Note</th><th style="text-align:center;width:80px">Avis</th><th style="text-align:center;width:90px">Rang moy.</th></tr></thead>
+          <tbody>${top5.map(c => `<tr><td style="font-weight:600">${c.name}</td><td style="text-align:center">${c.rating?"⭐ "+parseFloat(c.rating).toFixed(1):"—"}</td><td style="text-align:center">${c.reviews||"—"}</td><td style="text-align:center;font-weight:800;color:#6B40D8">${c.avgRank!=null?c.avgRank:"—"}</td></tr>`).join("")}</tbody>
+        </table>` : `<div style="font-size:11px;color:#9CA3AF">Aucun concurrent identifié sur ce mot-clé pour l'instant.</div>`}
+      </div>`;
+    }).join("") : `<div style="background:#FFF7ED;border-radius:8px;padding:12px;font-size:12px;color:#856404">Aucun scan de positionnement disponible — lancez un scan géographique sur les mots-clés prioritaires pour faire apparaître les cartes ici.</div>`;
+
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;background:#fff;color:#1E1B30;}
+      .page{max-width:780px;margin:0 auto;background:white;}
+
+      /* ── COVER (style aligné sur le rapport d'audit) ── */
+      .cover{background:white;color:#1E1B30;padding:0;overflow:hidden;position:relative;}
+      .cover-top-bar{height:5px;background:linear-gradient(90deg,#6B40D8,#C03080,#E85A30);width:100%;}
+      .cover-hdr{padding:32px 44px 0;display:flex;justify-content:space-between;align-items:center;}
+      .cover-agency{display:flex;align-items:center;gap:10px;}
+      .cover-badge{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:white;box-shadow:0 6px 20px rgba(107,64,216,.25);}
+      .cover-agency-name{font-size:20px;font-weight:900;color:#1E1B30;letter-spacing:-.02em;}
+      .cover-agency-sub{font-size:11px;color:#9CA3AF;}
+      .cover-date{text-align:right;font-size:11px;color:#9CA3AF;}
+      .cover-main{padding:36px 44px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+      .cover-tag{display:inline-flex;align-items:center;gap:6px;background:#EEF2FF;border:1px solid #C7D2FE;color:#3B5BDB;font-size:11px;font-weight:700;padding:5px 14px;border-radius:20px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:20px;}
+      .cover-title{font-size:34px;font-weight:900;line-height:1.15;letter-spacing:-.03em;margin-bottom:8px;max-width:560px;}
+      .cover-title-grad{background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+      .cover-client{font-size:14px;color:#6B7280;margin-bottom:28px;}
+      .cover-score-block{display:flex;align-items:center;gap:20px;background:white;border:1.5px solid #E9D5FF;border-radius:18px;padding:22px 28px;box-shadow:0 6px 24px rgba(107,64,216,.09);margin-bottom:24px;max-width:500px;width:100%;}
+      .cover-score-donut{width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .cover-score-inner{width:66px;height:66px;border-radius:50%;background:white;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+      .cover-score-num{font-size:26px;font-weight:900;line-height:1;}
+      .cover-score-sub{font-size:10px;color:#9CA3AF;}
+      .cover-score-bar-wrap{flex:1;text-align:left;}
+      .cover-score-label{font-size:16px;font-weight:900;color:#1E1B30;margin-bottom:3px;}
+      .cover-score-bar-bg{height:7px;background:#F4F5FA;border-radius:4px;overflow:hidden;}
+      .cover-score-bar-fill{height:100%;border-radius:4px;transition:width .4s;}
+      .cover-evo{font-size:12px;font-weight:700;margin-top:8px;}
+      .cover-bottom{padding:16px 44px;border-top:1px solid #F4F5FA;display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+      .cover-stat{background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid #6B40D8;}
+      .cover-stat-val{font-size:20px;font-weight:900;color:#1E1B30;line-height:1;}
+      .cover-stat-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin-top:6px;}
+
+      /* ── BODY ── */
+      .body{padding:36px 44px;}
+      .rp-section{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B40D8;margin:32px 0 14px;display:flex;align-items:center;gap:8px}
+      .rp-section::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#E5E7EB,transparent)}
+
+      /* ── KPI CARDS ── */
+      .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:4px;}
+      .kpi{background:#F9FAFB;border-radius:12px;padding:16px;border:1.5px solid #E5E7EB;border-top:3px solid #6B40D8;text-align:center;}
+      .kpi-icon{font-size:18px;margin-bottom:6px;}
+      .kpi-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#9CA3AF;margin-bottom:6px;}
+      .kpi-val{font-size:26px;font-weight:900;color:#1E1B30;line-height:1;}
+      .kpi-evo{font-size:11px;font-weight:700;margin-top:6px;}
+
+      /* ── GMB STATS ── */
+      .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+      .stat-card{background:#F9FAFB;border-radius:10px;padding:14px 16px;border:1px solid #E5E7EB;}
+      .stat-icon-lbl{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+      .stat-val{font-size:24px;font-weight:900;color:#1E1B30;}
+      .stat-evo{font-size:11px;font-weight:700;margin-top:4px;}
+
+      /* ── TABLE ── */
+      table{width:100%;border-collapse:collapse;margin-top:4px;}
+      thead tr{background:#F4F5FA;}
+      th{padding:9px 12px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6B7280;border-bottom:2px solid #E5E7EB;}
+      td{padding:9px 12px;font-size:12px;border-bottom:1px solid #F3F4F6;}
+      tr:last-child td{border-bottom:none;}
+
+      /* ── REVIEWS ── */
+      .review-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+      .review-card{background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;border:1px solid #E5E7EB;}
+      .review-val{font-size:28px;font-weight:900;color:#1E1B30;}
+      .review-lbl{font-size:10px;color:#9CA3AF;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:6px;}
+
+      /* ── STEPS ── */
+      .step{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;background:#F9FAFB;border-radius:10px;margin-bottom:8px;border-left:3px solid #6B40D8;}
+      .step.urgent{border-left-color:#DC2626;background:#FEF2F2;}
+      .step.important{border-left-color:#D97706;background:#FFFBEB;}
+      .step-num{width:26px;height:26px;border-radius:50%;background:#6B40D8;color:white;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+      .step.urgent .step-num{background:#DC2626;}
+      .step.important .step-num{background:#D97706;}
+      .step-text{font-size:13px;font-weight:600;color:#1E1B30;flex:1;padding-top:2px;}
+      .step-prio{font-size:10px;font-weight:700;margin-top:3px;}
+
+      /* ── CONCLUSION ── */
+      .conclusion{background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border-radius:12px;padding:20px 22px;border-left:4px solid #6B40D8;}
+      .conclusion p{font-size:13px;line-height:1.75;color:#374151;}
+
+      /* ── FOOTER ── */
+      .footer{margin-top:32px;padding:16px 44px;background:#F9FAFB;border-top:1px solid #E5E7EB;display:flex;justify-content:space-between;align-items:center;}
+      .footer-left{font-size:11px;color:#9CA3AF;}
+      .footer-right{font-size:11px;color:#9CA3AF;font-weight:600;}
+
+      /* ── DIVIDER ── */
+      .divider{height:1px;background:linear-gradient(90deg,#6B40D8,transparent);margin:32px 0;opacity:.2;}
+
+      .rp-map-tt{background:transparent!important;border:none!important;box-shadow:none!important;color:white;font-weight:800;font-size:11px;padding:0!important}
+      .rp-map-tt::before{display:none!important}
+
+      @media print{body{background:white;}.page{margin:0;max-width:none;}}
+    </style></head><body>
+    <div class="page">
+
+      <!-- COVER PAGE -->
+      <div class="cover">
+        <div class="cover-top-bar"></div>
+        <div class="cover-hdr">
+          <div class="cover-agency">
+            <div class="cover-badge">B</div>
+            <div>
+              <div class="cover-agency-name">${agencyName}</div>
+              <div class="cover-agency-sub">Agence Google My Business</div>
+            </div>
+          </div>
+          <div class="cover-date">Rapport confidentiel<br><strong style="color:#374151;font-size:13px">${monthLabel}</strong></div>
+        </div>
+        <div class="cover-main">
+          <div class="cover-tag">📊 Rapport mensuel GMB</div>
+          <div class="cover-title">Votre fiche Google ce mois-ci :<br><span class="cover-title-grad">où en êtes-vous ?</span></div>
+          <div class="cover-client">${clientName} · suivi de votre visibilité locale</div>
+
+          <div class="cover-score-block">
+            <div class="cover-score-donut" style="background:conic-gradient(${sc} 0% ${currentScore}%, #F4F5FA ${currentScore}% 100%)">
+              <div class="cover-score-inner">
+                <div class="cover-score-num" style="color:${sc}">${currentScore}</div>
+                <div class="cover-score-sub">/100</div>
+              </div>
+            </div>
+            <div class="cover-score-bar-wrap">
+              <div class="cover-score-label">Score de visibilité globale</div>
+              <div style="font-size:11.5px;color:#6B7280;line-height:1.5;margin-bottom:6px">${currentScore < 50 ? "Fiche <strong style='color:#dc2626'>en dessous du seuil de compétitivité</strong> (70/100). Des optimisations régulières sont indispensables." : currentScore < 70 ? "Fiche <strong style='color:#d97706'>en progression</strong> — des optimisations ciblées permettront d'atteindre le TOP 3." : "Fiche <strong style='color:#059669'>compétitive</strong> — l'enjeu est maintenant de maintenir et consolider la position."}</div>
+              <div class="cover-score-bar-bg"><div class="cover-score-bar-fill" style="width:${scoreBarWidth}%;background:linear-gradient(90deg,${sc},${sc}aa)"></div></div>
+              <div style="display:flex;justify-content:space-between;font-size:9px;color:#D1D5DB;margin-top:3px"><span>0 — Invisible</span><span>50 — Compétitif</span><span>100 — Leader</span></div>
+              <div class="cover-evo" style="color:${evoColor}">${trendD.icon} ${evoText}</div>
+            </div>
+          </div>
+
+          <!-- Piliers + position actuelle, avec évolution % vs mois précédent -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:560px;width:100%">
+            ${pillarsRecap.map(pl => { const c = pl.col; const evo = pl.delta; const evoTxt = evo==null?"":`<span style="font-size:9.5px;font-weight:800;color:${evo>0?"#059669":evo<0?"#dc2626":"#9CA3AF"}">${evo>0?"▲ +":evo<0?"▼ ":"→ "}${evo!==0?Math.abs(evo)+"%":"stable"}</span>`; return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${c}">
+              <div style="font-size:20px;margin-bottom:6px">${pl.icon}</div>
+              <div style="font-size:22px;font-weight:900;color:${c};line-height:1">${pl.pct}</div>
+              <div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${pl.pct}%;height:100%;background:${c};border-radius:2px"></div></div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">${pl.label}</div>
+              <div style="margin-top:3px;height:13px">${evoTxt}</div>
+            </div>`; }).join("")}
+            ${(() => {
+              const curAvg = mapPositions.length ? Math.round(mapPositions.reduce((s,p)=>s+p.avg,0)/mapPositions.length*10)/10 : null;
+              const prevVals = mapPositions.map(p=>p.prevPos).filter(v=>v!=null);
+              const prevAvg = prevVals.length ? Math.round(prevVals.reduce((a,b)=>a+b,0)/prevVals.length*10)/10 : null;
+              const posDelta = (curAvg!=null && prevAvg!=null && prevAvg!==0) ? Math.round(((curAvg-prevAvg)/prevAvg)*100) : null;
+              const pc = curAvg!=null ? (curAvg<=3?"#059669":"#d97706") : "#9CA3AF";
+              const evoTxt = posDelta==null ? "" : `<span style="font-size:9.5px;font-weight:800;color:${posDelta<0?"#059669":posDelta>0?"#dc2626":"#9CA3AF"}">${posDelta<0?"▲ ":posDelta>0?"▼ +":"→ "}${posDelta!==0?Math.abs(posDelta)+"%":"stable"}</span>`;
+              return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${pc}">
+                <div style="font-size:20px;margin-bottom:6px">📍</div>
+                <div style="font-size:22px;font-weight:900;color:${pc};line-height:1">${curAvg!=null?curAvg:"—"}</div>
+                <div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${curAvg!=null?Math.max(0,100-Math.min(100,curAvg*5)):0}%;height:100%;background:${pc};border-radius:2px"></div></div>
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">Position actuelle<br>Google Maps</div>
+                <div style="margin-top:3px;height:13px">${evoTxt}</div>
+              </div>`;
+            })()}
           </div>
         </div>
       </div>
-      <div class="r-body">
-        <div class="r-section">📊 Résultats du mois</div>
-        <div class="r-kpi-row">
-          <div class="r-kpi" style="border-top-color:${sc};">
-            <div class="r-kpi-label">Score GMB</div>
-            <div class="r-kpi-val" style="color:${sc};">${currentScore}</div>
-            <div class="r-kpi-evo" style="color:${scoreDiff==null?"#94a3b8":scoreDiff>0?"#27ae60":"#e74c3c"};">${scoreDiff==null?"—":scoreDiff>0?`▲ +${scoreDiff} pts`:`▼ ${scoreDiff} pts`}</div>
+
+      <!-- BODY -->
+      <div class="body">
+
+        <!-- KPIs -->
+        <div class="rp-section">📊 Résultats du mois</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Indicateurs clés de performance</div>
+        <div class="kpi-grid">
+          <div class="kpi" style="border-top-color:${scoreColor};background:${scoreBg};">
+            <div class="kpi-icon">🏆</div>
+            <div class="kpi-lbl">Score GMB</div>
+            <div class="kpi-val" style="color:${scoreColor};">${currentScore}</div>
+            <div class="kpi-evo" style="color:${evoColor};">${evoText}</div>
           </div>
-          <div class="r-kpi blue">
-            <div class="r-kpi-label">Avis Google</div>
-            <div class="r-kpi-val">${reviewCount??"—"}</div>
-            <div class="r-kpi-evo" style="color:${reviewCount&&prevReviewCount&&reviewCount>prevReviewCount?"#27ae60":reviewCount&&prevReviewCount&&reviewCount<prevReviewCount?"#e74c3c":"#94a3b8"};">${reviewCount&&prevReviewCount?reviewCount>prevReviewCount?`▲ +${reviewCount-prevReviewCount}`:reviewCount<prevReviewCount?`▼ ${reviewCount-prevReviewCount}`:"→":"—"}</div>
+          <div class="kpi" style="border-top-color:#3B82F6;">
+            <div class="kpi-icon">⭐</div>
+            <div class="kpi-lbl">Avis Google</div>
+            <div class="kpi-val">${reviewCount??"—"}</div>
+            <div class="kpi-evo" style="color:${reviewCount&&prevReviewCount&&reviewCount>prevReviewCount?"#059669":reviewCount&&prevReviewCount&&reviewCount<prevReviewCount?"#dc2626":"#9CA3AF"};">${reviewCount&&prevReviewCount?reviewCount>prevReviewCount?`↑ +${reviewCount-prevReviewCount} nouveaux`:reviewCount<prevReviewCount?`↓ ${reviewCount-prevReviewCount}`:"→ Stable":"—"}</div>
           </div>
-          <div class="r-kpi green">
-            <div class="r-kpi-label">Photos</div>
-            <div class="r-kpi-val">${photoCount??"—"}</div>
-            <div class="r-kpi-evo" style="color:${photoCount&&prevPhotoCount&&photoCount>prevPhotoCount?"#27ae60":"#94a3b8"};">${photoCount&&prevPhotoCount?photoCount>prevPhotoCount?`▲ +${photoCount-prevPhotoCount}`:"→":"—"}</div>
+          <div class="kpi" style="border-top-color:#059669;">
+            <div class="kpi-icon">📸</div>
+            <div class="kpi-lbl">Photos</div>
+            <div class="kpi-val">${photoCount??"—"}</div>
+            <div class="kpi-evo" style="color:${photosAddedThisMonth?"#059669":"#9CA3AF"};">${photosAddedThisMonth?`↑ +${photosAddedThisMonth} ce mois`:"→ Stable"}</div>
           </div>
-          <div class="r-kpi orange">
-            <div class="r-kpi-label">Posts publiés</div>
-            <div class="r-kpi-val">${monthPosts.length}</div>
-            <div class="r-kpi-evo" style="color:#94a3b8;">ce mois</div>
+          <div class="kpi" style="border-top-color:#C03080;">
+            <div class="kpi-icon">✍️</div>
+            <div class="kpi-lbl">Publications</div>
+            <div class="kpi-val">${monthPosts.length}</div>
+            <div class="kpi-evo" style="color:#9CA3AF;">ce mois</div>
           </div>
         </div>
 
-        <div class="r-section">📊 Statistiques Google My Business</div>
+        <!-- ACTIONS RÉALISÉES -->
+        <div class="rp-section">✅ Actions réalisées sur la fiche GMB</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Optimisations effectuées ce mois-ci</div>
+        ${actionsHtml}
+
+        <!-- GMB STATS -->
+        <div class="rp-section">📈 Statistiques Google My Business</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Visibilité et interactions sur votre fiche</div>
         ${gmbStatsHtml}
 
+        ${(_evoHasAny || platformsHtml || searchTermsHtml) ? `
+        <div class="rp-section">📈 Évolution des statistiques Google — ${evoMonthsCount} derniers mois</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Comparatif mois par mois</div>
+        ${statsEvoHtml}
+        ${(platformsHtml || searchTermsHtml) ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:14px">
+          ${platformsHtml ? `<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:16px"><div style="font-size:12px;font-weight:800;color:#1E1B30;margin-bottom:10px">📱 Plates-formes et appareils</div>${platformsHtml}</div>` : ""}
+          ${searchTermsHtml ? `<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:16px"><div style="font-size:12px;font-weight:800;color:#1E1B30;margin-bottom:10px">🔎 Termes de recherche</div>${searchTermsHtml}</div>` : ""}
+        </div>` : ""}` : ""}
+
         ${mapPositions.length>0?`
-        <div class="r-section">🗺️ Évolution des positions locales</div>
+        <!-- POSITIONS -->
+        <div class="rp-section">🗺️ Évolution des positions locales</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Classement Google Maps par mot-clé, comparé au mois précédent</div>
         <table>
-          <thead><tr><th>Mot-clé</th><th style="text-align:center;">Mois préc.</th><th style="text-align:center;">Ce mois</th><th style="text-align:center;">Classement</th><th style="text-align:center;">Évolution</th></tr></thead>
+          <thead><tr>
+            <th>Mot-clé</th>
+            <th style="text-align:center;width:80px;">Mois préc.</th>
+            <th style="text-align:center;width:80px;">Ce mois</th>
+            <th style="text-align:center;width:90px;">Classement</th>
+            <th style="text-align:center;width:80px;">Évolution</th>
+          </tr></thead>
           <tbody>${posRows}</tbody>
-        </table>`:""}
+        </table>
+        <div style="font-size:11px;color:#9CA3AF;margin-top:8px;margin-bottom:18px;line-height:1.6">Les cartes de positionnement géographique détaillées (scan réel point par point) sont consultables dans l'onglet « Positions & Stats GMB » de votre espace.</div>
+
+        <!-- CARTES MOTS-CLÉS + CONCURRENTS -->
+        <div class="rp-section">🗺️ Cartes de positionnement par mot-clé</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Jusqu'à 5 mots-clés suivis, avec le top 5 des concurrents principaux</div>
+        ${kwCardsHtml}
+        `:""}
 
         ${monthPosts.length>0?`
-        <div class="r-section">✍️ Publications du mois (${monthPosts.length})</div>
+        <!-- POSTS -->
+        <div class="rp-section">✍️ Publications du mois (${monthPosts.length})</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Posts publiés sur votre fiche Google</div>
         <table>
-          <thead><tr><th>Titre</th><th style="text-align:center;">Type</th><th style="text-align:center;">Date</th><th style="text-align:center;">Photos</th></tr></thead>
+          <thead><tr><th>Titre</th><th style="text-align:center;width:100px;">Type</th><th style="text-align:center;width:80px;">Date</th><th style="text-align:center;width:70px;">Photos</th></tr></thead>
           <tbody>${postsRows}</tbody>
         </table>`:""}
 
         ${monthUpdates.length>0?`
-        <div class="r-section">🔧 Optimisations fiche (${monthUpdates.length})</div>
+        <!-- UPDATES -->
+        <div class="rp-section">🔧 Optimisations fiche (${monthUpdates.length})</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Modifications apportées à votre fiche Google ce mois</div>
         <table>
-          <thead><tr><th>Élément</th><th>Modification</th><th style="text-align:center;">Date</th></tr></thead>
+          <thead><tr><th>Élément modifié</th><th>Détail</th><th style="text-align:center;width:80px;">Date</th></tr></thead>
           <tbody>${updatesRows}</tbody>
         </table>`:""}
 
         ${(reviewCount||rating)?`
-        <div class="r-section">⭐ Avis Google</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px;">
-          <div style="background:#f8fafc;border-radius:10px;padding:14px;text-align:center;"><div style="font-size:24px;font-weight:900;">${reviewCount??"—"}</div><div style="font-size:11px;color:#64748b;font-weight:600;margin-top:4px;">Total avis</div></div>
-          <div style="background:#f8fafc;border-radius:10px;padding:14px;text-align:center;"><div style="font-size:24px;font-weight:900;">${rating?"⭐ "+rating.toFixed(1):"—"}</div><div style="font-size:11px;color:#64748b;font-weight:600;margin-top:4px;">Note moyenne</div></div>
-          <div style="background:#f8fafc;border-radius:10px;padding:14px;text-align:center;"><div style="font-size:24px;font-weight:900;">${allMonthAvis.length}</div><div style="font-size:11px;color:#64748b;font-weight:600;margin-top:4px;">Nouveaux ce mois</div></div>
+        <!-- REVIEWS -->
+        <div class="rp-section">⭐ Avis Google</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Réputation et e-réputation</div>
+        <div class="review-grid">
+          <div class="review-card"><div class="review-val">${reviewCount??"—"}</div><div class="review-lbl">Total avis</div></div>
+          <div class="review-card"><div class="review-val">${rating?"⭐ "+rating.toFixed(1):"—"}</div><div class="review-lbl">Note moyenne</div></div>
+          <div class="review-card"><div class="review-val">${allMonthAvis.length}</div><div class="review-lbl">Nouveaux ce mois</div></div>
         </div>`:""}
 
-        <div class="r-section">📝 Conclusion</div>
-        <div class="r-conclusion"><p style="font-size:13px;line-height:1.7;color:#334155;">${conclusionHtml}</p></div>
+        <!-- RÉCAP INTERACTIONS -->
+        <div class="rp-section">📞 Récap des interactions</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Total des actions générées par votre fiche ce mois-ci</div>
+        ${recapHtml}
 
-        <div class="r-section">🎯 Prochaines étapes</div>
-        ${stepsHtml}
+        <div class="divider"></div>
+
+        <!-- ENGAGEMENT MENSUEL / OÙ ALLONS-NOUS -->
+        <div class="rp-section">🗺️ Notre engagement, mois après mois</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Ce que nous faisons chaque mois pour faire grandir votre visibilité</div>
+        <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1px solid #E9D5FF;border-radius:13px;padding:16px 18px;margin-bottom:14px;display:flex;gap:14px;align-items:flex-start">
+          <div style="font-size:24px;flex-shrink:0">♾️</div>
+          <div><div style="font-size:13px;font-weight:800;color:#6B40D8;margin-bottom:4px">Le TOP 3 ne se gagne pas une fois pour toutes</div>
+          <div style="font-size:12px;color:#374151;line-height:1.6">Chaque semaine sans action est une opportunité pour vos concurrents. C'est pourquoi nous menons ces actions <strong>en continu</strong>, mois après mois — pour consolider ce qui a été construit et préparer les prochaines avancées.</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:8px">
+          ${[["📝","4 posts / mois","Actualités, offres, conseils, témoignages"],["⭐","Suivi avis","Réponses + collecte active chaque semaine"],["🗺️","Scan mensuel","Vérification des positions sur la carte"],["📊","Rapport mensuel","KPIs, évolutions, ajustements stratégiques"]].map(([icon,title2,desc]) => `<div style="background:white;border-radius:10px;padding:13px;border:1px solid #E9D5FF;text-align:center"><div style="font-size:20px;margin-bottom:5px">${icon}</div><div style="font-size:12px;font-weight:700;color:#1E1B30;margin-bottom:2px">${title2}</div><div style="font-size:10.5px;color:#9CA3AF;line-height:1.4">${desc}</div></div>`).join("")}
+        </div>
+
+        <!-- CONCLUSION -->
+        <div class="rp-section">📝 Conclusion du mois</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Analyse et commentaires</div>
+        <div class="conclusion"><p>${conclusionHtml}</p></div>
+
+        <!-- OBJECTIFS : validation du mois précédent + objectifs du mois prochain -->
+        <div class="rp-section">🎯 Objectifs &amp; prochaines étapes</div>
+        <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Validation des engagements du mois précédent et priorités à venir</div>
+        ${objectivesHtml}
+
       </div>
-      <div class="r-footer">
-        <span>📅 Rapport généré le ${new Date().toLocaleDateString("fr-FR")}</span>
-        <span>${agencyName}${agencyEmail?" · "+agencyEmail:""} — Confidentiel</span>
+
+      <!-- PAGE DE CLÔTURE / CTA (style identique au rapport d'audit) -->
+      <div style="min-height:760px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 70px;text-align:center;background:linear-gradient(160deg,#F5F3FF 0%,#ffffff 50%,#FDF2F8 100%)">
+        <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:white;margin:0 auto 24px;box-shadow:0 14px 40px rgba(107,64,216,.22)">B</div>
+        <div style="font-size:32px;font-weight:900;color:#1E1B30;line-height:1.15;letter-spacing:-.02em;margin-bottom:12px;max-width:460px">TOP 3 — et<br><span style="background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">y rester durablement.</span></div>
+        <div style="font-size:14px;color:#6B7280;line-height:1.6;margin-bottom:36px;max-width:420px">Atteindre le TOP 3 en 90 jours, c'est l'objectif de départ. <strong style="color:#1E1B30">Le garder, c'est le vrai travail.</strong><br>Nous assurons les optimisations hebdomadaires pour que votre fiche reste visible et en tête — chaque mois.</div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px;max-width:500px;width:100%">
+          ${[["🚀","TOP 3 en 90 jours","Premières positions visibles dès le premier mois"],["♾️","Optimisation continue","Chaque semaine, votre fiche est travaillée pour rester en tête"],["📊","Rapport mensuel","Vos positions, clics, avis — chaque mois"]].map(([icon,title2,desc]) => `<div style="background:white;border:1.5px solid #E9D5FF;border-radius:13px;padding:17px 13px;text-align:center;box-shadow:0 2px 10px rgba(107,64,216,.06)"><div style="font-size:22px;margin-bottom:7px">${icon}</div><div style="font-size:13px;font-weight:700;color:#1E1B30;margin-bottom:4px">${title2}</div><div style="font-size:11px;color:#9CA3AF;line-height:1.4">${desc}</div></div>`).join("")}
+        </div>
+
+        <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
+          <div style="font-size:15px;font-weight:800;color:#1E1B30;margin-bottom:5px;text-align:center">Une question sur ce rapport ?</div>
+          ${(() => { const _nm = agencyName || "Agence Be The One"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full} · à votre disposition</div>`; })()}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
+            <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📧</span><strong style="color:#6B40D8">${agencyEmail || "contact@agence-betheone.fr"}</strong></div>
+            <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📞</span><strong style="color:#6B40D8">${agencyPhone || "06 51 17 69 10"}</strong></div>
+          </div>
+        </div>
       </div>
-    </div>`;
+
+      <!-- FOOTER (style identique au rapport d'audit) -->
+      <div style="padding:16px 44px;border-top:1px solid #F4F5FA;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#6B40D8,#C03080);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white">B</div>
+          <span style="font-size:11px;color:#9CA3AF"><strong style="color:#6B7280">${agencyName}</strong> · Agence Google My Business</span>
+        </div>
+        <div style="font-size:10px;color:#D1D5DB">Document confidentiel · © ${new Date().getFullYear()} ${agencyName}</div>
+      </div>
+
+    </div></body></html>`;
   };
 
   const exportPdf = async () => {
@@ -24788,13 +26393,120 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     }).from(el).save();
   };
 
+  const shareMonthlyReport = async () => {
+    setMonthlySharing(true);
+    try {
+      const html = buildReportHtml();
+      const r = await fetch("/api/data/sync?action=share-monthly-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html, clientId: e.id, month: CM }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data.url) throw new Error(data.error || "Échec de la génération du lien");
+      setMonthlyShareLink(data.url);
+      navigator.clipboard.writeText(data.url).then(() => { setMonthlyShareCopied(true); setTimeout(() => setMonthlyShareCopied(false), 2000); }).catch(() => {});
+    } catch (err) {
+      alert("Impossible de générer le lien pour le moment.");
+    }
+    setMonthlySharing(false);
+  };
+
+  // ── Cartes de positionnement Leaflet du rapport mensuel (jusqu'à 5 mots-clés) ──
+  D.useEffect(() => {
+    if (subTab !== "rapport") return;
+    let maps = [], cancelled = false, pollId = null, pollTimeout = null;
+    const gg = e.geoGrid || {};
+    const center = gg.center;
+    const _entries = Object.keys(gg).filter(k => k !== "center")
+      .map(kw => { const scans = (gg[kw]||{}).scans || []; return scans.length ? { kw, scan: scans[scans.length-1] } : null; })
+      .filter(Boolean)
+      .sort((a,b) => (b.scan.date||"").localeCompare(a.scan.date||""))
+      .slice(0, 5);
+    const cellColor = (r) => r == null ? "#9CA3AF" : r <= 3 ? "#059669" : r <= 10 ? "#d97706" : r <= 20 ? "#E85A30" : "#dc2626";
+    const buildMonthlyMapInto = (el, posScan) => {
+      if (!el || !window.L || el._leaflet_id) return;
+      if (!center || !posScan || !(posScan.cells || []).length) return;
+      const gs = posScan.gridSize || Math.round(Math.sqrt(posScan.cells.length));
+      const rayonKm = posScan.rayon || 20;
+      const spacing = (rayonKm * 1000 * 2) / Math.max(gs - 1, 1);
+      const mid = Math.floor(gs / 2);
+      const METERS_PER_DEG = 111320;
+      try {
+        const map = window.L.map(el, { zoomControl: true, scrollWheelZoom: false, attributionControl: false });
+        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map);
+        const bounds = [];
+        let idx = 0;
+        for (let row = 0; row < gs; row++) {
+          for (let col = 0; col < gs; col++) {
+            const r = posScan.cells[idx++];
+            const lat = center.lat + ((mid - row) * spacing) / METERS_PER_DEG;
+            const lng = center.lng + ((col - mid) * spacing) / (METERS_PER_DEG * Math.cos((center.lat * Math.PI) / 180));
+            if (row === mid && col === mid) { bounds.push([lat, lng]); continue; }
+            if (r == null) continue;
+            bounds.push([lat, lng]);
+            window.L.circleMarker([lat, lng], { radius: 12, color: "white", weight: 2, fillColor: cellColor(r), fillOpacity: 0.92 })
+              .bindTooltip(`${r}`, { permanent: true, direction: "center", className: "rp-map-tt" })
+              .addTo(map);
+          }
+        }
+        const storeIcon = window.L.divIcon({
+          className: "",
+          html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;background:linear-gradient(135deg,#6B40D8,#C03080);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.35);border:2px solid white"><span style="transform:rotate(45deg);font-size:14px;line-height:1">📍</span></div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 30],
+        });
+        window.L.marker([center.lat, center.lng], { icon: storeIcon }).addTo(map)
+          .bindTooltip(e.name || "Votre établissement", { permanent: false, direction: "top" });
+        bounds.push([center.lat, center.lng]);
+        map.fitBounds(bounds, { padding: [26, 26] });
+        setTimeout(() => { try { map.invalidateSize(); } catch {} }, 250);
+        maps.push(map);
+      } catch {}
+    };
+    const initMonthlyMaps = () => {
+      if (cancelled) return;
+      _entries.forEach(({scan}, idx) => {
+        buildMonthlyMapInto(document.getElementById(`rapport-mensuel-map-${idx}`), scan);
+      });
+    };
+    const ensureLeafletThenInit = () => {
+      if (window.L) { setTimeout(initMonthlyMaps, 60); return; }
+      if (!document.getElementById("leaflet-css-rapport")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css-rapport";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      if (!document.getElementById("leaflet-js-rapport")) {
+        const script = document.createElement("script");
+        script.id = "leaflet-js-rapport";
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => setTimeout(initMonthlyMaps, 60);
+        document.head.appendChild(script);
+      } else {
+        pollId = setInterval(() => { if (window.L) { clearInterval(pollId); setTimeout(initMonthlyMaps, 60); } }, 200);
+        pollTimeout = setTimeout(() => pollId && clearInterval(pollId), 8000);
+      }
+    };
+    ensureLeafletThenInit();
+    return () => {
+      cancelled = true;
+      if (pollId) clearInterval(pollId);
+      if (pollTimeout) clearTimeout(pollTimeout);
+      maps.forEach(m => { try { m.remove(); } catch {} });
+    };
+  }, [subTab, e.id, e.geoGrid]);
+
   const tabs2 = [
-    {id:"bilan", label:"📊 Bilan"},
-    {id:"actions", label:"✍️ Actions réalisées"},
-    {id:"positions", label:"🗺️ Positions & Stats GMB"},
-    {id:"avis", label:"⭐ Avis"},
-    {id:"prochain", label:"🎯 Mois prochain"},
-    {id:"rapport", label:"📄 Rapport client"},
+    {id:"bilan", label:"Bilan"},
+    {id:"actions", label:"Actions réalisées"},
+    {id:"stats", label:"Stats Google"},
+    {id:"positions", label:"Positions & mots-clés"},
+    {id:"avis", label:"Avis"},
+    {id:"prochain", label:"Mois prochain"},
+    {id:"rapport", label:"Rapport client"},
   ];
 
   const monthLabel = new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -24803,11 +26515,12 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
   const cardStyle = {background:"white",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"18px 22px",marginBottom:16};
   const sectionTitle = {fontSize:14,fontWeight:800,color:"#1E1B30",marginBottom:12};
   const gmbStatFields = [
-    {key:"vuesRecherche",prevKey:"prevVuesRecherche",icon:"👁️",label:"Vues Recherche Google"},
-    {key:"vuesMaps",prevKey:"prevVuesMaps",icon:"🗺️",label:"Vues Google Maps"},
-    {key:"appels",prevKey:"prevAppels",icon:"📞",label:"Appels téléphoniques"},
-    {key:"clicsWeb",prevKey:"prevClicsWeb",icon:"🌐",label:"Clics site web"},
-    {key:"itineraires",prevKey:"prevItineraires",icon:"📍",label:"Demandes d'itinéraire"},
+    {key:"vuesRecherche",prevKey:"prevVuesRecherche",icon:"👁️",label:"Utilisateurs ayant vu la fiche"},
+    {key:"vuesMaps",prevKey:"prevVuesMaps",icon:"🔎",label:"Recherches ayant affiché la fiche"},
+    {key:"appels",prevKey:"prevAppels",icon:"📞",label:"Appels"},
+    {key:"reservations",prevKey:"prevReservations",icon:"📅",label:"Réservations"},
+    {key:"itineraires",prevKey:"prevItineraires",icon:"📍",label:"Itinéraires"},
+    {key:"clicsWeb",prevKey:"prevClicsWeb",icon:"🌐",label:"Clics vers le site web"},
     {key:"vuesPhotos",prevKey:"prevVuesPhotos",icon:"🖼️",label:"Vues des photos"},
   ];
 
@@ -24826,52 +26539,147 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
   return n.jsxs("div", {
     style:{display:"flex",flexDirection:"column",height:"100%"},
     children:[
-      // Header + tabs
-      n.jsxs("div", {
-        style:{padding:"14px 24px 0",borderBottom:"1px solid #F3F4F6"},
-        children:[
-          n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12},children:[
-            n.jsxs("div",{children:[
-              n.jsx("div",{style:{fontSize:17,fontWeight:800,color:"#1E1B30"},children:"📅 Suivi mensuel"}),
-              n.jsx("div",{style:{fontSize:12,color:"#9CA3AF",marginTop:2},children:`Mois en cours : ${monthLabel}`}),
+      // Header + tabs style Visibilité (pleine largeur)
+      n.jsxs("div", { style:{padding:"18px 30px 14px", borderBottom:"1px solid var(--border)"}, children:[
+        // Titre avec barre décorative
+        n.jsxs("div", { style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}, children:[
+          n.jsxs("div", { style:{display:"flex",alignItems:"center",gap:0}, children:[
+            n.jsx("div", { style:{width:4,height:28,borderRadius:2,background:"linear-gradient(135deg,var(--indigo2),#C03080)",marginRight:14,flexShrink:0} }),
+            n.jsxs("div", { children:[
+              n.jsx("div", { style:{fontSize:16,fontWeight:800,color:"var(--ink)",marginBottom:2}, children:"Suivi mensuel" }),
+              n.jsx("div", { style:{fontSize:12,color:"var(--ink4)"}, children:`${monthLabel} · Bilan, positions et rapport client` }),
             ]}),
-            n.jsx("button",{
-              onClick:takeSnapshot,
-              style:{background:"#1E1B30",color:"white",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},
-              children:"📸 Snapshot du mois",
-            }),
           ]}),
-          n.jsx("div",{
-            style:{display:"flex",gap:4,overflowX:"auto"},
-            children:tabs2.map(tb=>n.jsx("button",{
-              key:tb.id,
-              onClick:()=>setSubTab(tb.id),
-              style:{background:"none",border:"none",borderBottom:subTab===tb.id?"2px solid #6B40D8":"2px solid transparent",color:subTab===tb.id?"#6B40D8":"#6B7280",fontWeight:subTab===tb.id?700:500,fontSize:13,padding:"7px 12px 9px",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"},
-              children:tb.label,
-            })),
-          }),
-        ]
-      }),
+          (() => {
+            const hasSnapThisMonth = snapshots.some(s2 => s2.date && s2.date.startsWith(CM));
+            return n.jsxs("div", { style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}, children:[
+              n.jsx("button", { onClick:takeSnapshot, style:{background:hasSnapThisMonth?"#059669":"var(--ink)",color:"white",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}, children: hasSnapThisMonth ? "✅ Snapshot pris" : "Snapshot du mois" }),
+              hasSnapThisMonth && n.jsx("div", {style:{fontSize:10,color:"var(--ink4)"},children:"Pris au login · cliquez pour mettre à jour"}),
+            ]});
+          })(),
+        ]}),
+        // Tabs segmentés (style Visibilité)
+        n.jsx("div", { style:{display:"flex",gap:4,background:"#F4F5FA",borderRadius:10,padding:"4px",overflowX:"auto"}, children:
+          tabs2.map(tb => n.jsx("button", {
+            key:tb.id, onClick:()=>setSubTab(tb.id),
+            style:{ flex:"0 0 auto", padding:"7px 14px", borderRadius:8, border:"none", cursor:"pointer", fontFamily:"inherit",
+              fontWeight:subTab===tb.id?700:500, fontSize:12.5,
+              background:subTab===tb.id?"white":"transparent",
+              color:subTab===tb.id?"var(--indigo2)":"var(--ink4)",
+              boxShadow:subTab===tb.id?"0 1px 4px rgba(0,0,0,.1)":"none",
+              transition:"all .15s", whiteSpace:"nowrap",
+            },
+            children:tb.label,
+          }))
+        }),
+      ]}),
 
       // Content
       n.jsx("div",{
-        style:{flex:1,overflowY:"auto",padding:"22px 26px"},
+        style:{flex:1,overflowY:"auto",padding:"22px 30px"},
         children:[
 
           // ── BILAN ──
           subTab==="bilan" && n.jsxs("div",{className:"fade",children:[
 
-            // Trend banner
-            n.jsxs("div",{style:{background:trendData.bg,borderRadius:14,padding:"18px 24px",display:"flex",alignItems:"center",gap:18,marginBottom:18,borderLeft:`5px solid ${trendData.border}`},children:[
-              n.jsx("div",{style:{fontSize:38},children:trendData.icon}),
-              n.jsxs("div",{children:[
-                n.jsx("div",{style:{fontSize:18,fontWeight:800,color:trendData.color},children:trendData.label}),
-                n.jsx("div",{style:{fontSize:13,color:trendData.color,opacity:.8,marginTop:4},children:
-                  scoreDiff != null
-                    ? `Score ${scoreDiff > 0 ? "en hausse de +" : "en baisse de "}${scoreDiff} pts vs snapshot précédent.`
-                    : "Prenez un snapshot pour suivre l'évolution dans le temps."
-                }),
+            // ── Hero Bilan (style Résumé) ──
+            n.jsxs("div",{ style:{ background:"white", border:"1px solid var(--border)", borderTop:`3px solid ${scCol(currentScore)}`, borderRadius:12, padding:"20px 24px", marginBottom:18, display:"flex", alignItems:"center", gap:24, flexWrap:"wrap" }, children:[
+              // Jauge SVG
+              n.jsxs("svg",{ width:80, height:80, viewBox:"0 0 80 80", style:{ flexShrink:0 }, children:[
+                n.jsx("circle",{ cx:40, cy:40, r:32, fill:"none", stroke:"#F3F4F6", strokeWidth:7 }),
+                n.jsx("circle",{ cx:40, cy:40, r:32, fill:"none", stroke:scCol(currentScore), strokeWidth:7, strokeLinecap:"round",
+                  strokeDasharray:`${2*Math.PI*32}`,
+                  strokeDashoffset:`${2*Math.PI*32*(1-currentScore/100)}`,
+                  transform:"rotate(-90 40 40)", style:{ transition:"stroke-dashoffset 1.2s ease" } }),
+                n.jsx("text",{ x:40, y:44, textAnchor:"middle", fill:scCol(currentScore), fontSize:18, fontWeight:800, fontFamily:"inherit", children:currentScore }),
               ]}),
+              // Niveau + delta
+              n.jsxs("div",{ style:{ flex:1, minWidth:120 }, children:[
+                n.jsx("div",{ style:{ fontSize:22, fontWeight:900, color:scCol(currentScore), letterSpacing:"-.02em", lineHeight:1 }, children: getLvl(currentScore).label }),
+                n.jsx("div",{ style:{ fontSize:12, color:"var(--ink4)", marginTop:4 }, children: getLvl(currentScore).desc }),
+                scoreDiff !== null && n.jsxs("div",{ style:{ display:"inline-flex", alignItems:"center", gap:6, marginTop:8, background: scoreDiff>0?"#F0FDF4":scoreDiff<0?"#FEF2F2":"#F9FAFB", border:`1px solid ${scoreDiff>0?"#BBF7D0":scoreDiff<0?"#FECACA":"#E5E7EB"}`, borderRadius:8, padding:"4px 10px" }, children:[
+                  n.jsx("span",{ style:{ fontSize:13, fontWeight:800, color: scoreDiff>0?"#059669":scoreDiff<0?"#dc2626":"#9CA3AF" }, children: scoreDiff>0?`↑ +${scoreDiff} pts`:scoreDiff<0?`↓ ${scoreDiff} pts`:"→ Stable" }),
+                  n.jsx("span",{ style:{ fontSize:11, color:"var(--ink4)" }, children:"vs snapshot précédent" }),
+                ]}),
+                !lastSnap && n.jsx("div",{ style:{ fontSize:12, color:"var(--ink4)", marginTop:6 }, children:"Prenez un snapshot pour suivre l'évolution." }),
+              ]}),
+              // KPIs rapides
+              n.jsx("div",{ style:{ display:"flex", gap:16, flexWrap:"wrap" }, children:
+                [{icon:"⭐",val:parseInt(extracted.reviewCount)||"—",lbl:"Avis",col:"#3498db"},
+                 {icon:"📸",val:parseInt(extracted.photoCount)||"—",lbl:"Photos",col:"#27ae60"},
+                 {icon:"✍️",val:monthPosts.length,lbl:"Posts",col:"#f39c12"}
+                ].map(k=>n.jsxs("div",{key:k.lbl,style:{textAlign:"center"},children:[
+                  n.jsx("div",{style:{fontSize:18,fontWeight:900,color:k.col},children:k.val}),
+                  n.jsx("div",{style:{fontSize:10,color:"var(--ink4)",marginTop:1},children:k.lbl}),
+                ]}))
+              }),
+            ]}),
+
+            // ── Score GMB — recap fidèle du Résumé (mêmes chiffres, mêmes piliers) ──
+            n.jsxs("div",{style:cardStyle,children:[
+              n.jsx("div",{style:sectionTitle,children:"📊 Score de la fiche Google Business — vue Résumé"}),
+              n.jsx("div",{style:{display:"flex",gap:16,marginBottom:16,flexWrap:"wrap"},children:[
+                { v: currentScore, c:"#059669", bg:"#F0FDF4", b:"#BBF7D0", l:"score actuel" },
+                { v: 100 - currentScore, c:"#dc2626", bg:"#FEF2F2", b:"#FECACA", l:"pts à gagner" },
+                { v: toImproveCount, c:"#6B40D8", bg:"#FDF2F8", b:"#FBCFE8", l:"à améliorer" },
+              ].map(st => n.jsxs("div",{key:st.l,style:{background:st.bg,border:`1px solid ${st.b}`,borderRadius:12,padding:"10px 18px",textAlign:"center"},children:[
+                n.jsx("div",{style:{fontSize:24,fontWeight:900,color:st.c},children:st.v}),
+                n.jsx("div",{style:{fontSize:11,color:"#6B7280",marginTop:2,fontWeight:500},children:st.l}),
+              ]}))}),
+              n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12},children:
+                pillarsRecap.map(p2 => n.jsxs("div",{key:p2.label,className:"card",style:{borderTop:`3px solid ${p2.col}`},children:[
+                  n.jsxs("div",{style:{display:"flex",gap:8,alignItems:"center",marginBottom:8},children:[
+                    n.jsx("div",{style:{width:36,height:36,borderRadius:9,background:p2.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18},children:p2.icon}),
+                    n.jsx("div",{style:{fontWeight:700,fontSize:14},children:p2.label}),
+                    n.jsxs("span",{style:{marginLeft:"auto",fontSize:22,fontWeight:800,color:p2.lvl.color},children:[p2.pct,"%"]}),
+                    p2.delta !== null && p2.delta !== 0 && n.jsxs("span",{style:{fontSize:11,fontWeight:700,color:p2.delta>0?"#059669":"#dc2626",marginLeft:2},children:[p2.delta>0?"+":"",p2.delta]}),
+                  ]}),
+                  n.jsx("div",{style:{fontSize:12,color:"var(--ink4)",marginBottom:10,fontWeight:500},children:p2.desc}),
+                  n.jsx("div",{className:"bar",children:n.jsx("div",{className:"bar-f",style:{width:`${p2.pct}%`,background:p2.lvl.color}})}),
+                ]},p2.label))
+              }),
+            ]}),
+
+            // ── Évolution du score moyen — courbe ──
+            n.jsxs("div",{style:cardStyle,children:[
+              n.jsx("div",{style:sectionTitle,children:"📈 Évolution du score moyen"}),
+              (() => {
+                const hist = [
+                  ...snapshots.map(sn=>({date:sn.date,label:sn.label,score:sn.score})),
+                  {date:new Date().toISOString().slice(0,10),label:"Aujourd'hui",score:currentScore},
+                ].filter(h=>typeof h.score==="number");
+                if (hist.length < 2) {
+                  return n.jsx("div",{style:{textAlign:"center",padding:"22px 12px",fontSize:12.5,color:"#9CA3AF"},children:"Prenez un snapshot chaque mois (bouton « 📸 Snapshot du mois ») pour voir apparaître ici la courbe d'évolution du score moyen."});
+                }
+                const W=640,H=140,pad=26;
+                const stepX = hist.length>1 ? (W-pad*2)/(hist.length-1) : 0;
+                const yFor = (v)=> H-pad-(v/100)*(H-pad*2);
+                const pts = hist.map((h,idx)=>({...h,x:pad+idx*stepX,y:yFor(h.score)}));
+                const pathD = pts.map((p,idx)=> (idx===0?"M":"L")+p.x.toFixed(1)+","+p.y.toFixed(1)).join(" ");
+                const areaD = pathD + ` L${pts[pts.length-1].x.toFixed(1)},${(H-pad).toFixed(1)} L${pts[0].x.toFixed(1)},${(H-pad).toFixed(1)} Z`;
+                return n.jsxs("div",{style:{overflowX:"auto"},children:[
+                  n.jsxs("svg",{width:"100%",height:H+34,viewBox:`0 0 ${W} ${H+34}`,preserveAspectRatio:"xMidYMid meet",style:{minWidth:380},children:[
+                    [0,25,50,75,100].map(v=> n.jsxs("g",{key:"grid"+v,children:[
+                      n.jsx("line",{x1:pad,x2:W-pad,y1:yFor(v),y2:yFor(v),stroke:"#F3F4F6",strokeWidth:1}),
+                      n.jsx("text",{x:4,y:yFor(v)+3,fontSize:9,fill:"#C4C4CE",children:v}),
+                    ]})),
+                    n.jsx("path",{d:areaD,fill:"url(#scoreGrad)",stroke:"none",opacity:0.5}),
+                    n.jsxs("defs",{children:[
+                      n.jsxs("linearGradient",{id:"scoreGrad",x1:"0",y1:"0",x2:"0",y2:"1",children:[
+                        n.jsx("stop",{offset:"0%",stopColor:"#6B40D8",stopOpacity:0.28}),
+                        n.jsx("stop",{offset:"100%",stopColor:"#6B40D8",stopOpacity:0.02}),
+                      ]}),
+                    ]}),
+                    n.jsx("path",{d:pathD,fill:"none",stroke:"#6B40D8",strokeWidth:2.6,strokeLinecap:"round",strokeLinejoin:"round"}),
+                    pts.map((p,idx)=> n.jsxs("g",{key:"pt"+idx,children:[
+                      n.jsx("circle",{cx:p.x,cy:p.y,r:idx===pts.length-1?5.5:4,fill: idx===pts.length-1 ? scCol(p.score) : "#6B40D8",stroke:"white",strokeWidth:2}),
+                      n.jsx("text",{x:p.x,y:p.y-12,textAnchor:"middle",fontSize:10.5,fontWeight:800,fill: idx===pts.length-1 ? scCol(p.score) : "#6B40D8",children:p.score}),
+                      n.jsx("text",{x:p.x,y:H+18,textAnchor:"middle",fontSize:9,fill:"#9CA3AF",children: idx===pts.length-1 ? "Aujourd'hui" : new Date(p.date).toLocaleDateString("fr-FR",{month:"short",year:"2-digit"})}),
+                    ]})),
+                  ]}),
+                  n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:6,textAlign:"center"},children:"Évolution du score GMB calculée à partir des snapshots mensuels enregistrés et du score actuel."}),
+                ]});
+              })(),
             ]}),
 
             // KPIs
@@ -24923,7 +26731,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
             // Stats strip
             n.jsxs("div",{style:{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap"},children:[
               {label:"Posts publiés",val:monthPosts.length,col:"#6B40D8",icon:"📱"},
-              {label:"Photos publiées",val:monthPosts.reduce((acc,p2)=>acc+(p2.photoCount||0),0),col:"#0EA5E9",icon:"📷"},
+              {label:"Photos publiées",val:monthPosts.reduce((acc,p2)=>acc+(p2.photoCount || (p2.photoUrl ? 1 : 0)),0),col:"#0EA5E9",icon:"📷"},
               {label:"Optimisations fiche",val:monthUpdates.length,col:"#059669",icon:"🔧"},
             ].map(s=>n.jsxs("div",{key:s.label,style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:12,padding:"14px 20px",flex:"1 1 120px",textAlign:"center"},children:[
               n.jsx("div",{style:{fontSize:26,fontWeight:900,color:s.col},children:s.val}),
@@ -24936,6 +26744,43 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                 n.jsx("div",{style:sectionTitle,children:"✍️ Publications du mois"}),
                 n.jsx("button",{onClick:()=>setShowAddPost(true),style:{background:"#6B40D8",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"+ Ajouter"}),
               ]}),
+
+              // Suggestions du calendrier éditorial — menu déroulant compact, intégré ici car logiquement lié
+              postIdeas.length > 0 && (() => {
+                const selIdea = selectedIdeaIdx !== "" ? postIdeas[parseInt(selectedIdeaIdx)] : null;
+                const matchedType = selIdea ? (postTypes.find(pt => pt.toLowerCase() === String(selIdea.type||"").toLowerCase()) || postTypes[0]) : null;
+                return n.jsxs("div",{style:{background:"#FAF9FF",border:"1px solid #E9E3FB",borderRadius:10,padding:"10px 14px",marginBottom:12},children:[
+                  n.jsx("div",{style:{fontSize:11.5,fontWeight:700,color:"#6B40D8",marginBottom:6},children:"💡 Suggestions du calendrier éditorial — transformer une proposition en publication réalisée"}),
+                  n.jsxs("div",{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"},children:[
+                    n.jsxs("select",{
+                      value:selectedIdeaIdx,
+                      onChange:ev=>setSelectedIdeaIdx(ev.target.value),
+                      style:{flex:1,minWidth:200,padding:"7px 10px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:12.5,fontFamily:"inherit",color:"#1E1B30"},
+                      children:[
+                        n.jsx("option",{value:"",children:"— Choisir une proposition —"}),
+                        postIdeas.map((pi,idx)=> n.jsx("option",{value:idx,children:`${pi.week ? pi.week+" · " : ""}${pi.type ? pi.type+" — " : ""}${pi.title||""}`},idx)),
+                      ],
+                    }),
+                    n.jsx("button",{
+                      disabled:!selIdea,
+                      onClick:()=>{
+                        if (!selIdea) return;
+                        setNewPost(p2=>({...p2, title:selIdea.title||"", type:matchedType, note:selIdea.content||"", date: p2.date || new Date().toISOString().slice(0,10)}));
+                        setShowAddPost(true);
+                      },
+                      style:{background:selIdea?"#6B40D8":"#E5E7EB",color:selIdea?"white":"#9CA3AF",border:"none",borderRadius:7,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:selIdea?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap"},
+                      children:"✓ Utiliser cette idée",
+                    }),
+                  ]}),
+                  selIdea && n.jsxs("div",{style:{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,fontSize:10.5,color:"#9CA3AF"},children:[
+                    selIdea.content && n.jsx("span",{style:{flexBasis:"100%",fontSize:11.5,color:"#6B7280",lineHeight:1.4},children:selIdea.content}),
+                    selIdea.bestDay && n.jsxs("span",{children:["📅 ",selIdea.bestDay, selIdea.bestTime ? ` · ${selIdea.bestTime}` : ""]}),
+                    selIdea.cta && n.jsxs("span",{children:["👉 ",selIdea.cta]}),
+                    selIdea.keywords && n.jsxs("span",{children:["🔑 ",Array.isArray(selIdea.keywords)?selIdea.keywords.join(", "):selIdea.keywords]}),
+                  ]}),
+                ]});
+              })(),
+
               showAddPost && n.jsxs("div",{style:{background:"#F9FAFB",border:"1.5px solid #E5E7EB",borderRadius:12,padding:"14px",marginBottom:12},children:[
                 n.jsxs("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8},children:[
                   n.jsxs("div",{style:{flex:2,minWidth:160},children:[
@@ -24955,9 +26800,38 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                     n.jsx("input",{type:"number",min:0,value:newPost.photoCount,onChange:ev=>setNewPost(p2=>({...p2,photoCount:parseInt(ev.target.value)||0})),style:{width:75,padding:"7px 9px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:13}}),
                   ]}),
                 ]}),
+                // Encart photo + ce que vous avez posté
+                n.jsxs("div",{style:{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10},children:[
+                  n.jsxs("div",{style:{flexShrink:0},children:[
+                    n.jsx("label",{style:{fontSize:11,color:"#6B7280",display:"block",marginBottom:3,fontWeight:600},children:"Photo du post"}),
+                    n.jsx("input",{id:"monthly-post-photo-input",type:"file",accept:"image/*",style:{display:"none"},onChange:ev=>{ if(ev.target.files[0]) handlePostPhotoFile(ev.target.files[0]); }}),
+                    (postPhotoPreview || newPost.photoUrl)
+                      ? n.jsxs("div",{style:{position:"relative",width:120,height:90,borderRadius:8,overflow:"hidden",border:"1.5px solid #E5E7EB"},children:[
+                          n.jsx("img",{src:postPhotoPreview || newPost.photoUrl,alt:"",style:{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:postPhotoUploading?0.5:1}}),
+                          postPhotoUploading && n.jsx("div",{style:{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#6B40D8"},children:"⏳"}),
+                          n.jsx("button",{onClick:()=>{setPostPhotoPreview("");setNewPost(p2=>({...p2,photoUrl:""}));},style:{position:"absolute",top:4,right:4,background:"rgba(255,255,255,0.9)",border:"none",borderRadius:"50%",width:20,height:20,cursor:"pointer",fontSize:11,color:"#DC2626",lineHeight:"20px",padding:0},children:"✕"}),
+                        ]})
+                      : n.jsxs("label",{htmlFor:"monthly-post-photo-input",style:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:120,height:90,border:"1.5px dashed #D1D5DB",borderRadius:8,cursor:"pointer",color:"#9CA3AF",fontSize:11,gap:4,background:"#F9FAFB"},children:[
+                          n.jsx("span",{style:{fontSize:18},children:"📷"}),
+                          n.jsx("span",{children:"Ajouter une photo"}),
+                        ]}),
+                    (postPhotoPreview || newPost.photoUrl) && n.jsxs("select",{
+                      value:newPost.photoType, onChange:ev=>setNewPost(p2=>({...p2,photoType:ev.target.value})),
+                      style:{marginTop:6,width:120,padding:"5px 7px",border:"1.5px solid #D1D5DB",borderRadius:6,fontSize:11,fontFamily:"inherit",color:"#374151"},
+                      children:[
+                        n.jsx("option",{value:"",children:"Type de photo…"}),
+                        ["Intérieur","Extérieur","Équipe","Produits / Services","Avant / Après","Événement","Clientèle","Logo / Couverture"].map(pt=>n.jsx("option",{value:pt,children:pt},pt)),
+                      ],
+                    }),
+                  ]}),
+                  n.jsxs("div",{style:{flex:1,minWidth:200},children:[
+                    n.jsx("label",{style:{fontSize:11,color:"#6B7280",display:"block",marginBottom:3,fontWeight:600},children:"Ce que vous avez posté"}),
+                    n.jsx("textarea",{value:newPost.note,onChange:ev=>setNewPost(p2=>({...p2,note:ev.target.value})),placeholder:"Décrivez en quelques mots la publication réalisée (texte, contexte, résultat...)",rows:4,style:{...inputStyle,width:"100%",resize:"vertical",fontFamily:"inherit",boxSizing:"border-box"}}),
+                  ]}),
+                ]}),
                 n.jsxs("div",{style:{display:"flex",gap:7},children:[
-                  n.jsx("button",{onClick:savePost,style:{background:"#6B40D8",color:"white",border:"none",borderRadius:7,padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"✅ Enregistrer"}),
-                  n.jsx("button",{onClick:()=>setShowAddPost(false),style:{background:"none",border:"1.5px solid #E5E7EB",borderRadius:7,padding:"7px 14px",fontSize:12,cursor:"pointer",color:"#6B7280",fontFamily:"inherit"},children:"Annuler"}),
+                  n.jsx("button",{onClick:()=>{savePost();setPostPhotoPreview("");},style:{background:"#6B40D8",color:"white",border:"none",borderRadius:7,padding:"7px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"✅ Enregistrer"}),
+                  n.jsx("button",{onClick:()=>{setShowAddPost(false);setPostPhotoPreview("");},style:{background:"none",border:"1.5px solid #E5E7EB",borderRadius:7,padding:"7px 14px",fontSize:12,cursor:"pointer",color:"#6B7280",fontFamily:"inherit"},children:"Annuler"}),
                 ]}),
               ]}),
               monthPosts.length===0&&!showAddPost
@@ -24965,22 +26839,51 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                 : n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:8},children:
                     [...monthPosts].reverse().map(p2=>n.jsxs("div",{
                       key:p2.id,
-                      style:{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:12},
+                      style:{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"flex-start",gap:12},
                       children:[
-                        n.jsx("div",{style:{width:32,height:32,background:`${typeColors[p2.type]||"#6B40D8"}18`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0},children:typeIcons[p2.type]||"📝"}),
+                        p2.photoUrl
+                          ? n.jsx("img",{src:p2.photoUrl,alt:"",style:{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0,border:"1px solid #E5E7EB"}})
+                          : n.jsx("div",{style:{width:48,height:48,background:`${typeColors[p2.type]||"#6B40D8"}18`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0},children:typeIcons[p2.type]||"📝"}),
                         n.jsxs("div",{style:{flex:1,minWidth:0},children:[
                           n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"},children:[
                             n.jsx("span",{style:{fontSize:13,fontWeight:700,color:"#1E1B30"},children:p2.title}),
                             n.jsx("span",{style:{background:typeColors[p2.type]||"#6B40D8",color:"white",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:700},children:p2.type}),
                             p2.photoCount>0&&n.jsxs("span",{style:{fontSize:11,color:"#0EA5E9",fontWeight:600,background:"#eff6ff",padding:"2px 7px",borderRadius:10},children:["📷 ",p2.photoCount]}),
+                            p2.photoType&&n.jsx("span",{style:{fontSize:10,color:"#6B7280",fontWeight:600,background:"#F3F4F6",padding:"2px 7px",borderRadius:10},children:p2.photoType}),
                           ]}),
                           n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:2},children:p2.date&&new Date(p2.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}),
+                          p2.note && n.jsx("div",{style:{fontSize:11.5,color:"#6B7280",marginTop:5,lineHeight:1.4},children:p2.note}),
                         ]}),
                         n.jsx("button",{onClick:()=>deletePost(p2.id),style:{background:"none",border:"none",cursor:"pointer",color:"#D1D5DB",fontSize:13,padding:2},children:"✕"}),
                       ]
                     }))
                   }),
             ]}),
+
+            // ── Photos publiées ce mois — galerie avec type & explication ──
+            (() => {
+              const monthPhotos = monthPosts.filter(p2 => p2.photoUrl);
+              if (monthPhotos.length === 0) return null;
+              return n.jsxs("div",{style:cardStyle,children:[
+                n.jsx("div",{style:sectionTitle,children:"🖼️ Photos publiées ce mois — détail & explications"}),
+                n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:12},children:"Chaque photo ajoutée à une publication apparaît ici avec son type et votre explication, pour garder une trace claire de ce qui a été posté."}),
+                n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14},children:
+                  [...monthPhotos].reverse().map(p2 => n.jsxs("div",{key:p2.id,style:{background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:12,overflow:"hidden"},children:[
+                    n.jsx("img",{src:p2.photoUrl,alt:"",style:{width:"100%",height:120,objectFit:"cover",display:"block"}}),
+                    n.jsxs("div",{style:{padding:"10px 12px"},children:[
+                      n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:5},children:[
+                        n.jsx("span",{style:{fontSize:12,fontWeight:700,color:"#1E1B30"},children:p2.title}),
+                        p2.photoType && n.jsx("span",{style:{fontSize:9.5,fontWeight:700,color:"white",background:"#0EA5E9",borderRadius:20,padding:"1px 7px"},children:p2.photoType}),
+                      ]}),
+                      n.jsx("div",{style:{fontSize:10.5,color:"#9CA3AF",marginBottom:5},children:p2.date && new Date(p2.date).toLocaleDateString("fr-FR",{day:"numeric",month:"long"})}),
+                      p2.note
+                        ? n.jsx("div",{style:{fontSize:11.5,color:"#6B7280",lineHeight:1.4},children:p2.note})
+                        : n.jsx("div",{style:{fontSize:11,color:"#D1D5DB",fontStyle:"italic"},children:"Aucune explication renseignée — modifiez le post pour en ajouter une."}),
+                    ]}),
+                  ]}))
+                }),
+              ]});
+            })(),
 
             // Mises à jour fiche
             n.jsxs("div",{style:cardStyle,children:[
@@ -25034,12 +26937,20 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
           ]}),
 
           // ── POSITIONS & STATS GMB ──
-          subTab==="positions" && n.jsxs("div",{className:"fade",children:[
+          subTab==="stats" && n.jsxs("div",{className:"fade",children:[
 
             // GMB Stats card
             n.jsxs("div",{style:cardStyle,children:[
               n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8},children:[
-                n.jsx("div",{style:sectionTitle,children:"📊 Statistiques GMB — "+monthLabel}),
+                n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"},children:[
+                  n.jsx("div",{style:sectionTitle,children:"📊 Statistiques GMB"}),
+                  n.jsxs("select",{
+                    value:statsMonth,
+                    onChange:ev=>{ setStatsMonth(ev.target.value); setEditingGmb(false); setShowGmbPaste(false); setGmbParsed(null); setGmbPasteText(""); },
+                    style:{padding:"5px 9px",border:"1.5px solid #D1D5DB",borderRadius:7,fontSize:12.5,fontFamily:"inherit",color:"#1E1B30",fontWeight:600,textTransform:"capitalize"},
+                    children: statsMonthOptions.map(o=> n.jsxs("option",{value:o.key,children:[o.label, gmbStatsAll[o.key] ? " ✓" : "", o.key===CM ? " (mois en cours)" : ""]},o.key)),
+                  }),
+                ]}),
                 n.jsxs("div",{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"},children:[
                   // Bouton sync Google (visible si connecté)
                   isGoogleConnected && n.jsx("button",{
@@ -25048,7 +26959,8 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                     style:{background:syncStatus==="ok"?"#059669":syncStatus==="error"?"#DC2626":"#4285F4",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5,opacity:syncingGmb?0.7:1},
                     children: syncingGmb ? "⏳ Synchronisation..." : syncStatus==="ok" ? "✅ Synchronisé" : syncStatus==="error" ? "❌ Erreur sync" : syncStatus==="no_location" ? "⚠️ Fiche non liée" : "🔄 Sync Google"
                   }),
-                  n.jsx("button",{onClick:openGmbForm,style:{background:editingGmb?"#E5E7EB":"#1E1B30",color:editingGmb?"#374151":"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:editingGmb?"✕ Annuler":"✏️ Saisir manuellement"}),
+                  n.jsx("button",{onClick:()=>{setShowGmbPaste(s=>!s); setEditingGmb(false);},style:{background:showGmbPaste?"#E5E7EB":"#6B40D8",color:showGmbPaste?"#374151":"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:showGmbPaste?"✕ Fermer":"📋 Coller les statistiques"}),
+                  n.jsx("button",{onClick:()=>{openGmbForm(); setShowGmbPaste(false);},style:{background:editingGmb?"#E5E7EB":"#1E1B30",color:editingGmb?"#374151":"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:editingGmb?"✕ Annuler":"✏️ Saisir manuellement"}),
                 ]},),
               ]}),
               // Bandeau si connecté mais fiche non liée
@@ -25117,6 +27029,44 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                   ]}),
                 ]})
               }),
+              // ── Coller-coller : zone de texte + analyse automatique ──
+              showGmbPaste && n.jsxs("div",{style:{background:"#F9FAFB",border:"1.5px solid #E5E7EB",borderRadius:12,padding:"14px",marginBottom:14},children:[
+                n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:8},children:"Sur votre fiche Google Business, sélectionnez et copiez tout le bloc « Statistiques » (Vue d'ensemble, Plates-formes et appareils, Termes de recherche…), puis collez-le ci-dessous : l'app répartit automatiquement les chiffres dans les bonnes cases."}),
+                n.jsx("textarea",{
+                  value:gmbPasteText, onChange:ev=>{setGmbPasteText(ev.target.value); setGmbParsed(null);},
+                  placeholder:"Collez ici le texte copié depuis Google Business Profile (statistiques, plates-formes & appareils, termes de recherche...)",
+                  rows:8,
+                  style:{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:"1.5px solid #D1D5DB",borderRadius:8,fontSize:12.5,fontFamily:"inherit",resize:"vertical",marginBottom:10},
+                }),
+                n.jsxs("div",{style:{display:"flex",gap:8,flexWrap:"wrap"},children:[
+                  n.jsx("button",{onClick:analyzeGmbPaste,disabled:!gmbPasteText.trim(),style:{background:gmbPasteText.trim()?"#6B40D8":"#E5E7EB",color:gmbPasteText.trim()?"white":"#9CA3AF",border:"none",borderRadius:7,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:gmbPasteText.trim()?"pointer":"default",fontFamily:"inherit"},children:"🔍 Analyser le texte"}),
+                  gmbParsed && n.jsx("button",{onClick:applyGmbPaste,style:{background:"#059669",color:"white",border:"none",borderRadius:7,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"✅ Enregistrer ces statistiques"}),
+                ]}),
+                gmbParsed && n.jsxs("div",{style:{marginTop:14},children:[
+                  n.jsx("div",{style:{fontSize:12,fontWeight:700,color:"#1E1B30",marginBottom:8},children:"Aperçu détecté — vérifiez avant d'enregistrer :"}),
+                  Object.keys(gmbParsed.fields).length > 0
+                    ? n.jsx("div",{style:{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10},children:
+                        gmbStatFields.filter(f2=>gmbParsed.fields[f2.key]!=null).map(f2=> { const ch = gmbParsed.changes[f2.key]; return n.jsxs("div",{key:f2.key,style:{background:"white",border:"1px solid #E5E7EB",borderRadius:8,padding:"6px 12px",fontSize:12},children:[
+                          n.jsx("span",{children:f2.icon+" "+f2.label+" : "}),
+                          n.jsx("strong",{children:gmbParsed.fields[f2.key]}),
+                          ch && n.jsxs("span",{style:{marginLeft:6,fontSize:11,fontWeight:700,color: ch.pct.startsWith("-")||ch.pct.startsWith("−") ? "#dc2626" : "#059669"},children:[ch.pct.match(/^[+\-−]/)?ch.pct:"+"+ch.pct,"%", ch.ref?` (vs ${ch.ref})`:""]}),
+                        ]}); })
+                      })
+                    : n.jsx("div",{style:{fontSize:12,color:"#9CA3AF",marginBottom:10},children:"Aucun indicateur principal (appels, itinéraires, clics...) détecté automatiquement — vous pourrez les compléter via « ✏️ Saisir manuellement »."}),
+                  gmbParsed.platforms.length > 0 && n.jsxs("div",{style:{marginBottom:10},children:[
+                    n.jsx("div",{style:{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:5},children:`📱 ${gmbParsed.platforms.length} plate(s)-forme(s) / appareil(s) détecté(s)`}),
+                    n.jsx("div",{style:{display:"flex",flexWrap:"wrap",gap:6},children:
+                      gmbParsed.platforms.map((p2,idx)=> n.jsxs("span",{key:idx,style:{background:"white",border:"1px solid #E5E7EB",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#374151"},children:[p2.label," — ",p2.count," (",p2.pct,"%)"]}))
+                    }),
+                  ]}),
+                  gmbParsed.searchTerms.length > 0 && n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:11,fontWeight:700,color:"#6B7280",marginBottom:5},children:`🔎 ${gmbParsed.searchTerms.length} terme(s) de recherche détecté(s)`}),
+                    n.jsx("div",{style:{display:"flex",flexWrap:"wrap",gap:6},children:
+                      gmbParsed.searchTerms.map((st,idx)=> n.jsxs("span",{key:idx,style:{background:"white",border:"1px solid #E5E7EB",borderRadius:20,padding:"3px 10px",fontSize:11,color:"#374151"},children:[st.term," — ",st.count]}))
+                    }),
+                  ]}),
+                ]}),
+              ]}),
               editingGmb ? n.jsxs("div",{children:[
                 n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:12},children:"Saisissez les stats GMB depuis l'interface Google. Renseignez également les valeurs du mois précédent pour calculer l'évolution."}),
                 n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12,marginBottom:14},children:
@@ -25141,17 +27091,112 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                 ? n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12},children:
                     gmbStatFields.map(f2=>{
                       const val = gmbStats[f2.key]; const prev = gmbStats[f2.prevKey];
+                      const ch = (gmbStats.changes||{})[f2.key];
                       return n.jsxs("div",{key:f2.key,style:{background:"#F9FAFB",border:"1px solid #E2E8F0",borderRadius:12,padding:"16px",display:"flex",flexDirection:"column",alignItems:"center",gap:6},children:[
                         n.jsx("div",{style:{fontSize:22},children:f2.icon}),
                         n.jsx("div",{style:{fontSize:11,color:"#64748b",fontWeight:600,textTransform:"uppercase",textAlign:"center"},children:f2.label}),
                         n.jsx("div",{style:{fontSize:24,fontWeight:900,color:"#1E1B30"},children:val?parseInt(val).toLocaleString("fr-FR"):"—"}),
                         gmbEvo(val,prev) || n.jsx("span",{style:{fontSize:11,color:"#9CA3AF"},children:prev?"Stable":"—"}),
+                        ch && n.jsxs("span",{style:{fontSize:10.5,fontWeight:700,color: /^[-−]/.test(ch.pct) ? "#dc2626" : "#059669",background: /^[-−]/.test(ch.pct) ? "#FEF2F2" : "#F0FDF4",borderRadius:8,padding:"2px 8px"},children:[/^[+\-−]/.test(ch.pct)?ch.pct:"+"+ch.pct,"% ", ch.ref ? `vs ${ch.ref}` : "vs période préc. (Google)"]}),
                       ]});
                     })
                   })
-                : n.jsx("div",{style:{background:"#FEF3C7",borderRadius:10,padding:"14px",textAlign:"center",fontSize:13,color:"#92400E"},children:"📊 Cliquez sur « Saisir les stats » pour renseigner les statistiques GMB de ce mois."})
+                : n.jsxs("div",{style:{background:"#FEF3C7",borderRadius:10,padding:"14px",textAlign:"center",fontSize:13,color:"#92400E"},children:["📊 Aucune statistique enregistrée pour ", n.jsx("strong",{style:{textTransform:"capitalize"},children:statsMonthLabel}), " — utilisez « 📋 Coller les statistiques » ou « ✏️ Saisir manuellement » pour les renseigner."]})
               ),
             ]}),
+
+            // Plates-formes & appareils + Termes de recherche (issus du copier-coller analysé)
+            (gmbStats.platforms?.length > 0 || gmbStats.searchTerms?.length > 0) && n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:18},children:[
+              gmbStats.platforms?.length > 0 && n.jsxs("div",{style:cardStyle,children:[
+                n.jsx("div",{style:sectionTitle,children:"📱 Plates-formes et appareils"}),
+                n.jsx("div",{style:{fontSize:11.5,color:"#9CA3AF",marginBottom:10},children:"D'où viennent les internautes qui ont trouvé votre fiche."}),
+                n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:8},children:
+                  gmbStats.platforms.map((p2,idx)=> n.jsxs("div",{key:idx,children:[
+                    n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3},children:[
+                      n.jsx("span",{style:{fontWeight:600,color:"#374151"},children:p2.label}),
+                      n.jsxs("span",{style:{color:"#6B7280"},children:[n.jsx("strong",{style:{color:"#1E1B30"},children:p2.count})," · ",p2.pct,"%"]}),
+                    ]}),
+                    n.jsx("div",{className:"bar",children:n.jsx("div",{className:"bar-f",style:{width:`${Math.min(100,parseFloat(p2.pct)||0)}%`,background:"#6B40D8"}})}),
+                  ]}))
+                }),
+              ]}),
+              gmbStats.searchTerms?.length > 0 && n.jsxs("div",{style:cardStyle,children:[
+                n.jsx("div",{style:sectionTitle,children:"🔎 Termes de recherche"}),
+                n.jsx("div",{style:{fontSize:11.5,color:"#9CA3AF",marginBottom:10},children:"Mots-clés qui ont affiché votre fiche dans les résultats de recherche Google."}),
+                n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:6},children:
+                  gmbStats.searchTerms.map((st,idx)=> n.jsxs("div",{key:idx,style:{display:"flex",alignItems:"center",gap:10,background:"#F9FAFB",border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 12px"},children:[
+                    n.jsx("span",{style:{width:20,height:20,borderRadius:"50%",background:idx<3?"#6B40D8":"#E5E7EB",color:idx<3?"white":"#6B7280",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0},children:st.rank||idx+1}),
+                    n.jsx("span",{style:{flex:1,fontSize:12.5,color:"#1E1B30",fontWeight:600},children:st.term}),
+                    n.jsx("span",{style:{fontSize:12,fontWeight:800,color:"#6B40D8"},children:st.count}),
+                  ]}))
+                }),
+              ]}),
+            ]}),
+
+            // Évolution des stats Google sur 6 ou 12 mois
+            (() => {
+              const months = [];
+              const now = new Date();
+              for (let k=evoMonthsCount-1; k>=0; k--) {
+                const dt = new Date(now.getFullYear(), now.getMonth()-k, 1);
+                months.push({ key: dt.toISOString().slice(0,7), label: dt.toLocaleDateString("fr-FR",{month:"short",year:"2-digit"}) });
+              }
+              const rows = months.map(m => ({ ...m, stats: gmbStatsAll[m.key] || null }));
+              const hasAny = rows.some(rw => rw.stats);
+              const titleTxt = "📈 Évolution des statistiques Google — " + evoMonthsCount + " derniers mois";
+              const rangeToggle = n.jsxs("div",{style:{display:"flex",gap:6},children:[
+                [6,12].map(nb => n.jsx("button",{type:"button",onClick:()=>setEvoMonthsCount(nb),style:{border:"1px solid "+(evoMonthsCount===nb?"#6D5BD0":"#E5E7EB"),background:evoMonthsCount===nb?"#6D5BD0":"#fff",color:evoMonthsCount===nb?"#fff":"#6B7280",borderRadius:8,padding:"5px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer"},children:nb+" mois"},nb)),
+              ]});
+              if (!hasAny) {
+                return n.jsxs("div",{style:cardStyle,children:[
+                  n.jsxs("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8},children:[
+                    n.jsx("div",{style:sectionTitle,children:titleTxt}),
+                    rangeToggle,
+                  ]}),
+                  n.jsx("div",{style:{textAlign:"center",padding:"18px 12px",fontSize:12.5,color:"#9CA3AF"},children:"Aucune donnée historique pour l'instant. Copiez-collez chaque mois les statistiques Google (Vues, Appels, Clics...) via « ✏️ Saisir manuellement » ou la synchronisation automatique pour faire apparaître ici la courbe."}),
+                ]});
+              }
+              return n.jsxs("div",{style:cardStyle,children:[
+                n.jsxs("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8},children:[
+                  n.jsx("div",{style:sectionTitle,children:titleTxt}),
+                  rangeToggle,
+                ]}),
+                n.jsx("div",{style:{fontSize:12,color:"#6B7280",margin:"4px 0 12px"},children:"Comparez l'évolution mois par mois des statistiques copiées-collées depuis votre fiche Google Business. Le badge sous chaque valeur indique la variation par rapport au mois précédent."}),
+                n.jsx("div",{style:{overflowX:"auto"},children:
+                  n.jsxs("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:evoMonthsCount>6?960:560},children:[
+                    n.jsx("thead",{children:n.jsxs("tr",{children:[
+                      n.jsx("th",{style:{background:"#F9FAFB",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".4px",color:"#9CA3AF",padding:"8px 12px",textAlign:"left"},children:"Indicateur"}),
+                      ...rows.map(rw => n.jsx("th",{key:rw.key,style:{background:"#F9FAFB",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".4px",color:"#9CA3AF",padding:"8px 12px",textAlign:"center"},children:rw.label})),
+                    ]})}),
+                    n.jsx("tbody",{children:
+                      gmbStatFields.map(f2 => n.jsxs("tr",{key:f2.key,children:[
+                        n.jsx("td",{style:{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap"},children:f2.icon+" "+f2.label}),
+                        ...rows.map((rw,ri) => {
+                          const v = rw.stats ? rw.stats[f2.key] : null;
+                          const hasV = v!=null && v!=="";
+                          const prevRw = ri>0 ? rows[ri-1] : null;
+                          const pv = prevRw && prevRw.stats ? prevRw.stats[f2.key] : null;
+                          let delta = null;
+                          if (hasV && pv!=null && pv!=="" && parseFloat(pv)!==0) {
+                            const cur = parseFloat(v), prv = parseFloat(pv);
+                            const pct = ((cur - prv) / Math.abs(prv)) * 100;
+                            delta = { pct, up: pct > 0 };
+                          }
+                          return n.jsxs("td",{key:rw.key,style:{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center"},children:[
+                            n.jsx("div",{style:{fontSize:13,fontWeight:700,color: hasV ? "#1E1B30" : "#D1D5DB"},children: hasV ? parseInt(v).toLocaleString("fr-FR") : "—"}),
+                            delta && n.jsxs("div",{style:{fontSize:10,fontWeight:700,marginTop:2,color: delta.pct===0 ? "#9CA3AF" : (delta.up ? "#059669" : "#dc2626")},children:[delta.up?"▲":(delta.pct<0?"▼":"–")," ",(delta.pct>0?"+":"")+delta.pct.toFixed(1),"%"]}),
+                          ]});
+                        }),
+                      ]},f2.key))
+                    }),
+                  ]}),
+                }),
+              ]});
+            })(),
+          ]}),
+
+          // ── POSITIONS & MOTS-CLÉS ──
+          subTab==="positions" && n.jsxs("div",{className:"fade",children:[
 
             // Positions table
             n.jsxs("div",{style:cardStyle,children:[
@@ -25184,6 +27229,48 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                     })}),
                   ]}),
             ]}),
+
+            // ── Carte des positions — évolution visuelle (mini-snapshots par date) ──
+            (() => {
+              const kwEntries = Object.entries(geoGrid).filter(([k,v]) => k !== "center" && v && v.scans && v.scans.length > 0);
+              if (kwEntries.length === 0) return null;
+              const cellColor = (rk) => rk == null ? "transparent" : rk <= 3 ? "#22c55e" : rk <= 6 ? "#f59e0b" : rk <= 10 ? "#f97316" : "#dc2626";
+              const fmtDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}) : "?";
+              return n.jsxs("div",{style:cardStyle,children:[
+                n.jsx("div",{style:sectionTitle,children:"📸 Évolution visuelle des positions — comme un historique de captures de la carte"}),
+                n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:14},children:"Chaque mini-carte reprend la grille carrée de la zone de chalandise scannée : 🟢 TOP 3 · 🟠 TOP 6-10 · 🔴 au-delà. Faites défiler pour voir l'évolution dans le temps."}),
+                n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:18},children:
+                  kwEntries.map(([kw, kwData]) => {
+                    const sortedScans = [...kwData.scans].sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+                    return n.jsxs("div",{key:kw,children:[
+                      n.jsx("div",{style:{fontSize:13,fontWeight:800,color:"#1E1B30",marginBottom:8},children:`🔑 ${kw}`}),
+                      n.jsx("div",{style:{display:"flex",gap:18,overflowX:"auto",paddingBottom:6},children:
+                        sortedScans.map((scan, si) => {
+                          const gs = scan.gridSize || 5;
+                          const cells = scan.cells || [];
+                          const cell = gs >= 9 ? 10 : gs >= 7 ? 12 : 14;
+                          return n.jsxs("div",{key:si,style:{flexShrink:0,textAlign:"center"},children:[
+                            n.jsx("div",{
+                              style:{ position:"relative", width:gs*cell, height:gs*cell,
+                                borderRadius:6, background:"#F9FAFB",
+                                overflow:"hidden",
+                                display:"grid", gridTemplateColumns:`repeat(${gs},1fr)`, gap:1, padding:0 },
+                              children: cells.map((c,ci) => {
+                                const rk = c && typeof c === "object" ? c.rank : c;
+                                return n.jsx("div",{key:ci,style:{ background:cellColor(rk), width:"100%", aspectRatio:"1", borderRadius:2 }});
+                              })
+                            }),
+                            n.jsxs("div",{style:{fontSize:10,color:"#9CA3AF",marginTop:6,fontWeight:600},children:[fmtDate(scan.date)]}),
+                            n.jsxs("div",{style:{fontSize:9,color:"#6B7280",marginTop:1},children:[`${gs}×${gs}`, scan.rayon ? ` sur ${scan.rayon} km` : ""]}),
+                            si === sortedScans.length-1 && n.jsx("div",{style:{fontSize:9,color:"#6B40D8",fontWeight:700,marginTop:2},children:"Dernier scan"}),
+                          ]});
+                        })
+                      }),
+                    ]});
+                  })
+                }),
+              ]});
+            })(),
           ]}),
 
           // ── AVIS ──
@@ -25250,7 +27337,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                   n.jsx("button",{
                     onClick:()=>{ setReplyingTo(rv.reviewId); setReplyText(""); generateAiReply(rv); },
                     style:{background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
-                    children:"✨ Répondre avec l'IA"
+                    children:"✨ Rédiger une réponse"
                   }),
                   n.jsx("button",{
                     onClick:()=>{ setReplyingTo(rv.reviewId); setReplyText(""); },
@@ -25261,7 +27348,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
                 // Zone rédaction réponse
                 replyingTo === rv.reviewId && n.jsxs("div",{style:{marginTop:8},children:[
-                  generatingReply && n.jsx("div",{style:{fontSize:12,color:"#6B40D8",marginBottom:8,fontWeight:600},children:"✨ L'IA rédige une réponse..."}),
+                  generatingReply && n.jsx("div",{style:{fontSize:12,color:"#6B40D8",marginBottom:8,fontWeight:600},children:"✨ Rédaction en cours..."}),
                   n.jsx("textarea",{
                     value:replyText,
                     onChange:ev=>setReplyText(ev.target.value),
@@ -25389,7 +27476,13 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                 n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30",marginBottom:4},children:"📄 Rapport client"}),
                 n.jsx("div",{style:{fontSize:12,color:"#6B7280"},children:"Rapport complet prêt à envoyer au client"}),
               ]}),
-              n.jsx("button",{onClick:exportPdf,style:{background:"linear-gradient(135deg,#e63946,#c0392b)",color:"white",border:"none",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"⬇️ Exporter PDF"}),
+              monthlyShareLink
+                ? n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:6},children:[
+                    n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:6,background:"#F5F3FF",border:"1.5px solid #C4B5FD",borderRadius:9,padding:"7px 12px",fontSize:11.5,color:"#6B40D8",fontWeight:600,maxWidth:260,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"},children:["🔗 ",monthlyShareLink]}),
+                    n.jsx("button",{onClick:()=>{ navigator.clipboard.writeText(monthlyShareLink).then(()=>{ setMonthlyShareCopied(true); setTimeout(()=>setMonthlyShareCopied(false),2000); }); },style:{fontSize:11.5,padding:"7px 12px",borderRadius:9,border:"1.5px solid #E5E7EB",background:"white",cursor:"pointer",fontFamily:"inherit",fontWeight:700,color:"#374151"},children:monthlyShareCopied?"✓ Copié":"📋 Copier"}),
+                    n.jsx("button",{onClick:()=>setMonthlyShareLink(null),title:"Régénérer un lien à jour avec les dernières données",style:{fontSize:12,padding:"7px 10px",borderRadius:9,border:"1.5px solid #E5E7EB",background:"white",cursor:"pointer",color:"#6B7280"},children:"🔄"}),
+                  ]})
+                : n.jsx("button",{onClick:shareMonthlyReport,disabled:monthlySharing,style:{background:monthlySharing?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)",color:monthlySharing?"#9CA3AF":"white",border:"none",borderRadius:9,padding:"10px 22px",fontSize:13,fontWeight:700,cursor:monthlySharing?"default":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:6},children:monthlySharing?"⏳ Génération…":"🔗 Partager"}),
             ]}),
             n.jsx("div",{
               id:"rapport-mensuel-content",
@@ -25445,6 +27538,25 @@ function TemplatesTab({
     },
     N = (L) => B.includes(L),
     E = (L, $) => (m[L] !== void 0 ? m[L] : $),
+    [sec, setSec] = D.useState(() => {
+      const def = { forces:true, benchmark:true, quickwins:true, keywords:true, plan90:true, roadmap:true, cta:true };
+      try { return { ...def, ...JSON.parse(localStorage.getItem(`report_sections_${e.id}`) || "{}") }; } catch { return def; }
+    }),
+    [showSecPanel, setShowSecPanel] = D.useState(false),
+    [shareLink, setShareLink] = D.useState(null),
+    [sharing, setSharing] = D.useState(false),
+    [shareCopied, setShareCopied] = D.useState(false),
+    toggleSec = (key) => {
+      const ns = { ...sec, [key]: !sec[key] };
+      (setSec(ns), localStorage.setItem(`report_sections_${e.id}`, JSON.stringify(ns)));
+    },
+    [mapKwSel, setMapKwSel] = D.useState(() => {
+      try { return JSON.parse(localStorage.getItem(`report_mapkws_${e.id}`) || "{}"); } catch { return {}; }
+    }),
+    setMapKw = (slot, val) => {
+      const ns = { ...mapKwSel, [slot]: val || null };
+      (setMapKwSel(ns), localStorage.setItem(`report_mapkws_${e.id}`, JSON.stringify(ns)));
+    },
     M = ({
       id: L,
       children: $,
@@ -25568,6 +27680,104 @@ function TemplatesTab({
     H = () => {
       (F(), window.print());
     };
+
+  /* Carte de positionnement — initialise une vraie carte Leaflet (OSM) avec le point de l'établissement + les points scannés */
+  D.useEffect(() => {
+    let maps = [], cancelled = false, pollId = null, pollTimeout = null;
+    const buildMapInto = (el, posKw, posScan) => {
+      const gg = e.geoGrid || {};
+      const center = gg.center;
+      if (!el || !window.L || el._leaflet_id) return;
+      if (!center || !posScan || !(posScan.cells || []).length) return;
+      const gs = posScan.gridSize || Math.round(Math.sqrt(posScan.cells.length));
+      const rayonKm = posScan.rayon || 20;
+      const spacing = (rayonKm * 1000 * 2) / Math.max(gs - 1, 1);
+      const mid = Math.floor(gs / 2);
+      const METERS_PER_DEG = 111320;
+      const cellColor = (r) => r == null ? "#9CA3AF" : r <= 3 ? "#059669" : r <= 10 ? "#d97706" : r <= 20 ? "#E85A30" : "#dc2626";
+      try {
+        const map = window.L.map(el, { zoomControl: true, scrollWheelZoom: false, attributionControl: false });
+        window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map);
+        const bounds = [];
+        let idx = 0;
+        for (let row = 0; row < gs; row++) {
+          for (let col = 0; col < gs; col++) {
+            const r = posScan.cells[idx++];
+            const lat = center.lat + ((mid - row) * spacing) / METERS_PER_DEG;
+            const lng = center.lng + ((col - mid) * spacing) / (METERS_PER_DEG * Math.cos((center.lat * Math.PI) / 180));
+            if (row === mid && col === mid) { bounds.push([lat, lng]); continue; } // emplacement de l'établissement → marqueur dédié
+            if (r == null) continue; // hors zone → ne pas surcharger la carte avec un point
+            bounds.push([lat, lng]);
+            window.L.circleMarker([lat, lng], { radius: 12, color: "white", weight: 2, fillColor: cellColor(r), fillOpacity: 0.92 })
+              .bindTooltip(`${r}`, { permanent: true, direction: "center", className: "rp-map-tt" })
+              .addTo(map);
+          }
+        }
+        const storeIcon = window.L.divIcon({
+          className: "",
+          html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;background:linear-gradient(135deg,#6B40D8,#C03080);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.35);border:2px solid white"><span style="transform:rotate(45deg);font-size:14px;line-height:1">📍</span></div>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 30],
+        });
+        window.L.marker([center.lat, center.lng], { icon: storeIcon }).addTo(map)
+          .bindTooltip(e.name || "Votre établissement", { permanent: false, direction: "top" });
+        bounds.push([center.lat, center.lng]);
+        map.fitBounds(bounds, { padding: [26, 26] });
+        setTimeout(() => { try { map.invalidateSize(); } catch {} }, 250);
+        maps.push(map);
+      } catch {}
+    };
+    const initRapportMap = () => {
+      if (cancelled) return;
+      const gg = e.geoGrid || {};
+      const avail = [];
+      for (const k of Object.keys(gg)) {
+        if (k === "center") continue;
+        const scans = (gg[k] || {}).scans || [];
+        if (scans.length) avail.push({ kw: k, scan: scans[scans.length - 1] });
+      }
+      const pick = (sel, fallbackIdx) => {
+        if (sel === "__none__") return null;
+        if (sel) { const found = avail.find(m => m.kw === sel); if (found) return found; }
+        return avail[fallbackIdx] || null;
+      };
+      const posEntries = [];
+      const p1 = pick(mapKwSel.kw1, 0);
+      if (p1) posEntries.push(p1);
+      const p2 = pick(mapKwSel.kw2, 1);
+      if (p2 && !posEntries.some(p => p.kw === p2.kw)) posEntries.push(p2);
+      if (posEntries[0]) buildMapInto(document.getElementById("rapport-positioning-map"), posEntries[0].kw, posEntries[0].scan);
+      if (posEntries[1]) buildMapInto(document.getElementById("rapport-positioning-map-2"), posEntries[1].kw, posEntries[1].scan);
+    };
+    const ensureLeafletThenInit = () => {
+      if (window.L) { setTimeout(initRapportMap, 60); return; }
+      if (!document.getElementById("leaflet-css-rapport")) {
+        const link = document.createElement("link");
+        link.id = "leaflet-css-rapport";
+        link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      if (!document.getElementById("leaflet-js-rapport")) {
+        const script = document.createElement("script");
+        script.id = "leaflet-js-rapport";
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => setTimeout(initRapportMap, 60);
+        document.head.appendChild(script);
+      } else {
+        pollId = setInterval(() => { if (window.L) { clearInterval(pollId); setTimeout(initRapportMap, 60); } }, 200);
+        pollTimeout = setTimeout(() => pollId && clearInterval(pollId), 8000);
+      }
+    };
+    ensureLeafletThenInit();
+    return () => {
+      cancelled = true;
+      if (pollId) clearInterval(pollId);
+      if (pollTimeout) clearTimeout(pollTimeout);
+      maps.forEach(m => { try { m.remove(); } catch {} });
+    };
+  }, [e.id, sec.keywords, mapKwSel.kw1, mapKwSel.kw2]);
+
   return n.jsx("div", {
     style: {
       position: "fixed",
@@ -25616,21 +27826,10 @@ function TemplatesTab({
                   style: { fontSize: 11.5, color: "#6B7280" },
                   children: ["— ", e.name],
                 }),
-                n.jsx("span", {
-                  style: {
-                    fontSize: 11,
-                    background: "#FDF2F8",
-                    color: "#6B40D8",
-                    padding: "2px 8px",
-                    borderRadius: 20,
-                    fontWeight: 600,
-                  },
-                  children: "✏ Cliquez sur n'importe quel texte pour modifier",
-                }),
               ],
             }),
             n.jsxs("div", {
-              style: { display: "flex", gap: 7 },
+              style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" },
               children: [
                 Object.keys(m).length > 0 &&
                   n.jsx("button", {
@@ -25643,158 +27842,204 @@ function TemplatesTab({
                   }),
                 n.jsx("button", {
                   className: "btn-ghost",
-                  onClick: () => u((L) => !L),
-                  style: { fontSize: 12 },
-                  children: "⚙️ Agence",
+                  onClick: () => setShowSecPanel((L) => !L),
+                  style: { fontSize: 11, padding: "5px 9px", whiteSpace: "nowrap" },
+                  children: "📑 Sections",
                 }),
-                n.jsx("button", {
-                  className: "btn",
-                  onClick: H,
-                  children: "🖨️ Imprimer",
-                }),
-                n.jsx("button", {
-                  onClick: async () => {
-                    window.html2pdf ||
-                      (await new Promise(($, X) => {
-                        const te = document.createElement("script");
-                        ((te.src =
-                          "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"),
-                          (te.onload = $),
-                          (te.onerror = X),
-                          document.head.appendChild(te));
-                      }));
-                    const L = document.getElementById("rapport-content");
-                    L &&
-                      window
-                        .html2pdf()
-                        .set({
-                          margin: 10,
-                          filename: `rapport_${e.name.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.pdf`,
-                          image: { type: "jpeg", quality: 0.95 },
-                          html2canvas: { scale: 2, useCORS: !0 },
-                          jsPDF: {
-                            unit: "mm",
-                            format: "a4",
-                            orientation: "portrait",
+                shareLink
+                  ? n.jsxs("div", {
+                      style: { display: "flex", alignItems: "center", gap: 6, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "5px 6px 5px 12px" },
+                      children: [
+                        n.jsx("span", { style: { fontSize: 11, color: "#059669", fontWeight: 600, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: shareLink }),
+                        n.jsx("button", {
+                          className: "btn-sm",
+                          onClick: () => {
+                            navigator.clipboard.writeText(shareLink).then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000); });
                           },
-                        })
-                        .from(L)
-                        .save();
-                  },
-                  style: {
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: "#dc2626",
-                    color: "white",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    fontWeight: 600,
-                    fontSize: 12.5,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  },
-                  children: "📄 Télécharger PDF",
-                }),
+                          style: { fontSize: 11.5 },
+                          children: shareCopied ? "✓ Copié" : "📋 Copier",
+                        }),
+                        n.jsx("button", {
+                          className: "btn-ghost",
+                          title: "Régénérer un lien à jour avec les dernières données",
+                          onClick: () => setShareLink(null),
+                          style: { fontSize: 11.5, color: "#6B7280" },
+                          children: "🔄",
+                        }),
+                      ],
+                    })
+                  : n.jsx("button", {
+                      className: "btn",
+                      disabled: sharing,
+                      onClick: async () => {
+                        setSharing(true);
+                        try {
+                          // Capture le HTML interne du rapport (identique à ce que l'agence voit)
+                          const reportEl = document.getElementById("rapport-content");
+                          if (!reportEl) throw new Error("Rapport non disponible — afficher d'abord l'onglet Rapport client.");
+                          const innerHtml = reportEl.innerHTML;
+                          // Données carte pour réinitialiser Leaflet côté client
+                          const _ggData = JSON.stringify(e.geoGrid || {}).replace(/<\/script>/gi, "<\\/script>");
+                          const _mkData = JSON.stringify(mapKwSel || {}).replace(/<\/script>/gi, "<\\/script>");
+                          const _clientName = (e.name || "").replace(/"/g, "&quot;");
+                          const mapInitScript = `(function(){
+  var geoGrid=JSON.parse('${_ggData.replace(/'/g, "\\'")}');
+  var mkSel=JSON.parse('${_mkData.replace(/'/g, "\\'")}');
+  function cc(r){return r==null?'#9CA3AF':r<=3?'#059669':r<=10?'#d97706':r<=20?'#E85A30':'#dc2626';}
+  function initM(elId,scan){
+    var el=document.getElementById(elId);
+    if(!el||!window.L||el._leaflet_id)return;
+    var center=geoGrid.center;
+    if(!center||!scan||(scan.cells||[]).length===0)return;
+    var gs=scan.gridSize||Math.round(Math.sqrt(scan.cells.length));
+    var rayon=scan.rayon||20;
+    var spacing=(rayon*1000*2)/Math.max(gs-1,1);
+    var mid=Math.floor(gs/2);
+    var MPD=111320;
+    try{
+      var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,attributionControl:false});
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18}).addTo(map);
+      var bounds=[];var idx=0;
+      for(var row=0;row<gs;row++){for(var col=0;col<gs;col++){
+        var r=scan.cells[idx++];
+        var lat=center.lat+((mid-row)*spacing)/MPD;
+        var lng=center.lng+((col-mid)*spacing)/(MPD*Math.cos(center.lat*Math.PI/180));
+        bounds.push([lat,lng]);
+        if(row===mid&&col===mid)continue;
+        L.circleMarker([lat,lng],{radius:12,color:'white',weight:2,fillColor:cc(r),fillOpacity:0.92})
+          .bindTooltip(r==null?'Hors zone':String(r),{permanent:true,direction:'center',className:'rp-map-tt'}).addTo(map);
+      }}
+      var si=L.divIcon({className:'',html:'<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;background:linear-gradient(135deg,#6B40D8,#C03080);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.35);border:2px solid white"><span style="transform:rotate(45deg);font-size:14px;line-height:1">📍</span></div>',iconSize:[30,30],iconAnchor:[15,30]});
+      L.marker([center.lat,center.lng],{icon:si}).addTo(map).bindTooltip('${_clientName}',{permanent:false,direction:'top'});
+      bounds.push([center.lat,center.lng]);
+      map.fitBounds(bounds,{padding:[26,26]});
+      setTimeout(function(){try{map.invalidateSize();}catch(e){}},250);
+    }catch(e){}
+  }
+  function tryInit(){
+    if(!window.L){setTimeout(tryInit,100);return;}
+    var avail=[];
+    Object.keys(geoGrid).forEach(function(k){
+      if(k==='center')return;
+      var scans=(geoGrid[k]||{}).scans||[];
+      if(scans.length)avail.push({kw:k,scan:scans[scans.length-1]});
+    });
+    function pick(sel,idx){if(sel==='__none__')return null;if(sel){var f=avail.find(function(m){return m.kw===sel;});if(f)return f;}return avail[idx]||null;}
+    var e1=pick(mkSel.kw1,0);var e2=pick(mkSel.kw2,1);
+    if(e1)initM('rapport-positioning-map',e1.scan);
+    if(e2&&(!e1||e2.kw!==e1.kw))initM('rapport-positioning-map-2',e2.scan);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',tryInit);else tryInit();
+})();`;
+                          const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport Google Business — ${_clientName}</title><meta name="robots" content="noindex,nofollow"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script><style>body{font-family:system-ui,sans-serif;background:#F4F5FA;margin:0;padding:24px 0;color:#1E1B30}#rw{max-width:820px;margin:0 auto}</style></head><body><div id="rw">${innerHtml}</div><script>${mapInitScript}<\/script></body></html>`;
+                          const r = await fetch("/api/data/sync?action=share-audit-report", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ html }),
+                          });
+                          const data = await r.json();
+                          if (!r.ok || !data.url) throw new Error(data.error || "Échec de la génération du lien");
+                          setShareLink(data.url);
+                          navigator.clipboard.writeText(data.url).then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000); }).catch(() => {});
+                        } catch (err) {
+                          alert("Impossible de générer le lien : " + (err.message || "erreur inconnue"));
+                        }
+                        setSharing(false);
+                      },
+                      style: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, padding: "5px 10px", whiteSpace: "nowrap" },
+                      children: sharing ? "⏳ Génération…" : "🔗 Partager",
+                    }),
                 n.jsx("button", {
                   className: "btn-ghost",
                   onClick: p,
-                  children: "Fermer",
+                  title: "Fermer",
+                  style: { fontSize: 12, lineHeight: 1, padding: "4px 8px", color: "#9CA3AF" },
+                  children: "✕",
                 }),
               ],
             }),
           ],
         }),
-        c &&
+        showSecPanel &&
           n.jsxs("div", {
             className: "no-print",
             style: {
-              padding: "12px 22px",
+              padding: "14px 22px",
               borderBottom: "1px solid #f1f5f9",
               background: "#F4F5FA",
-              display: "flex",
-              gap: 12,
-              flexWrap: "wrap",
-              alignItems: "flex-end",
             },
             children: [
-              n.jsxs("div", {
-                style: { flex: 1, minWidth: 160 },
+              n.jsx("div", {
+                style: { fontSize: 11, fontWeight: 700, color: "var(--ink3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" },
+                children: "Sections à inclure dans le rapport client",
+              }),
+              n.jsx("div", {
+                style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 8 },
                 children: [
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "var(--ink3)",
-                      marginBottom: 4,
-                      textTransform: "uppercase",
-                    },
-                    children: "Nom agence",
+                  { key: "forces", label: "💡 Forces & axes d'amélioration" },
+                  { key: "benchmark", label: "🏆 Benchmark vs concurrents locaux" },
+                  { key: "quickwins", label: "⚡ 3 actions rapides (quick wins)" },
+                  { key: "keywords", label: "🔍 Mots-clés & positionnement" },
+                  { key: "plan90", label: "📈 Premiers résultats — 90 jours" },
+                  { key: "roadmap", label: "🗺️ Roadmap mois par mois" },
+                  { key: "cta", label: "📞 Page contact / consultation" },
+                ].map(({ key, label }) =>
+                  n.jsxs("label", {
+                    key,
+                    style: { display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#374151", cursor: "pointer", background: "white", border: "1px solid #E5E7EB", borderRadius: 8, padding: "7px 10px" },
+                    children: [
+                      n.jsx("input", { type: "checkbox", checked: !!sec[key], onChange: () => toggleSec(key) }),
+                      label,
+                    ],
                   }),
-                  n.jsx("input", {
-                    className: "inp",
-                    style: { fontSize: 12 },
-                    value: j,
-                    onChange: (L) => I(L.target.value),
-                    placeholder: "Mon Agence SEO",
-                  }),
-                ],
+                ),
               }),
-              n.jsxs("div", {
-                style: { flex: 1, minWidth: 160 },
-                children: [
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "var(--ink3)",
-                      marginBottom: 4,
-                      textTransform: "uppercase",
-                    },
-                    children: "Email",
-                  }),
-                  n.jsx("input", {
-                    className: "inp",
-                    style: { fontSize: 12 },
-                    value: z,
-                    onChange: (L) => g(L.target.value),
-                    placeholder: "contact@agence.fr",
-                  }),
-                ],
-              }),
-              n.jsxs("div", {
-                style: { flex: 1, minWidth: 140 },
-                children: [
-                  n.jsx("div", {
-                    style: {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "var(--ink3)",
-                      marginBottom: 4,
-                      textTransform: "uppercase",
-                    },
-                    children: "Téléphone",
-                  }),
-                  n.jsx("input", {
-                    className: "inp",
-                    style: { fontSize: 12 },
-                    value: h,
-                    onChange: (L) => f(L.target.value),
-                    placeholder: "06 XX XX XX XX",
-                  }),
-                ],
-              }),
-              n.jsx("button", {
-                className: "btn-sm",
-                onClick: () => {
-                  (localStorage.setItem("ag_name", j),
-                    localStorage.setItem("ag_email", z),
-                    localStorage.setItem("ag_phone", h),
-                    u(!1));
-                },
-                children: "Enregistrer",
-              }),
+              n.jsx("div", { style: { fontSize: 11, color: "#9CA3AF", marginTop: 8 }, children: "La page de couverture (score, piliers, alertes) reste toujours visible. Vos choix sont mémorisés pour ce client." }),
+              (() => {
+                const _availKws = Object.keys(e.geoGrid || {}).filter(k => k !== "center" && (((e.geoGrid[k]||{}).scans)||[]).length > 0);
+                if (!_availKws.length) return null;
+                const _selectStyle = { fontSize: 12.5, color: "#374151", border: "1px solid #E5E7EB", borderRadius: 8, padding: "7px 10px", background: "white", flex: 1 };
+                return n.jsxs("div", {
+                  style: { marginTop: 14, paddingTop: 14, borderTop: "1px solid #E5E7EB" },
+                  children: [
+                    n.jsx("div", {
+                      style: { fontSize: 11, fontWeight: 700, color: "var(--ink3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".4px" },
+                      children: "🗺️ Cartes de positionnement local — mots-clés à afficher",
+                    }),
+                    n.jsxs("div", {
+                      style: { display: "flex", gap: 10, flexWrap: "wrap" },
+                      children: [
+                        n.jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, flex: "1 1 220px" }, children: [
+                          n.jsx("span", { style: { fontSize: 11, color: "#9CA3AF", whiteSpace: "nowrap" }, children: "Carte 1" }),
+                          n.jsxs("select", {
+                            value: mapKwSel.kw1 || "",
+                            onChange: (ev) => setMapKw("kw1", ev.target.value || null),
+                            style: _selectStyle,
+                            children: [
+                              n.jsx("option", { value: "", children: "Auto (1er mot-clé scanné)" }),
+                              ..._availKws.map(k => n.jsx("option", { key: k, value: k, children: k })),
+                            ],
+                          }),
+                        ]}),
+                        n.jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, flex: "1 1 220px" }, children: [
+                          n.jsx("span", { style: { fontSize: 11, color: "#9CA3AF", whiteSpace: "nowrap" }, children: "Carte 2" }),
+                          n.jsxs("select", {
+                            value: mapKwSel.kw2 || "",
+                            onChange: (ev) => setMapKw("kw2", ev.target.value || null),
+                            style: _selectStyle,
+                            children: [
+                              n.jsx("option", { value: "", children: "Auto (2e mot-clé scanné)" }),
+                              n.jsx("option", { value: "__none__", children: "— Aucune (masquer)" }),
+                              ..._availKws.map(k => n.jsx("option", { key: k, value: k, children: k })),
+                            ],
+                          }),
+                        ]}),
+                      ],
+                    }),
+                    n.jsx("div", { style: { fontSize: 10.5, color: "#D1D5DB", marginTop: 6 }, children: "Par défaut, les 2 premiers mots-clés ayant un scan carte sont utilisés. Choisis ici lesquels afficher dans le rapport." }),
+                  ],
+                });
+              })(),
             ],
           }),
         n.jsx("div", {
@@ -25803,13 +28048,59 @@ function TemplatesTab({
             id: "rapport-content",
             dangerouslySetInnerHTML: {
               __html: (() => {
-                const sc   = t >= 70 ? "#059669" : t >= 50 ? "#d97706" : "#E85A30";
+                // Score & piliers = EXACTEMENT le même calcul que l'onglet Résumé (calcScore + pillarsRecap sur {...e.scores, ...e.manualOverrides})
+                // → mêmes chiffres partout (Résumé / Bilan / Évolution / Rapport client)
+                const _Mscore  = { ...(e.scores || {}), ...(e.manualOverrides || {}) };
+                const _eHasData = Object.keys(_Mscore).length > 0;
+                const _pillarPct = (cats) => {
+                  const K = CATS.filter(c => cats.includes(c.id));
+                  const tot = K.flatMap(c=>c.criteria).reduce((s,c)=>s+c.points,0);
+                  const got = K.flatMap(c=>c.criteria).reduce((s,c)=> _Mscore[c.id]===true ? s+c.points : s, 0);
+                  return tot>0 ? Math.round(got/tot*100) : 0;
+                };
+                const _eScores = _eHasData ? { pert:_pillarPct(["identity","description"]), prox:_pillarPct(["contact"]), notor:_pillarPct(["reviews","photos","posts"]) } : null;
+                const t2 = _eHasData ? calcScore(_Mscore) : t;
+                const sc   = t2 >= 70 ? "#059669" : t2 >= 50 ? "#d97706" : "#E85A30";
                 const pl   = P.pillars || {};
-                const pls  = (k) => (pl[k] && pl[k].score != null) ? pl[k].score : null;
+                const pls  = (k) => { if(_eScores){ if(k==="pertinence") return _eScores.pert; if(k==="proximite") return _eScores.prox; if(k==="notoriete"||k==="prominence") return _eScores.notor; } return (pl[k] && pl[k].score != null) ? pl[k].score : null; };
                 const plc  = (s) => s == null ? "#9CA3AF" : s >= 70 ? "#059669" : s >= 50 ? "#d97706" : "#dc2626";
                 const pos  = P.competitorRanking?.estimatedPosition || "—";
-                const comps= (P.competitors||[]).filter(c=>c.name&&!c.name.toLowerCase().includes("nom réel")).slice(0,4);
                 const allKws=[...(P.keywords?.primary||[]),...(P.keywords?.secondary||[])].filter(k=>k.kw&&!k.kw.includes("[")).slice(0,6);
+
+                // ── Concurrents RÉELS issus du scan carte (geoGrid) — agrégés par fréquence d'apparition + rang moyen ──
+                const _geoGridAll = e.geoGrid || {};
+                const _aggComps = {};
+                let _scanCompKw = null, _scanCompDate = null, _totalCellsScanned = 0, _myAppearances = 0;
+                Object.entries(_geoGridAll).forEach(([kwG, kwData]) => {
+                  if (kwG === "center") return;
+                  ((kwData||{}).scans || []).forEach(scan => {
+                    _totalCellsScanned += (scan.cells||[]).filter(cv=>cv!=null).length;
+                    (scan.cellData || []).forEach(cell => {
+                      if ((cell && cell.top10 || []).some(c => c.isMe)) _myAppearances++;
+                      ((cell && cell.top10) || []).filter(c=>!c.isMe).forEach(c => {
+                        const key = (c.name||"").toLowerCase().trim();
+                        if (!key) return;
+                        if (!_aggComps[key]) _aggComps[key] = { name:c.name, address:c.address||"", rating:c.rating, reviews:c.reviews||0, appearances:0, rankSum:0, lastSeen:scan.date, lastKw:kwG };
+                        _aggComps[key].appearances++;
+                        _aggComps[key].rankSum += (c.rank || 10);
+                        if ((scan.date||"") > (_aggComps[key].lastSeen||"")) { _aggComps[key].lastSeen = scan.date; _aggComps[key].lastKw = kwG; }
+                        if (!_scanCompDate || (scan.date||"") > _scanCompDate) { _scanCompDate = scan.date; _scanCompKw = kwG; }
+                      });
+                    });
+                  });
+                });
+                // Même méthodologie que l'onglet "Visibilité concurrent" : tri par fréquence d'apparition (= influence réelle sur le secteur)
+                const realComps = Object.values(_aggComps)
+                  .map(c => ({ ...c, avgRank: c.appearances>0 ? Math.round(c.rankSum/c.appearances) : null, visibilityPct: _totalCellsScanned>0 ? Math.round(c.appearances/_totalCellsScanned*100) : 0 }))
+                  .sort((a,b) => b.appearances - a.appearances)
+                  .slice(0, 10);
+                const hasRealComps = realComps.length > 0;
+                const comps = hasRealComps ? realComps : (P.competitors||[]).filter(c=>c.name&&!c.name.toLowerCase().includes("nom réel")).slice(0,10);
+                // Indicateurs RÉELS pour la page de couverture (basés sur le scan carte + données de fiche, pas de chiffres fabriqués)
+                const myVisibilityPct = _totalCellsScanned > 0 ? Math.round(_myAppearances / _totalCellsScanned * 100) : null;
+                const leaderComp = hasRealComps ? realComps[0] : null;
+                const visibilityGap = (myVisibilityPct != null && leaderComp) ? (leaderComp.visibilityPct - myVisibilityPct) : null;
+                const reviewsRatio = (T.reviewCount && leaderComp && leaderComp.reviews && T.reviewCount > 0) ? Math.round(leaderComp.reviews / T.reviewCount) : null;
                 const strengths =(_.strengths||[]).filter(s=>!s.includes("[")).slice(0,3);
                 const weaknesses=(_.weaknesses||[]).filter(s=>!s.includes("[")).slice(0,4);
                 const qw        =(_.quickWins||[]).filter(s=>!s.includes("[")).slice(0,3);
@@ -25821,11 +28112,124 @@ function TemplatesTab({
                 const dateStr    = new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
                 const reviewCount= T.reviewCount||"—"; const photoCount=T.photoCount||"—"; const rating=T.rating||"—";
 
-                const pb = (p) => { const n2=parseInt(p); if(!p||isNaN(n2)) return `<span style="color:#9CA3AF">—</span>`; const bg=n2<=3?"#d1fae5":n2<=10?"#ffedd5":"#fef2f2"; const col=n2<=3?"#059669":n2<=10?"#d97706":"#dc2626"; return `<span style="background:${bg};color:${col};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">${n2<=3?"🏆 ":""}TOP ${p}</span>`; };
-                const evoSpan = (dir,evo) => dir==="up"?`<span style="color:#059669;font-weight:700">↑ ${evo}</span>`:dir==="down"?`<span style="color:#dc2626;font-weight:700">↓ ${evo}</span>`:`<span style="color:#9CA3AF">→</span>`;
-                const prioSpan = (p) => { const map={TOP:"#EEF2FF,#3B5BDB",Urgent:"#fef2f2,#dc2626",Maintenir:"#f0fdf4,#059669",Rapide:"#fffbeb,#d97706"}; const [bg,col]=(map[p]||"#F4F5FA,#374151").split(","); return `<span style="background:${bg};color:${col};padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">${p}</span>`; };
 
                 const rmActions = (actions=[]) => (actions||[]).filter(a=>a&&!a.includes("action")).slice(0,4).map((a,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4;margin-bottom:4px"><div style="width:18px;height:18px;border-radius:5px;background:currentColor;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px" class="rm-dot">${i+1}</div>${a}</div>`).join("");
+
+                // ── CARTE DE POSITIONNEMENT LOCAL (à partir d'un scan géographique RÉEL — geoGrid, pas de données fabriquées) ──
+                // Mots-clés disponibles (avec au moins un scan carte), dans l'ordre de geoGrid
+                const _availMapKws = [];
+                for (const _k of Object.keys(e.geoGrid || {})) {
+                  if (_k === "center") continue;
+                  const _scans = ((e.geoGrid[_k] || {}).scans) || [];
+                  if (_scans.length) _availMapKws.push({ kw: _k, scan: _scans[_scans.length - 1] });
+                }
+                // Sélection : manuelle (mapKwSel) si définie et valide, sinon automatique (les 2 premiers mots-clés scannés)
+                const _pickMapKw = (sel, fallbackIdx) => {
+                  if (sel === "__none__") return null;
+                  if (sel) { const found = _availMapKws.find(m => m.kw === sel); if (found) return found; }
+                  return _availMapKws[fallbackIdx] || null;
+                };
+                const _posEntries = [];
+                const _e1 = _pickMapKw(mapKwSel.kw1, 0);
+                if (_e1) _posEntries.push(_e1);
+                const _e2 = _pickMapKw(mapKwSel.kw2, 1);
+                if (_e2 && !_posEntries.some(p => p.kw === _e2.kw)) _posEntries.push(_e2);
+                const _posKw = _posEntries[0] ? _posEntries[0].kw : null;
+                const _posScan = _posEntries[0] ? _posEntries[0].scan : null;
+                let mapRangMoyen = null;
+                const _buildCarteHtml = (posKw, posScan, mapElId) => {
+                  if (!posScan || !(posScan.cells||[]).length) return { html: "", rangMoyen: null };
+                  const gs = posScan.gridSize || Math.round(Math.sqrt(posScan.cells.length));
+                  const rayonKm = posScan.rayon || 20;
+                  const cells = posScan.cells;
+                  const valid = cells.filter(r=>r!=null);
+                  const rangMoyen = valid.length ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1) : null;
+                  const pctTrouve = valid.length ? Math.round(valid.filter(r=>r<=20).length/valid.length*100) : 0;
+                  const scanDateStr = posScan.date ? new Date(posScan.date).toLocaleDateString("fr-FR") : "";
+                  const html = `<div class="rp-section">🗺️ Carte de positionnement local — "${posKw}"</div>
+                  <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+                    <div style="display:flex;gap:18px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:13px;padding:14px 20px">
+                      <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#6B40D8;line-height:1">${rangMoyen!=null?rangMoyen:"—"}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Rang moyen</div></div>
+                      <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#059669;line-height:1">${pctTrouve}%</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Trouvé top 20</div></div>
+                      <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#374151;line-height:1">${valid.length}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Points scannés</div></div>
+                    </div>
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:#6B7280">
+                      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#059669;display:inline-block"></span>Top 3</span>
+                      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#d97706;display:inline-block"></span>Top 10</span>
+                      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#E85A30;display:inline-block"></span>Top 20</span>
+                      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block"></span>Hors top 20</span>
+                      <span style="display:flex;align-items:center;gap:4px"><span style="font-size:13px">📍</span>Votre établissement</span>
+                    </div>
+                  </div>
+                  <div id="${mapElId}" style="height:280px;border-radius:13px;overflow:hidden;border:1px solid #E5E7EB;margin-bottom:10px;background:#F4F5FA"></div>
+                  <div style="font-size:11.5px;color:#9CA3AF;margin:0 0 24px;line-height:1.6">Carte du scan géographique réel autour de votre établissement (zone locale de ${rayonKm} km de rayon, grille ${gs}×${gs}${scanDateStr?`, scan du ${scanDateStr}`:""}) — chaque point représente votre position effective sur Google Maps à cet endroit pour « ${posKw} ». Ce scan est régénéré régulièrement dans le cadre de notre suivi continu, pour cibler précisément les zones à renforcer en priorité.</div>`;
+                  return { html, rangMoyen };
+                };
+                const _carte1 = _buildCarteHtml(_posEntries[0]?.kw, _posEntries[0]?.scan, "rapport-positioning-map");
+                const _carte2 = _posEntries[1] ? _buildCarteHtml(_posEntries[1].kw, _posEntries[1].scan, "rapport-positioning-map-2") : { html: "", rangMoyen: null };
+                mapRangMoyen = _carte1.rangMoyen;
+                const carteHtml = _carte1.html + _carte2.html;
+
+                // ── PROJECTIONS À 3 MOIS (basées sur le suivi mensuel du client, si renseigné) ──
+                let monthlyStatsArr = [];
+                try { monthlyStatsArr = JSON.parse(localStorage.getItem(`bto_monthly_stats_${e.id}`) || "[]"); } catch {}
+                const lastStats = monthlyStatsArr.length ? monthlyStatsArr[monthlyStatsArr.length-1] : null;
+                const upliftPct = t2 < 50 ? 0.35 : t2 < 70 ? 0.25 : 0.15;
+                const numOr = (v) => { const n2 = parseFloat(v); return (v!=null && v!=="" && !isNaN(n2)) ? n2 : null; };
+                const baseVues   = numOr(lastStats && lastStats.vues);
+                const baseAppels = numOr(lastStats && lastStats.appels);
+                const baseClics  = numOr(lastStats && lastStats.clics);
+                const baseItin   = baseVues!=null ? Math.round(baseVues*0.045) : null;
+                const projRow = (icon,label,base) => base!=null ? { icon, label, actuel:Math.round(base), objectif:Math.round(base*(1+upliftPct)) } : null;
+                const projections = [
+                  projRow("👁️","Vues de la fiche / mois",baseVues),
+                  projRow("📞","Appels reçus / mois",baseAppels),
+                  projRow("🔗","Clics vers le site / mois",baseClics),
+                  projRow("🧭","Demandes d'itinéraire / mois",baseItin),
+                ].filter(Boolean);
+                let projectionsHtml = "";
+                if (projections.length) {
+                  projectionsHtml = `<div class="rp-section">📊 Projections à 3 mois</div>
+                  <div style="font-size:12.5px;color:#6B7280;line-height:1.6;margin-bottom:14px">Sur la base de vos statistiques actuelles et d'une optimisation continue de la fiche (+${Math.round(upliftPct*100)}% en moyenne sur 3 mois selon le niveau de votre score actuel), voici une projection réaliste de vos retombées :</div>
+                  <table class="bench-table" style="margin-bottom:6px">
+                    <thead><tr><th>Indicateur</th><th>Actuel</th><th>Objectif 3 mois</th><th>Évolution</th></tr></thead>
+                    <tbody>${projections.map(p=>`<tr><td>${p.icon} ${p.label}</td><td><strong>${p.actuel}</strong></td><td style="color:#059669;font-weight:700">${p.objectif}</td><td style="color:#059669;font-weight:700">+${p.objectif-p.actuel}</td></tr>`).join("")}</tbody>
+                  </table>
+                  <div style="font-size:10.5px;color:#D1D5DB;margin-bottom:24px">* Estimations basées sur vos statistiques mensuelles renseignées (vues, appels, clics) et un objectif d'optimisation continue de la fiche. Les demandes d'itinéraire sont estimées proportionnellement au volume de vues.</div>`;
+                } else {
+                  projectionsHtml = `<div class="rp-section">📊 Projections à 3 mois</div>
+                  <div style="background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;font-size:13px;color:#9CA3AF;margin-bottom:24px">Renseignez le suivi mensuel (vues, appels, clics) de cette fiche pour afficher des projections personnalisées à 3 mois.</div>`;
+                }
+
+                // ── CE QUE VOUS PERDEZ EN NE FAISANT RIEN ──
+                let lossHtml = "";
+                {
+                  const lossPoints = [];
+                  if (weaknesses.length) lossPoints.push(`Vos points de vigilance actuels (${weaknesses.slice(0,2).join(", ").replace(/\.$/,"").toLowerCase()}) restent autant d'opportunités laissées à la concurrence tant qu'ils ne sont pas traités.`);
+                  if (pos !== "—" && parseInt(pos) > 3) lossPoints.push(`En position #${pos} sur Google Maps, une partie des recherches locales se conclut directement chez les établissements mieux classés — souvent avant même que votre fiche soit consultée.`);
+                  if (t2 < 70) lossPoints.push(`Avec un score de ${t2}/100, votre fiche reste sous le seuil de compétitivité (70/100) : chaque mois sans action laisse l'écart se creuser plutôt que se combler.`);
+                  lossPoints.push(`Une fiche qui n'évolue pas (peu de posts récents, photos non renouvelées, avis sans réponse) envoie à Google — et à vos clients — un signal d'inactivité qui pèse directement sur la visibilité locale.`);
+                  lossHtml = `<div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:13px;padding:18px 20px;margin-bottom:24px">
+                    <div style="font-size:11px;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px">⚠️ Ce que vous perdez en ne faisant rien</div>
+                    ${lossPoints.slice(0,3).map(pt=>`<div style="display:flex;gap:8px;margin-bottom:8px;font-size:12.5px;color:#374151;line-height:1.6"><span style="color:#dc2626;flex-shrink:0;font-weight:900">→</span>${pt}</div>`).join("")}
+                    <div style="font-size:11.5px;color:#9CA3AF;margin-top:8px;line-height:1.6">Sur Google Maps, les positions évoluent en continu : sans actions régulières, l'écart avec les concurrents les mieux placés tend à se creuser plutôt qu'à se résorber de lui-même.</div>
+                  </div>`;
+                }
+
+                // ── PETITES NOTES NARRATIVES « NOTRE LECTURE » (entre les modules) ──
+                const noteBox = (txt) => `<div style="font-size:11.5px;color:#6B7280;font-style:italic;line-height:1.6;margin:0 0 24px;padding:11px 15px;background:#F9FAFB;border-left:3px solid #6B40D8;border-radius:0 8px 8px 0">💬 <strong style="color:#6B40D8;font-style:normal">Notre lecture —</strong> ${txt}</div>`;
+                const weakestPillar = (() => {
+                  let min = null;
+                  [["pertinence","Pertinence","la cohérence entre votre fiche et les recherches de vos clients"],
+                   ["proximite","Proximité","votre couverture géographique locale"],
+                   ["notoriete","Notoriété","votre notoriété — avis, photos, posts — face aux concurrents"]]
+                  .forEach(([k,label,desc])=>{ const s = pls(k); if (s!=null && (min==null || s<min.score)) min = {label,desc,score:s}; });
+                  return min;
+                })();
+                const noteForces = weakestPillar ? noteBox(`le pilier <strong>${weakestPillar.label}</strong> (${weakestPillar.score}/100) est aujourd'hui le plus pénalisant — il porte sur ${weakestPillar.desc}. C'est l'un des leviers que nous travaillons en priorité dans le cadre de notre accompagnement mensuel.`) : "";
+                const noteBenchmark = comps.length ? noteBox(`${comps[0].name||"le premier acteur local"} domine actuellement la zone${(comps[0].reviews && reviewCount && reviewCount!=="—") ? ` avec ${comps[0].reviews} avis contre ${reviewCount} pour votre fiche` : ""}. Notre veille concurrentielle mensuelle permet d'identifier en continu les opportunités concrètes de rattrapage.`) : "";
+                const topPriorityKw = allKws.find(k=>k.priority==="Urgent") || allKws.find(k=>k.priority==="TOP");
+                const noteKeywords = topPriorityKw ? noteBox(`le mot-clé « ${topPriorityKw.kw} » mérite une attention ${topPriorityKw.priority==="Urgent"?"urgente":"prioritaire"} — ${topPriorityKw.action ? topPriorityKw.action.toLowerCase() : "une action ciblée peut faire progresser la position rapidement"}. C'est le type d'optimisation que nous pilotons chaque mois pour vous, via le suivi continu des mots-clés.`) : "";
 
                 const css = `<style>
                   .rp-page{background:white;width:100%;margin-bottom:20px;position:relative;overflow:hidden}
@@ -25843,6 +28247,9 @@ function TemplatesTab({
                   .kw-table th{padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;border-bottom:2px solid #E5E7EB;background:#F9FAFB}
                   .kw-table td{padding:8px 10px;border-bottom:1px solid #F9FAFB;color:#374151}
                   .rm-dot{background:#dc2626!important}
+                  .rp-map-tt{background:transparent!important;border:none!important;box-shadow:none!important;color:white;font-weight:800;font-size:11px;padding:0!important}
+                  .rp-map-tt::before{display:none!important}
+                  .leaflet-container{font-family:inherit}
                 </style>`;
 
                 // ── PAGE 1 COVER ──
@@ -25866,50 +28273,37 @@ function TemplatesTab({
 
                     <!-- Score hero -->
                     <div style="display:flex;align-items:center;gap:20px;background:white;border:1.5px solid #E9D5FF;border-radius:18px;padding:22px 28px;box-shadow:0 6px 24px rgba(107,64,216,.09);margin-bottom:24px;max-width:500px;width:100%">
-                      <div style="width:84px;height:84px;border-radius:50%;background:conic-gradient(${sc} 0% ${t}%, #F4F5FA ${t}% 100%);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                      <div style="width:84px;height:84px;border-radius:50%;background:conic-gradient(${sc} 0% ${t2}%, #F4F5FA ${t2}% 100%);display:flex;align-items:center;justify-content:center;flex-shrink:0">
                         <div style="width:66px;height:66px;border-radius:50%;background:white;display:flex;flex-direction:column;align-items:center;justify-content:center">
-                          <div style="font-size:26px;font-weight:900;color:${sc};line-height:1">${t}</div>
+                          <div style="font-size:26px;font-weight:900;color:${sc};line-height:1">${t2}</div>
                           <div style="font-size:10px;color:#9CA3AF">/100</div>
                         </div>
                       </div>
                       <div style="flex:1;text-align:left">
                         <div style="font-size:16px;font-weight:900;color:#1E1B30;margin-bottom:3px">Score de visibilité globale</div>
-                        <div style="font-size:12px;color:#6B7280;line-height:1.5;margin-bottom:8px">${t < 50 ? "Fiche <strong style='color:#dc2626'>en dessous du seuil de compétitivité</strong> (70/100). Des optimisations régulières sont indispensables." : t < 70 ? "Fiche <strong style='color:#d97706'>en progression</strong> — des optimisations ciblées permettront d'atteindre le TOP 3." : "Fiche <strong style='color:#059669'>compétitive</strong> — l'enjeu est maintenant de maintenir et consolider la position."}</div>
+                        <div style="font-size:12px;color:#6B7280;line-height:1.5;margin-bottom:8px">${t2 < 50 ? "Fiche <strong style='color:#dc2626'>en dessous du seuil de compétitivité</strong> (70/100). Des optimisations régulières sont indispensables." : t2 < 70 ? "Fiche <strong style='color:#d97706'>en progression</strong> — des optimisations ciblées permettront d'atteindre le TOP 3." : "Fiche <strong style='color:#059669'>compétitive</strong> — l'enjeu est maintenant de maintenir et consolider la position."}</div>
                         <div style="height:7px;background:#F4F5FA;border-radius:4px;overflow:hidden">
-                          <div style="width:${t}%;height:100%;background:linear-gradient(90deg,${sc},${sc}aa);border-radius:4px"></div>
+                          <div style="width:${t2}%;height:100%;background:linear-gradient(90deg,${sc},${sc}aa);border-radius:4px"></div>
                         </div>
                         <div style="display:flex;justify-content:space-between;font-size:9px;color:#D1D5DB;margin-top:3px"><span>0 — Invisible</span><span>50 — Compétitif</span><span>100 — Leader</span></div>
                       </div>
                     </div>
 
-                    <!-- 3 cartes alert -->
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:500px;width:100%;margin-bottom:24px">
-                      <div style="background:white;border:1.5px solid #E5E7EB;border-radius:14px;padding:16px 12px;text-align:center;border-top:3px solid #dc2626;box-shadow:0 2px 8px rgba(0,0,0,.04)">
-                        <div style="font-size:18px;margin-bottom:6px">👆</div>
-                        <div style="font-size:28px;font-weight:900;color:#dc2626;line-height:1">×3</div>
-                        <div style="font-size:11.5px;color:#6B7280;margin-top:5px;line-height:1.4">moins de clics que<br>le leader local</div>
-                      </div>
-                      <div style="background:white;border:1.5px solid #E5E7EB;border-radius:14px;padding:16px 12px;text-align:center;border-top:3px solid #d97706;box-shadow:0 2px 8px rgba(0,0,0,.04)">
-                        <div style="font-size:18px;margin-bottom:6px">👁️</div>
-                        <div style="font-size:28px;font-weight:900;color:#d97706;line-height:1">−68%</div>
-                        <div style="font-size:11.5px;color:#6B7280;margin-top:5px;line-height:1.4">de visibilité<br>sur votre zone</div>
-                      </div>
-                      <div style="background:white;border:1.5px solid #E5E7EB;border-radius:14px;padding:16px 12px;text-align:center;border-top:3px solid #6B40D8;box-shadow:0 2px 8px rgba(0,0,0,.04)">
-                        <div style="font-size:18px;margin-bottom:6px">📍</div>
-                        <div style="font-size:28px;font-weight:900;color:#6B40D8;line-height:1">${pos!=="—"?"#"+pos:"—"}</div>
-                        <div style="font-size:11.5px;color:#6B7280;margin-top:5px;line-height:1.4">position actuelle<br>Google Maps</div>
-                      </div>
-                    </div>
-
-                    <!-- Piliers -->
-                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-width:500px;width:100%">
-                      ${[["Pertinence","pertinence"],["Proximité","proximite"],["Notoriété","prominence"],["Avis","avis"],["Complétion","completion"]].map(([label,key])=>{const s=pls(key);const c=plc(s);return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:12px 8px;text-align:center;border-top:3px solid ${c}"><div style="font-size:22px;font-weight:900;color:${c};line-height:1">${s!==null?s:"—"}</div><div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${s||0}%;height:100%;background:${c};border-radius:2px"></div></div><div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">${label}</div></div>`;}).join("")}
+                    <!-- Piliers réels + position actuelle (carte de positionnement) -->
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:560px;width:100%">
+                      ${[["🎯","Pertinence","pert"],["📍","Proximité","prox"],["⭐","Notoriété","notor"]].map(([icon,label,key])=>{const s=pls(key==="pert"?"pertinence":key==="prox"?"proximite":"notoriete");const c=plc(s);return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${c}"><div style="font-size:20px;margin-bottom:6px">${icon}</div><div style="font-size:22px;font-weight:900;color:${c};line-height:1">${s!==null?s:"—"}</div><div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${s||0}%;height:100%;background:${c};border-radius:2px"></div></div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">${label}</div></div>`;}).join("")}
+                      ${(() => { const rv = mapRangMoyen!=null ? parseFloat(mapRangMoyen) : null; const pc = rv!=null ? (rv<=3?"#059669":"#d97706") : "#9CA3AF"; return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${pc}">
+                        <div style="font-size:20px;margin-bottom:6px">📍</div>
+                        <div style="font-size:22px;font-weight:900;color:${pc};line-height:1">${mapRangMoyen!=null?mapRangMoyen:(pos!=="—"?"#"+pos:"—")}</div>
+                        <div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${rv!=null?Math.max(0,100-Math.min(100,rv*5)):0}%;height:100%;background:${pc};border-radius:2px"></div></div>
+                        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">Position actuelle<br>Google Maps</div>
+                      </div>`; })()}
                     </div>
                   </div>
 
                   <div style="padding:16px 44px;border-top:1px solid #F4F5FA;display:flex;justify-content:space-between;align-items:center">
                     <div style="display:flex;align-items:center;gap:10px">
-                      <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,#E85A30,#C03080);display:flex;align-items:center;justify-content:center;font-size:16px;color:white">🏢</div>
+                      <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,#E85A30,#C03080);display:flex;align-items:center;justify-content:center;font-size:16px;color:white">${e.icon || "🏢"}</div>
                       <div>
                         <div style="font-size:14px;font-weight:700;color:#1E1B30">${clientName}</div>
                         <div style="font-size:11px;color:#9CA3AF">${clientCat}${clientCity?" · "+clientCity:""}</div>
@@ -25931,6 +28325,7 @@ function TemplatesTab({
                       <div style="font-size:11px;color:#9CA3AF;text-align:right">${clientName}${clientCat?" · "+clientCat:""}<br><strong style="color:#374151">Diagnostic & Benchmark</strong></div>
                     </div>
 
+                    ${!sec.forces ? "" : `
                     <div class="rp-section">💡 Forces & axes d'amélioration</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
                       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px">
@@ -25942,26 +28337,31 @@ function TemplatesTab({
                         ${weaknesses.length?weaknesses.map(s=>`<div style="display:flex;gap:7px;margin-bottom:7px;font-size:12.5px;color:#374151;line-height:1.5"><span style="color:#dc2626;font-weight:900;flex-shrink:0">!</span>${s}</div>`).join(""):`<div style="font-size:12px;color:#9CA3AF">Lancez un audit pour obtenir l'analyse</div>`}
                       </div>
                     </div>
+                    ${noteForces}`}
 
+                    ${!sec.benchmark ? "" : `
                     <div class="rp-section">🏆 Benchmark vs concurrents locaux</div>
+                    ${hasRealComps ? `<div style="font-size:11px;color:#9CA3AF;margin:-6px 0 10px;display:flex;align-items:center;gap:6px">🗺️ Concurrents issus du scan carte — ${_scanCompKw||""}${_scanCompDate?` · ${new Date(_scanCompDate).toLocaleDateString("fr-FR")}`:""} · classés par fréquence d'apparition</div>` : ""}
                     <table class="bench-table">
-                      <thead><tr><th>Rang</th><th>Établissement</th><th>Note</th><th>Avis</th><th>Photos</th><th>Posts</th><th>Réponses</th><th>Écart à combler</th></tr></thead>
+                      <thead><tr><th>Établissement</th><th>Note</th><th>Avis</th>${hasRealComps?`<th>Visibilité</th><th>Rang moy.</th>`:`<th>Photos</th><th>Posts</th><th>Réponses</th>`}</tr></thead>
                       <tbody>
-                        ${comps.slice(0,3).map((c,i)=>{const badges=["🥇","🥈","🥉"];return`<tr><td>${badges[i]||"#"+(i+1)}</td><td>${c.name||"—"}</td><td>${c.rating?"⭐ "+c.rating:"—"}</td><td>${c.reviews||"—"}</td><td>${c.photos||"—"}</td><td>${c.posts?"✅":"❌"}</td><td>${c.responseRate||"—"}</td><td style="font-size:11px;color:#6B7280">${i===0?"Référence #1":"—"}</td></tr>`;}).join("")}
-                        <tr class="me"><td>👤</td><td><strong>${clientName}</strong> <em style="font-size:10px;color:#9CA3AF;font-weight:400">(vous)</em></td><td>${rating?"⭐ "+rating:"—"}</td><td>${reviewCount}</td><td>${photoCount}</td><td>—</td><td>—</td><td style="font-size:11px;color:#dc2626;font-weight:700">Voir actions ci-dessous</td></tr>
+                        ${comps.slice(0,10).slice().sort((a,b)=>{const ra=(a.avgRank==null?99:a.avgRank),rb=(b.avgRank==null?99:b.avgRank);return ra-rb;}).map((c)=>{return`<tr><td>${c.name||"—"}</td><td>${c.rating?"⭐ "+c.rating:"—"}</td><td>${c.reviews||"—"}</td>${hasRealComps?`<td>${c.visibilityPct!=null?c.visibilityPct+"%":"—"}</td><td>${c.avgRank?"#"+c.avgRank:"—"}</td>`:`<td>${c.photos||"—"}</td><td>${c.posts?"✅":"❌"}</td><td>${c.responseRate||"—"}</td>`}</tr>`;}).join("")}
                       </tbody>
                     </table>
+                    ${noteBenchmark}`}
 
-                    ${qw.length?`<div style="background:linear-gradient(135deg,#EEF2FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:13px;padding:18px 20px;margin-bottom:24px">
+                    ${(!sec.quickwins || !qw.length)?"":`<div style="background:linear-gradient(135deg,#EEF2FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:13px;padding:18px 20px;margin-bottom:16px">
                       <div style="font-size:11px;font-weight:800;color:#3B5BDB;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px">⚡ 3 actions rapides — résultats en moins de 30 jours</div>
                       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${qw.map((q,i)=>`<div style="background:white;border-radius:9px;padding:11px 13px;border:1px solid #E9D5FF;font-size:12px;color:#374151;line-height:1.4;display:flex;gap:7px;align-items:flex-start"><div style="width:19px;height:19px;background:linear-gradient(135deg,#6B40D8,#C03080);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:white;flex-shrink:0;margin-top:1px">${i+1}</div>${q}</div>`).join("")}</div>
-                    </div>`:""}
+                    </div>
+                    ${lossHtml}`}
 
+                    ${!sec.keywords ? "" : `
                     <div class="rp-section">🔍 Mots-clés & positionnement</div>
-                    ${allKws.length?`<table class="kw-table">
-                      <thead><tr><th>Mot-clé</th><th>Volume</th><th>Position</th><th>Évolution</th><th>Priorité</th><th>Action</th></tr></thead>
-                      <tbody>${allKws.map(k=>`<tr><td><strong>${k.kw}</strong></td><td>${k.volume||"—"}</td><td>${pb(k.position)}</td><td>${evoSpan(k.evolutionDir,k.evolution)}</td><td>${prioSpan(k.priority)}</td><td style="font-size:11px;color:#6B7280">${k.action||"—"}</td></tr>`).join("")}</tbody>
-                    </table>`:`<div style="background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;font-size:13px;color:#9CA3AF;margin-bottom:24px">Lancez un audit pour obtenir les mots-clés et positions</div>`}
+                    ${allKws.length?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px">${allKws.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;background:#F5F3FF;border:1px solid #E9D5FF;color:#6B40D8;font-weight:700;font-size:12px;padding:7px 14px;border-radius:20px">🔑 ${k.kw}</span>`).join("")}</div>
+                    <div style="font-size:11px;color:#9CA3AF;margin:-10px 0 18px;line-height:1.5">Mots-clés stratégiques identifiés pour votre activité — leur position réelle est mesurée et suivie via le scan carte ci-dessous (données toujours à jour, sans estimation).</div>`:`<div style="background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;font-size:13px;color:#9CA3AF;margin-bottom:24px">Lancez un audit pour obtenir les mots-clés</div>`}
+                    ${noteKeywords}
+                    ${carteHtml}`}
                   </div>
                 </div>`;
 
@@ -25983,11 +28383,14 @@ function TemplatesTab({
                       <div style="font-size:12.5px;color:#374151;line-height:1.6">Les premiers résultats sont visibles sous 90 jours. Mais <strong>Google Maps est un travail continu</strong> : chaque semaine sans action, un concurrent peut vous dépasser. Maintenir le TOP 3 demande des optimisations régulières — posts, avis, photos, mots-clés — tout au long de l'année.</div></div>
                     </div>
 
+                    ${!sec.plan90 ? "" : `
                     <div class="rp-section">📈 Premiers résultats visibles — 90 jours</div>
                     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px">
                       ${[["TOP 3","Position cible sur votre mot-clé principal"],["×2.5","Clics sur votre fiche Google"],["75+","Score global fiche (actuellement "+t+")"],["−68%","Écart de visibilité comblé vs leader"]].map(([n2,l2])=>`<div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1px solid #E9D5FF;border-radius:12px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:#6B40D8;line-height:1">${n2}</div><div style="font-size:11px;color:#6B7280;margin-top:5px;line-height:1.4">${l2}</div></div>`).join("")}
                     </div>
+                    ${projectionsHtml}`}
 
+                    ${!sec.roadmap ? "" : `
                     <div class="rp-section">🗺️ Roadmap mois par mois</div>
                     ${[[rm1,"#dc2626","#fef2f2","#fecaca","Mois 1","Fondations"],
                        [rm2,"#d97706","#fffbeb","#fde68a","Mois 2","Notoriété & Contenu"],
@@ -26000,7 +28403,7 @@ function TemplatesTab({
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
                           ${(rm.actions||[]).filter(a=>a&&!a.includes("action")).slice(0,4).map((a,i)=>`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div>${a}</div>`).join("")}
                         </div>
-                      </div>`).join("")}
+                      </div>`).join("")}`}
 
                     <div style="background:linear-gradient(135deg,#F5F3FF,#EEF2FF);border:1.5px solid #C4B5FD;border-radius:13px;padding:16px 18px">
                       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
@@ -26028,9 +28431,12 @@ function TemplatesTab({
                     </div>
 
                     <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
-                      <div style="font-size:14px;font-weight:800;color:#1E1B30;margin-bottom:16px;display:flex;align-items:center;gap:7px;justify-content:center">📞 Parlons-en — consultation gratuite 30 min</div>
-                      ${z?`<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px;color:#374151"><div style="width:30px;height:30px;border-radius:7px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📧</div><strong style="color:#6B40D8">${z}</strong></div>`:""}
-                      ${h?`<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px;color:#374151"><div style="width:30px;height:30px;border-radius:7px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📞</div><strong style="color:#6B40D8">${h}</strong></div>`:""}
+                      <div style="font-size:15px;font-weight:800;color:#1E1B30;margin-bottom:5px;text-align:center">Parlons-en, consultation offerte 30 min</div>
+                      ${(() => { const _nm = j || "Agence Be The One"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full}</div>`; })()}
+                      <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
+                        ${(() => { const _em = z || "contact@agence-betheone.fr"; return `<div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📧</span><strong style="color:#6B40D8">${_em}</strong></div>`; })()}
+                        ${h?`<div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📞</span><strong style="color:#6B40D8">${h}</strong></div>`:""}
+                      </div>
                     </div>
 
                     <div style="font-size:11.5px;color:#9CA3AF;border-top:1px solid #F4F5FA;padding-top:18px;max-width:400px;line-height:1.6">
@@ -26043,7 +28449,65 @@ function TemplatesTab({
                   </div>
                 </div>`;
 
-                return css + cover + page2 + page3 + page4;
+                const pageParrainage = `<div class="rp-page">
+                  <div class="rp-top-bar"></div>
+                  <div style="padding:44px 50px">
+                    <div style="border-radius:18px;overflow:hidden;border:1.5px solid #E9D5FF">
+                      <!-- Header gradient -->
+                      <div style="background:linear-gradient(135deg,#6B40D8 0%,#C03080 60%,#E85A30 100%);padding:28px 32px;color:white;text-align:center">
+                        <div style="display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);border-radius:20px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;padding:4px 14px;margin-bottom:12px">🎁 Programme de parrainage</div>
+                        <div style="font-size:20px;font-weight:900;margin-bottom:8px">Parrainez, cumulez les avantages</div>
+                        <div style="font-size:12.5px;opacity:.88;font-weight:500;max-width:480px;margin:0 auto;line-height:1.55">Recommandez Be The One à vos contacts. Chaque filleul qui signe un contrat vous rapporte un avantage — sans limite et cumulable.</div>
+                      </div>
+                      <!-- Body -->
+                      <div style="background:white;padding:26px 28px 30px">
+                        <!-- Paliers -->
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-radius:12px;overflow:hidden;border:1.5px solid #E9D5FF;margin-bottom:16px">
+                          <div style="padding:18px 14px;text-align:center;background:#FAFAFF;border-right:1.5px solid #E9D5FF">
+                            <div style="font-size:22px;margin-bottom:7px">👤</div>
+                            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#9CA3AF;margin-bottom:5px">1 filleul</div>
+                            <div style="font-size:20px;font-weight:900;color:#6B40D8;line-height:1;margin-bottom:3px">−50%</div>
+                            <div style="font-size:11px;color:#6B7280;font-weight:600">sur 1 mois</div>
+                          </div>
+                          <div style="padding:18px 14px;text-align:center;background:#FAFAFF;border-right:1.5px solid #E9D5FF">
+                            <div style="font-size:22px;margin-bottom:7px">👥</div>
+                            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#9CA3AF;margin-bottom:5px">2 filleuls</div>
+                            <div style="font-size:20px;font-weight:900;background:linear-gradient(90deg,#6B40D8,#C03080);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:3px">1 mois offert</div>
+                            <div style="font-size:11px;color:#6B7280;font-weight:600">100% gratuit</div>
+                          </div>
+                          <div style="padding:18px 14px;text-align:center;background:linear-gradient(160deg,#F5F0FF 0%,#FFF0F8 100%)">
+                            <div style="font-size:22px;margin-bottom:7px">🚀</div>
+                            <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#9CA3AF;margin-bottom:5px">3 filleuls et +</div>
+                            <div style="font-size:20px;font-weight:900;background:linear-gradient(90deg,#6B40D8,#C03080);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;margin-bottom:3px">1 mois offert</div>
+                            <div style="font-size:11px;color:#6B7280;font-weight:600">par filleul supplémentaire</div>
+                          </div>
+                        </div>
+                        <div style="text-align:center;font-size:11px;font-weight:700;color:#6B40D8;margin-bottom:18px">✨ Avantages cumulables sans limite</div>
+                        <!-- Steps -->
+                        <div style="background:#F8F6FF;border-radius:12px;padding:16px 18px;margin-bottom:18px">
+                          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#6B40D8;margin-bottom:12px">Comment ça marche ?</div>
+                          <div style="display:flex;gap:8px;align-items:flex-start">
+                            ${[["1","Recommandez Be The One à un contact"],["2","Votre filleul signe son contrat"],["3","Votre avantage est appliqué dès le mois suivant"]].map(([n,t2],i,a)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px"><div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#6B40D8,#C03080);color:white;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</div><div style="font-size:10.5px;color:#4B5563;font-weight:600;line-height:1.4">${t2}</div></div>${i<a.length-1?'<div style="font-size:13px;color:#C4B5FD;margin-top:3px;flex-shrink:0">→</div>':''}`).join("")}
+                          </div>
+                        </div>
+                        <!-- CTA -->
+                        <div style="display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#6B40D8,#C03080);border-radius:12px;padding:14px 18px;color:white">
+                          <div style="font-size:20px;flex-shrink:0">✉️</div>
+                          <div style="flex:1">
+                            <div style="font-size:13px;font-weight:800;margin-bottom:2px">Prêt à parrainer ?</div>
+                            <div style="font-size:11px;opacity:.88">Envoyez un email à <strong>${z || "contact@agence-betheone.fr"}</strong> en mentionnant le nom de votre filleul.</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="padding:14px 44px;border-top:1px solid #F4F5FA;display:flex;justify-content:space-between;align-items:center">
+                    <div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#6B40D8,#C03080);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white">B</div><span style="font-size:11px;color:#9CA3AF"><strong style="color:#6B7280">${j}</strong> · Programme de parrainage</span></div>
+                    <div style="font-size:10px;color:#D1D5DB">Document confidentiel · © ${new Date().getFullYear()} ${j}</div>
+                  </div>
+                </div>`;
+
+                return css + cover + page2 + page3 + pageParrainage + (sec.cta ? page4 : "");
               })()
             }
           })
@@ -26069,6 +28533,7 @@ const vt = [
     bg: "#ffffff",
   },
   { id: "Question", label: "Question", color: "#dc2626", bg: "#fef2f2" },
+  { id: "Coulisses", label: "Coulisses", color: "#7c3aed", bg: "#f5f3ff" },
 ];
 function PostPreviewModal({ post: e, client: t, onClose: i, onToggle: r }) {
   const o = vt.find((d) => d.id === e.type) || vt[0],
@@ -26456,7 +28921,7 @@ function PostEditTab({ client: e, upd: t, clients: i }) {
                 children: [
                   n.jsx("div", {
                     style: { fontSize: 40, marginBottom: 12 },
-                    children: "🤖",
+                    children: "✨",
                   }),
                   n.jsx("div", {
                     style: {
@@ -26717,203 +29182,6 @@ function PostEditTab({ client: e, upd: t, clients: i }) {
                       );
                     }),
                   }),
-                  n.jsxs("div", {
-                    style: { borderTop: "2px solid #e8edf5", paddingTop: 20 },
-                    children: [
-                      n.jsxs("div", {
-                        style: {
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          marginBottom: 16,
-                        },
-                        children: [
-                          n.jsxs("div", {
-                            children: [
-                              n.jsx("div", {
-                                style: {
-                                  ...ke,
-                                  fontSize: 22,
-                                  color: "var(--ink)",
-                                  marginBottom: 2,
-                                },
-                                children: "Bibliothèque de modèles",
-                              }),
-                              n.jsx("div", {
-                                style: { fontSize: 12.5, color: "var(--ink4)" },
-                                children:
-                                  "Templates génériques à personnaliser par client",
-                              }),
-                            ],
-                          }),
-                          n.jsx("input", {
-                            className: "inp",
-                            style: {
-                              maxWidth: 220,
-                              background: "var(--surface)",
-                            },
-                            value: a,
-                            onChange: (u) => d(u.target.value),
-                            placeholder: "Rechercher…",
-                          }),
-                        ],
-                      }),
-                      !a &&
-                        n.jsx("div", {
-                          style: {
-                            display: "flex",
-                            gap: 6,
-                            flexWrap: "wrap",
-                            marginBottom: 14,
-                          },
-                          children: xn.map((u, m) =>
-                            n.jsx(
-                              "button",
-                              {
-                                onClick: () => l(m),
-                                style: {
-                                  padding: "6px 14px",
-                                  borderRadius: 20,
-                                  border: `1.5px solid ${s === m ? u.color : "#F4F5FA"}`,
-                                  background: s === m ? u.bg : "#fff",
-                                  color: s === m ? u.color : "var(--ink3)",
-                                  fontWeight: s === m ? 700 : 500,
-                                  cursor: "pointer",
-                                  fontFamily: "inherit",
-                                  fontSize: 12,
-                                  transition: "all .2s",
-                                },
-                                children: u.cat,
-                              },
-                              m,
-                            ),
-                          ),
-                        }),
-                      n.jsx("div", {
-                        style: {
-                          display: "grid",
-                          gridTemplateColumns:
-                            "repeat(auto-fill,minmax(280px,1fr))",
-                          gap: 12,
-                        },
-                        children: h.flatMap((u) =>
-                          u.templates.map((m, C) => {
-                            const B = a
-                                ? xn.find((R) => R.templates.includes(m)) ||
-                                  xn[0]
-                                : xn[s],
-                              k = `lib-${B.cat}-${C}`;
-                            return n.jsxs(
-                              "div",
-                              {
-                                style: {
-                                  background: "var(--surface)",
-                                  borderRadius: 12,
-                                  border: "1px solid var(--border)",
-                                  borderTop: `3px solid ${B.color}`,
-                                  overflow: "hidden",
-                                },
-                                children: [
-                                  n.jsxs("div", {
-                                    style: {
-                                      padding: "10px 14px 8px",
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      alignItems: "center",
-                                      background: B.bg,
-                                    },
-                                    children: [
-                                      n.jsx("span", {
-                                        style: {
-                                          background: B.color,
-                                          color: "#fff",
-                                          borderRadius: 6,
-                                          padding: "2px 10px",
-                                          fontSize: 11,
-                                          fontWeight: 700,
-                                        },
-                                        children: m.title,
-                                      }),
-                                      n.jsx("button", {
-                                        onClick: () => g(m.content, k),
-                                        style: {
-                                          background:
-                                            p === k ? "#059669" : B.color,
-                                          color: "#fff",
-                                          border: "none",
-                                          borderRadius: 7,
-                                          padding: "5px 12px",
-                                          fontSize: 11.5,
-                                          cursor: "pointer",
-                                          fontFamily: "inherit",
-                                          fontWeight: 600,
-                                          transition: "background .2s",
-                                        },
-                                        children:
-                                          p === k ? "Copié !" : "Copier",
-                                      }),
-                                    ],
-                                  }),
-                                  n.jsx("div", {
-                                    style: { padding: "10px 14px" },
-                                    children: n.jsx("pre", {
-                                      style: {
-                                        fontSize: 12,
-                                        color: "var(--ink2)",
-                                        lineHeight: 1.7,
-                                        whiteSpace: "pre-wrap",
-                                        fontFamily: "inherit",
-                                        maxHeight: 160,
-                                        overflowY: "auto",
-                                        margin: 0,
-                                      },
-                                      children: m.content,
-                                    }),
-                                  }),
-                                ],
-                              },
-                              k,
-                            );
-                          }),
-                        ),
-                      }),
-                      n.jsx("div", {
-                        style: {
-                          marginTop: 16,
-                          background: "#F4F5FA",
-                          border: "1.5px solid #e0e7ff",
-                          borderRadius: 12,
-                          padding: "16px 20px",
-                          textAlign: "center",
-                        },
-                        children: n.jsxs("div", {
-                          style: {
-                            fontSize: 13,
-                            color: "var(--ink3)",
-                            lineHeight: 1.8,
-                          },
-                          children: [
-                            "Remplacez ",
-                            n.jsx("strong", {
-                              style: { color: "var(--indigo2)" },
-                              children: "[VotreVille]",
-                            }),
-                            ", ",
-                            n.jsx("strong", {
-                              style: { color: "var(--indigo2)" },
-                              children: "[VotreMétier]",
-                            }),
-                            ", ",
-                            n.jsx("strong", {
-                              style: { color: "var(--indigo2)" },
-                              children: "[Téléphone]",
-                            }),
-                            " avant de publier.",
-                          ],
-                        }),
-                      }),
-                    ],
-                  }),
                 ],
               }),
       }),
@@ -26926,419 +29194,6 @@ function PostEditTab({ client: e, upd: t, clients: i }) {
             I(r);
           },
         }),
-    ],
-  });
-}
-function TemplatesListTab({ client: e, clients: t, upd: i }) {
-  const [r, o] = D.useState("Autre"),
-    [s, l] = D.useState(null),
-    [a, d] = D.useState({}),
-    [p, b] = D.useState((e == null ? void 0 : e.id) || null),
-    [x, j] = D.useState(!1);
-  D.useEffect(() => {
-    var m, C;
-    if (!e) return;
-    const c = e.category || "",
-      u = Object.keys(er).find((B) =>
-        c.toLowerCase().includes(B.toLowerCase()),
-      );
-    (u && o(u),
-      d({
-        "[VILLE]": e.city || "",
-        "[NOM]": e.name || "",
-        "[TEL]":
-          ((C = (m = e.data) == null ? void 0 : m.extracted) == null
-            ? void 0
-            : C.phone) || "",
-        "[DATE]": "",
-        "[ANNÉES]": "",
-      }));
-  }, [e]);
-  const I = er[r] || er.Autre,
-    z = Object.keys(er),
-    g = (c) => {
-      let u = c;
-      return (
-        Object.entries(a).forEach(([m, C]) => {
-          C && (u = u.replaceAll(m, C));
-        }),
-        u
-      );
-    },
-    h = () => {
-      if (!s || !p) return;
-      const c = t.find((R) => R.id === p);
-      if (!c) return;
-      const u = new Date(),
-        m = new Date(u);
-      m.setDate(u.getDate() + ((8 - u.getDay()) % 7) || 7);
-      const C = m.toISOString().slice(0, 10),
-        B = {
-          id: Date.now().toString(),
-          type: s.type,
-          title: g(s.title),
-          content: g(s.content),
-          keywords: s.keywords.map((R) => g(R)),
-          cta: "",
-          done: !1,
-          fromTemplate: !0,
-        },
-        k = { ...(c.calPosts || {}) };
-      ((k[C] = [...(k[C] || []), B]),
-        i(t.map((R) => (R.id === c.id ? { ...R, calPosts: k } : R))),
-        j(!0),
-        setTimeout(() => j(!1), 2e3));
-    },
-    f = (c) =>
-      ({
-        Réalisation: { bg: "#ffffff", c: "var(--indigo)" },
-        Conseil: { bg: "#ffffff", c: "#059669" },
-        Offre: { bg: "#fffbeb", c: "#d97706" },
-        Témoignage: { bg: "#fdf4ff", c: "#9333ea" },
-        Actualité: { bg: "#F4F5FA", c: "#0891b2" },
-      })[c] || { bg: "var(--ground)", c: "var(--ink3)" };
-  return n.jsxs("div", {
-    style: { display: "flex", height: "100%", overflow: "hidden" },
-    children: [
-      n.jsxs("div", {
-        style: {
-          width: 300,
-          flexShrink: 0,
-          borderRight: "1px solid #E2E8F0",
-          overflowY: "auto",
-          background: "var(--surface)",
-          display: "flex",
-          flexDirection: "column",
-        },
-        children: [
-          n.jsxs("div", {
-            style: {
-              padding: "16px 16px 12px",
-              borderBottom: "1px solid var(--border)",
-              flexShrink: 0,
-            },
-            children: [
-              n.jsx("div", {
-                style: {
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "#94A3B8",
-                  textTransform: "uppercase",
-                  letterSpacing: ".6px",
-                  marginBottom: 8,
-                },
-                children: "Secteur",
-              }),
-              n.jsx("select", {
-                className: "inp",
-                value: r,
-                onChange: (c) => o(c.target.value),
-                style: { fontSize: 12.5, padding: "7px 10px" },
-                children: z.map((c) =>
-                  n.jsx("option", { value: c, children: c }, c),
-                ),
-              }),
-            ],
-          }),
-          n.jsx("div", {
-            style: { overflowY: "auto", flex: 1, padding: "10px 10px" },
-            children: I.map((c, u) => {
-              const m = f(c.type),
-                C = (s == null ? void 0 : s.title) === c.title;
-              return n.jsxs(
-                "div",
-                {
-                  onClick: () => l(c),
-                  style: {
-                    padding: "12px 14px",
-                    borderRadius: 12,
-                    marginBottom: 6,
-                    cursor: "pointer",
-                    background: C ? "#ffffff" : "var(--ground)",
-                    border: `1.5px solid ${C ? "var(--indigo)" : "transparent"}`,
-                    transition: "all .15s",
-                  },
-                  children: [
-                    n.jsx("div", {
-                      style: {
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 7,
-                        marginBottom: 5,
-                      },
-                      children: n.jsx("span", {
-                        style: {
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "2px 8px",
-                          borderRadius: 20,
-                          background: m.bg,
-                          color: m.c,
-                        },
-                        children: c.type,
-                      }),
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: C ? "var(--indigo)" : "var(--ink)",
-                        lineHeight: 1.4,
-                      },
-                      children: c.title,
-                    }),
-                  ],
-                },
-                u,
-              );
-            }),
-          }),
-        ],
-      }),
-      n.jsx("div", {
-        style: {
-          flex: 1,
-          overflowY: "auto",
-          padding: "20px 24px",
-          background: "#F4F5FA",
-        },
-        children: s
-          ? n.jsxs(n.Fragment, {
-              children: [
-                n.jsxs("div", {
-                  style: {
-                    background: "var(--surface)",
-                    borderRadius: 16,
-                    padding: "18px 20px",
-                    marginBottom: 16,
-                    border: "1px solid var(--border)",
-                  },
-                  children: [
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 11,
-                        fontWeight: 700,
-                        color: "var(--ink4)",
-                        textTransform: "uppercase",
-                        letterSpacing: ".6px",
-                        marginBottom: 12,
-                      },
-                      children: "Variables à personnaliser",
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 10,
-                      },
-                      children: Df.map((c) =>
-                        n.jsxs(
-                          "div",
-                          {
-                            children: [
-                              n.jsx("label", {
-                                style: {
-                                  fontSize: 11.5,
-                                  color: "var(--ink3)",
-                                  fontWeight: 500,
-                                  display: "block",
-                                  marginBottom: 4,
-                                },
-                                children: c,
-                              }),
-                              n.jsx("input", {
-                                className: "inp",
-                                value: a[c] || "",
-                                onChange: (u) =>
-                                  d((m) => ({ ...m, [c]: u.target.value })),
-                                placeholder:
-                                  c === "[VILLE]"
-                                    ? "Vannes"
-                                    : c === "[NOM]"
-                                      ? "Plomberie Martin"
-                                      : c === "[TEL]"
-                                        ? "02 97 XX XX XX"
-                                        : c === "[DATE]"
-                                          ? "31 mars"
-                                          : c === "[ANNÉES]"
-                                            ? "10"
-                                            : "",
-                                style: { fontSize: 12.5, padding: "7px 10px" },
-                              }),
-                            ],
-                          },
-                          c,
-                        ),
-                      ),
-                    }),
-                  ],
-                }),
-                n.jsxs("div", {
-                  style: {
-                    background: "var(--surface)",
-                    borderRadius: 16,
-                    padding: "20px",
-                    marginBottom: 16,
-                    border: "1px solid var(--border)",
-                  },
-                  children: [
-                    n.jsxs("div", {
-                      style: {
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        marginBottom: 14,
-                      },
-                      children: [
-                        n.jsx("span", {
-                          style: {
-                            fontSize: 11,
-                            fontWeight: 700,
-                            padding: "3px 10px",
-                            borderRadius: 20,
-                            ...f(s.type),
-                          },
-                          children: s.type,
-                        }),
-                        n.jsx("div", {
-                          style: {
-                            ...ke,
-                            fontSize: 17,
-                            color: "var(--ink)",
-                            flex: 1,
-                          },
-                          children: g(s.title),
-                        }),
-                      ],
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        fontSize: 13,
-                        color: "var(--ink2)",
-                        lineHeight: 1.9,
-                        whiteSpace: "pre-line",
-                        padding: "14px 16px",
-                        background: "#F4F5FA",
-                        borderRadius: 12,
-                        marginBottom: 12,
-                      },
-                      children: g(s.content),
-                    }),
-                    n.jsx("div", {
-                      style: { display: "flex", flexWrap: "wrap", gap: 6 },
-                      children: s.keywords.map((c, u) =>
-                        n.jsx(
-                          "span",
-                          {
-                            style: {
-                              background: "#F4F5FA",
-                              border: "1px solid #b8b8f8",
-                              borderRadius: 20,
-                              padding: "3px 10px",
-                              fontSize: 11,
-                              color: "#6B40D8",
-                              fontWeight: 600,
-                            },
-                            children: g(c),
-                          },
-                          u,
-                        ),
-                      ),
-                    }),
-                  ],
-                }),
-                n.jsxs("div", {
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  },
-                  children: [
-                    n.jsxs("select", {
-                      className: "inp",
-                      value: p || "",
-                      onChange: (c) => b(c.target.value),
-                      style: {
-                        flex: 1,
-                        minWidth: 160,
-                        fontSize: 12.5,
-                        padding: "8px 12px",
-                      },
-                      children: [
-                        n.jsx("option", {
-                          value: "",
-                          children: "— Choisir un client —",
-                        }),
-                        t.map((c) =>
-                          n.jsxs(
-                            "option",
-                            {
-                              value: c.id,
-                              children: [c.icon || "📍", " ", c.name],
-                            },
-                            c.id,
-                          ),
-                        ),
-                      ],
-                    }),
-                    n.jsx("button", {
-                      className: "btn",
-                      onClick: h,
-                      disabled: !p,
-                      style: {
-                        fontSize: 13,
-                        padding: "9px 18px",
-                        opacity: p ? 1 : 0.4,
-                      },
-                      children: x
-                        ? "✓ Ajouté au calendrier !"
-                        : "📅 Ajouter au calendrier",
-                    }),
-                    n.jsx("button", {
-                      className: "btn-ghost",
-                      onClick: () => {
-                        var c;
-                        ((c = navigator.clipboard) == null ||
-                          c.writeText(g(s.content)),
-                          j(!0),
-                          setTimeout(() => j(!1), 1500));
-                      },
-                      style: { fontSize: 12.5 },
-                      children: "📋 Copier",
-                    }),
-                  ],
-                }),
-              ],
-            })
-          : n.jsxs("div", {
-              style: {
-                textAlign: "center",
-                padding: "60px 20px",
-                color: "var(--ink4)",
-              },
-              children: [
-                n.jsx("div", {
-                  style: { fontSize: 36, marginBottom: 12 },
-                  children: "📝",
-                }),
-                n.jsx("div", {
-                  style: {
-                    ...ke,
-                    fontSize: 20,
-                    color: "var(--ink)",
-                    marginBottom: 6,
-                  },
-                  children: "Bibliothèque de templates",
-                }),
-                n.jsx("div", {
-                  style: { fontSize: 13 },
-                  children:
-                    "Sélectionnez un template à gauche pour le prévisualiser et le personnaliser.",
-                }),
-              ],
-            }),
-      }),
     ],
   });
 }
@@ -28293,7 +30148,10 @@ function CalendrierView({ clients: e, client: t, setSelClient: i, upd: r }) {
                         if (!F)
                           return n.jsx("div", { style: { minHeight: 80 } }, H);
                         const S = m(s, a, F),
-                          w = _[S] || [],
+                          wEditorial = (_[S] || []).map(p2 => ({...p2, _src:"cal"})),
+                          wScheduled = (t ? (t.scheduledPosts||[]).filter(p2=>p2.date===S).map(p2=>({ id:p2.id, type:"Actualite", title:(p2.text||"").slice(0,40)||"Post Google", done:p2.status==="published", _src:"google" })) : []),
+                          wPublished = (t ? (t.publishedPosts||[]).filter(p2=>p2.date===S).map(p2=>({ id:p2.id, type:p2.type||"Realisation", title:p2.title, done:true, _src:"published" })) : []),
+                          w = [...wEditorial, ...wScheduled, ...wPublished],
                           W =
                             F === o.getDate() &&
                             a === o.getMonth() &&
@@ -28375,10 +30233,11 @@ function CalendrierView({ clients: e, client: t, setSelClient: i, upd: r }) {
                                       gap: 3,
                                       padding: "2px 5px",
                                       borderRadius: 4,
-                                      background: $.done ? "#f0fdf4" : X.bg,
+                                      background: $.done ? "#f0fdf4" : $._src==="google" ? "#EFF6FF" : X.bg,
                                       marginBottom: 2,
                                       cursor: "pointer",
-                                      opacity: $.done ? 0.6 : 1,
+                                      opacity: $.done ? 0.7 : 1,
+                                      border: $._src==="google" ? "1px solid #BFDBFE" : "none",
                                     },
                                     children: [
                                       n.jsx("span", {
@@ -28386,9 +30245,7 @@ function CalendrierView({ clients: e, client: t, setSelClient: i, upd: r }) {
                                           width: 5,
                                           height: 5,
                                           borderRadius: "50%",
-                                          background: $.done
-                                            ? "#059669"
-                                            : X.color,
+                                          background: $.done ? "#059669" : $._src==="google" ? "#4285F4" : X.color,
                                           flexShrink: 0,
                                           display: "inline-block",
                                         },
@@ -28396,7 +30253,7 @@ function CalendrierView({ clients: e, client: t, setSelClient: i, upd: r }) {
                                       n.jsx("span", {
                                         style: {
                                           fontSize: 9.5,
-                                          color: $.done ? "#059669" : X.color,
+                                          color: $.done ? "#059669" : $._src==="google" ? "#1D4ED8" : X.color,
                                           fontWeight: 700,
                                           overflow: "hidden",
                                           whiteSpace: "nowrap",
@@ -28671,7 +30528,7 @@ function CalendrierView({ clients: e, client: t, setSelClient: i, upd: r }) {
                                                 fontWeight: 600,
                                                 flexShrink: 0,
                                               },
-                                              children: ["IA S", S.week],
+                                              children: ["Semaine ", S.week],
                                             }),
                                           n.jsx("button", {
                                             onClick: () => k(F, S.id),
@@ -28832,8 +30689,7 @@ function CalendrierPage({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) 
     p = e.find((j) => j.id === a) || e[0] || null,
     b = [
       { id: "calendrier", label: "📅 Calendrier" },
-      { id: "posts", label: "🤖 Posts IA" },
-      { id: "templates", label: "📝 Templates" },
+      { id: "posts", label: "✨ Publications" },
     ];
   return n.jsxs("div", {
     style: {
@@ -28919,7 +30775,7 @@ function CalendrierPage({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) 
           s === "calendrier" &&
             n.jsx(CalendrierView, { clients: e, client: p, setSelClient: d, upd: t }),
           s === "posts" && n.jsx(PostEditTab, { client: p, upd: t, clients: e }),
-          s === "templates" && n.jsx(TemplatesListTab, { client: p, clients: e, upd: t }),
+          false,
         ],
       }),
     ],

@@ -9,6 +9,9 @@ export default function handler(req, res) {
     redirect_uri: `${base}/api/auth/callback`,
     response_type: "code",
     scope: [
+      "openid",
+      "email",
+      "profile",
       "https://www.googleapis.com/auth/business.manage",
     ].join(" "),
     access_type: "offline",
