@@ -7937,7 +7937,7 @@ function App() {
         }
         // Charger les contracts
         const KEYS_TO_SYNC = ["bto_contracts","bto_paiements","gmb_monthly_obj",
-          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","bto_apikey"];
+          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","bto_apikey","bto_sara_notes"];
         for (const key of KEYS_TO_SYNC) {
           const val = await supaGet(key);
           if (val !== null && val !== undefined) localStorage.setItem(key, val);
@@ -9858,7 +9858,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                             (W = L.prospects) != null &&
                               W.length &&
                               localStorage.setItem(
-                                "gmb_prosp_v2",
+                                PROSPECTS_KEY,
                                 JSON.stringify(L.prospects),
                               ),
                             L.contracts &&
@@ -9895,7 +9895,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                   const y = {
                       clients: e,
                       prospects: JSON.parse(
-                        localStorage.getItem("gmb_prosp_v2") || "[]",
+                        localStorage.getItem(PROSPECTS_KEY) || "[]",
                       ),
                       contracts: u,
                       exportDate: new Date().toISOString(),
@@ -10225,11 +10225,9 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                       rows: 4,
                       value: g,
                       onChange: (y) => {
-                        (h(y.target.value),
-                          localStorage.setItem(
-                            "bto_sara_notes",
-                            y.target.value,
-                          ));
+                        h(y.target.value);
+                        localStorage.setItem("bto_sara_notes", y.target.value);
+                        supaSet("bto_sara_notes", y.target.value);
                       },
                       placeholder: "Idées, actions, rappels…",
                       style: { fontSize: 13, lineHeight: 1.7, margin: 0 },
@@ -11602,7 +11600,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
                 ]}),
               ]}),
               n.jsx("button",{
-                onClick:()=>i("facturation"),
+                onClick:()=>c("facturation"),
                 style:{padding:"7px 14px",borderRadius:8,border:"none",background:"#F59E0B",color:"white",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"},
                 children:"Voir facturation →",
               }),
