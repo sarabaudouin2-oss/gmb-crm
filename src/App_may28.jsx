@@ -2170,6 +2170,27 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
     [M, P] = D.useState("all"),
     [T, _] = D.useState(null),
     [U, V] = D.useState(null),
+    [searchQ, setSearchQ] = D.useState(""),
+    [filterCity, setFilterCity] = D.useState("all"),
+    [filterNoteMin, setFilterNoteMin] = D.useState(""),
+    [filterAvisMin, setFilterAvisMin] = D.useState(""),
+    [showFilters, setShowFilters] = D.useState(false),
+    [placesQuery, setPlacesQuery] = D.useState(""),
+    [placesCity, setPlacesCity] = D.useState("Vannes"),
+    [placesResults, setPlacesResults] = D.useState([]),
+    [placesLoading, setPlacesLoading] = D.useState(false),
+    [placesSelected, setPlacesSelected] = D.useState(new Set()),
+    [placesError, setPlacesError] = D.useState(""),
+    [placesAdded, setPlacesAdded] = D.useState(0),
+    [searchMode, setSearchMode] = D.useState("ia"),
+    [iaLoading, setIaLoading] = D.useState(false),
+    [iaSecteur, setIaSecteur] = D.useState(""),
+    [iaZone, setIaZone] = D.useState("Vannes, Morbihan"),
+    [iaResult, setIaResult] = D.useState(null),
+    [iaLeads, setIaLeads] = D.useState([]),
+    [iaSelected, setIaSelected] = D.useState(new Set()),
+    [iaAdded, setIaAdded] = D.useState(0),
+    [iaError, setIaError] = D.useState(""),
     G = (v, A) => {
       (_(A), (v.dataTransfer.effectAllowed = "move"));
     },
@@ -2322,19 +2343,22 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
     te = (v) => s.filter((A) => A.status === v).length,
     Q = s.filter((v) => v.status === "signe").length,
     Z = s.length > 0 ? Math.round((Q / s.length) * 100) : 0;
-  [...new Set(s.map((v) => v.category || "").filter(Boolean))].sort();
+  const allCategories = [...new Set(s.map((v) => v.category || "").filter(Boolean))].sort();
+  const allCities = [...new Set(s.map((v) => v.city || "").filter(Boolean))].sort();
+  const activeFiltersCount = [searchQ, filterCity !== "all" ? filterCity : "", filterNoteMin, filterAvisMin].filter(Boolean).length;
+  const resetFilters = () => { setSearchQ(""); setFilterCity("all"); setFilterNoteMin(""); setFilterAvisMin(""); P("all"); };
   const Y = (x === "all" ? s : s.filter((v) => v.status === x))
       .filter((v) => M === "all" || v.category === M)
+      .filter((v) => !searchQ || v.name.toLowerCase().includes(searchQ.toLowerCase()) || (v.city || "").toLowerCase().includes(searchQ.toLowerCase()) || (v.category || "").toLowerCase().includes(searchQ.toLowerCase()))
+      .filter((v) => filterCity === "all" || v.city === filterCity)
+      .filter((v) => !filterNoteMin || (parseFloat(v.note) || 0) >= parseFloat(filterNoteMin))
+      .filter((v) => !filterAvisMin || (parseInt(v.reviewCount) || 0) >= parseInt(filterAvisMin))
       .sort((v, A) => {
         const q = N === "asc" ? 1 : -1;
         return k === "note"
-          ? (parseFloat(v.note) || 0) > (parseFloat(A.note) || 0)
-            ? q
-            : -q
+          ? (parseFloat(v.note) || 0) > (parseFloat(A.note) || 0) ? q : -q
           : k === "reviewCount"
-            ? (parseInt(v.reviewCount) || 0) > (parseInt(A.reviewCount) || 0)
-              ? q
-              : -q
+            ? (parseInt(v.reviewCount) || 0) > (parseInt(A.reviewCount) || 0) ? q : -q
             : k === "name"
               ? v.name.localeCompare(A.name) * q
               : (new Date(A.dateAdded || 0) - new Date(v.dateAdded || 0)) * q;
@@ -2408,6 +2432,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
                     children: [
                       { id: "pipeline", l: "Pipeline" },
                       { id: "list", l: "Liste" },
+                      { id: "search", l: "🔍 Chercher" },
                     ].map((v) =>
                       n.jsx(
                         "button",
@@ -2727,6 +2752,163 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
             ],
           }),
           n.jsxs("div", {
+            style: {
+              background: "white",
+              borderBottom: "1px solid #E5E7EB",
+              padding: "10px 24px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexShrink: 0,
+              flexWrap: "wrap",
+            },
+            children: [
+              n.jsx("input", {
+                type: "text",
+                value: searchQ,
+                onChange: (v) => setSearchQ(v.target.value),
+                placeholder: "🔍 Rechercher (nom, ville, secteur)…",
+                style: {
+                  flex: "1 1 200px",
+                  minWidth: 180,
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #E5E7EB",
+                  fontSize: 12.5,
+                  fontFamily: "inherit",
+                  background: "#F9FAFB",
+                  outline: "none",
+                },
+              }),
+              n.jsx("button", {
+                onClick: () => setShowFilters(!showFilters),
+                style: {
+                  padding: "7px 13px",
+                  borderRadius: 8,
+                  border: `1.5px solid ${showFilters || activeFiltersCount > 0 ? "#6B40D8" : "#E5E7EB"}`,
+                  background: showFilters || activeFiltersCount > 0 ? "#EDE9FE" : "white",
+                  color: showFilters || activeFiltersCount > 0 ? "#6B40D8" : "#6B7280",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontWeight: 600,
+                  fontSize: 12.5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                },
+                children: ["⚙ Filtres", activeFiltersCount > 0 && n.jsx("span", {
+                  style: {
+                    background: "#6B40D8",
+                    color: "white",
+                    borderRadius: 20,
+                    padding: "0 6px",
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    lineHeight: "18px",
+                  },
+                  children: activeFiltersCount,
+                })],
+              }),
+              activeFiltersCount > 0 && n.jsx("button", {
+                onClick: resetFilters,
+                style: {
+                  padding: "7px 11px",
+                  borderRadius: 8,
+                  border: "1px solid #FCA5A5",
+                  background: "#FEF2F2",
+                  color: "#DC2626",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontWeight: 600,
+                  fontSize: 12,
+                },
+                children: "✕ Réinitialiser",
+              }),
+              showFilters && n.jsxs("div", {
+                style: {
+                  width: "100%",
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  paddingTop: 8,
+                  borderTop: "1px solid #F3F4F6",
+                  marginTop: 2,
+                },
+                children: [
+                  n.jsxs("div", {
+                    style: { display: "flex", flexDirection: "column", gap: 3 },
+                    children: [
+                      n.jsx("label", { style: { fontSize: 10.5, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".4px" }, children: "Ville" }),
+                      n.jsxs("select", {
+                        value: filterCity,
+                        onChange: (v) => setFilterCity(v.target.value),
+                        style: { padding: "6px 10px", borderRadius: 7, border: "1px solid #E5E7EB", fontSize: 12.5, fontFamily: "inherit", background: "white", color: "#1E1B30", cursor: "pointer" },
+                        children: [
+                          n.jsx("option", { value: "all", children: "Toutes les villes" }),
+                          ...allCities.map((v) => n.jsx("option", { value: v, children: v }, v)),
+                        ],
+                      }),
+                    ],
+                  }),
+                  n.jsxs("div", {
+                    style: { display: "flex", flexDirection: "column", gap: 3 },
+                    children: [
+                      n.jsx("label", { style: { fontSize: 10.5, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".4px" }, children: "Secteur" }),
+                      n.jsxs("select", {
+                        value: M,
+                        onChange: (v) => P(v.target.value),
+                        style: { padding: "6px 10px", borderRadius: 7, border: "1px solid #E5E7EB", fontSize: 12.5, fontFamily: "inherit", background: "white", color: "#1E1B30", cursor: "pointer" },
+                        children: [
+                          n.jsx("option", { value: "all", children: "Tous les secteurs" }),
+                          ...allCategories.map((v) => n.jsx("option", { value: v, children: v }, v)),
+                        ],
+                      }),
+                    ],
+                  }),
+                  n.jsxs("div", {
+                    style: { display: "flex", flexDirection: "column", gap: 3 },
+                    children: [
+                      n.jsx("label", { style: { fontSize: 10.5, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".4px" }, children: "Note min." }),
+                      n.jsx("input", {
+                        type: "number",
+                        min: 0,
+                        max: 5,
+                        step: 0.1,
+                        value: filterNoteMin,
+                        onChange: (v) => setFilterNoteMin(v.target.value),
+                        placeholder: "ex: 4.0",
+                        style: { width: 80, padding: "6px 10px", borderRadius: 7, border: "1px solid #E5E7EB", fontSize: 12.5, fontFamily: "inherit" },
+                      }),
+                    ],
+                  }),
+                  n.jsxs("div", {
+                    style: { display: "flex", flexDirection: "column", gap: 3 },
+                    children: [
+                      n.jsx("label", { style: { fontSize: 10.5, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".4px" }, children: "Avis min." }),
+                      n.jsx("input", {
+                        type: "number",
+                        min: 0,
+                        value: filterAvisMin,
+                        onChange: (v) => setFilterAvisMin(v.target.value),
+                        placeholder: "ex: 20",
+                        style: { width: 80, padding: "6px 10px", borderRadius: 7, border: "1px solid #E5E7EB", fontSize: 12.5, fontFamily: "inherit" },
+                      }),
+                    ],
+                  }),
+                  n.jsxs("div", {
+                    style: { display: "flex", alignItems: "flex-end", paddingBottom: 1 },
+                    children: [
+                      n.jsxs("div", {
+                        style: { fontSize: 12, color: activeFiltersCount > 0 ? "#6B40D8" : "#9CA3AF", fontWeight: 600 },
+                        children: [Y.length, " résultat", Y.length !== 1 ? "s" : ""],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+          n.jsxs("div", {
             style: { flex: 1, overflowY: "auto", padding: "16px 24px" },
             children: [
               a === "pipeline" &&
@@ -2738,7 +2920,7 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
                     alignItems: "start",
                   },
                   children: rn.map((v) => {
-                    const A = s.filter((q) => q.status === v.id);
+                    const A = Y.filter((q) => q.status === v.id);
                     return n.jsxs(
                       "div",
                       {
@@ -3103,42 +3285,28 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
                                 }),
                                 n.jsx("div", {
                                   onClick: (oe) => oe.stopPropagation(),
-                                  children: K
-                                    ? n.jsx("button", {
-                                        onClick: () => b(v),
-                                        style: {
-                                          fontSize: 11.5,
-                                          padding: "5px 12px",
-                                          borderRadius: 8,
-                                          border: "1px solid #E5E7EB",
-                                          background: "white",
-                                          color: "#6B40D8",
-                                          cursor: "pointer",
-                                          fontFamily: "inherit",
-                                          fontWeight: 600,
-                                        },
-                                        children: "Voir →",
-                                      })
-                                    : n.jsx("button", {
-                                        onClick: () => {
-                                          ((window._prospectToAudit = v),
-                                            i && i("audit"));
-                                        },
-                                        style: {
-                                          fontSize: 11.5,
-                                          padding: "5px 12px",
-                                          borderRadius: 8,
-                                          border: "none",
-                                          background:
-                                            "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                                          color: "white",
-                                          cursor: "pointer",
-                                          fontFamily: "inherit",
-                                          fontWeight: 600,
-                                          whiteSpace: "nowrap",
-                                        },
-                                        children: "+ Audit",
-                                      }),
+                                  style: { display: "flex", alignItems: "center", gap: 6 },
+                                  children: [
+                                    K
+                                      ? n.jsx("button", {
+                                          onClick: () => b(v),
+                                          style: { fontSize: 11.5, padding: "5px 12px", borderRadius: 8, border: "1px solid #E5E7EB", background: "white", color: "#6B40D8", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
+                                          children: "Voir →",
+                                        })
+                                      : n.jsx("button", {
+                                          onClick: () => { (window._prospectToAudit = v); i && i("audit"); },
+                                          style: { fontSize: 11.5, padding: "5px 12px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)", color: "white", cursor: "pointer", fontFamily: "inherit", fontWeight: 600, whiteSpace: "nowrap" },
+                                          children: "+ Audit",
+                                        }),
+                                    n.jsx("button", {
+                                      onClick: () => S(v.id),
+                                      title: "Supprimer ce prospect",
+                                      style: { width: 26, height: 26, borderRadius: 7, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", cursor: "pointer", fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 1, fontFamily: "inherit" },
+                                      onMouseEnter: (oe) => { oe.currentTarget.style.background = "#DC2626"; oe.currentTarget.style.color = "white"; },
+                                      onMouseLeave: (oe) => { oe.currentTarget.style.background = "#FEF2F2"; oe.currentTarget.style.color = "#DC2626"; },
+                                      children: "×",
+                                    }),
+                                  ],
                                 }),
                               ],
                             },
@@ -3151,6 +3319,387 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
           }),
         ],
       }),
+      a === "search" && n.jsxs("div", { style:{ padding:"0 0 40px" }, children:[
+
+        // Toggle IA / Google Maps
+        n.jsx("div", { style:{ background:"white", borderRadius:10, padding:3, display:"inline-flex", gap:3, marginBottom:14, border:"1px solid #E5E7EB" }, children:
+          [{ id:"ia", l:"🤖 IA Prospection" }, { id:"maps", l:"🗺️ Google Maps" }].map(t =>
+            n.jsx("button", { onClick:()=>setSearchMode(t.id), style:{ border:"none", borderRadius:7, padding:"7px 18px", fontSize:12.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit", background:searchMode===t.id?"white":"transparent", color:searchMode===t.id?"#1E1B30":"#9CA3AF", boxShadow:searchMode===t.id?"0 1px 4px rgba(0,0,0,.1)":"none" }, children:t.l }, t.id)
+          )
+        }),
+
+        // ── MODE IA PROSPECTION ──
+        searchMode === "ia" && n.jsxs("div", { children:[
+          n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"20px 22px", marginBottom:14, borderLeft:"3px solid #6B40D8" }, children:[
+            n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:2 }, children:"🤖 Prospection IA — Growth Hacking Local" }),
+            n.jsx("div", { style:{ fontSize:11.5, color:"#9CA3AF", marginBottom:16 }, children:"Claude analyse le secteur, score chaque lead (0-100) et classe automatiquement : 🔥 HOT · ⚠️ WARM · ❌ COLD" }),
+            n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:10, alignItems:"end" }, children:[
+              n.jsxs("div", { children:[
+                n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Secteur d'activité" }),
+                n.jsx("input", {
+                  value: iaSecteur,
+                  onChange: e => setIaSecteur(e.target.value),
+                  placeholder: "Ex : plombier, coiffeur, agence immobilière, restaurant...",
+                  style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"9px 12px", fontSize:13, fontFamily:"inherit", outline:"none", color:"#1E1B30", boxSizing:"border-box" },
+                }),
+              ]}),
+              n.jsxs("div", { children:[
+                n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Ville + rayon" }),
+                n.jsx("input", {
+                  value: iaZone,
+                  onChange: e => setIaZone(e.target.value),
+                  placeholder: "Ex : Vannes, Morbihan — rayon 20 km",
+                  style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"9px 12px", fontSize:13, fontFamily:"inherit", outline:"none", color:"#1E1B30", boxSizing:"border-box" },
+                }),
+              ]}),
+              n.jsx("button", {
+                disabled: iaLoading || !iaSecteur.trim(),
+                onClick: async () => {
+                  const claudeKey = (() => { try { return JSON.parse(localStorage.getItem("bto_settings")||"{}").claudeApiKey||""; } catch { return ""; } })();
+                  if (!claudeKey) { setIaError("Clé API Claude manquante (onglet Paramètres)."); return; }
+                  setIaLoading(true); setIaError(""); setIaResult(null); setIaLeads([]); setIaSelected(new Set()); setIaAdded(0);
+                  const prompt = `Tu es un expert en growth hacking local et en prospection B2B spécialisée dans le référencement local (Google Business Profile / Google Maps).
+
+Ta mission est de constituer une base de prospects qualifiés à partir de recherches Google Maps dans le secteur suivant :
+
+SECTEUR : ${iaSecteur}
+ZONE GÉOGRAPHIQUE : ${iaZone}
+
+# 🧭 OBJECTIF FINAL
+Construire une base de prospects exploitables pour de la prospection commerciale (appel + email + audit SEO).
+Chaque entreprise doit être analysée comme un potentiel client pour une agence spécialisée en optimisation Google Business Profile et génération de leads locaux.
+
+# 🔎 ÉTAPE 1 — COLLECTE DES ENTREPRISES
+Simule une recherche Google Maps réelle. Trouve uniquement des entreprises actives, présentes sur Google Business Profile, situées dans la zone demandée, dans le secteur demandé.
+👉 Minimum : 20 entreprises
+
+# 📊 ÉTAPE 2 — DONNÉES À EXTRAIRE
+Pour chaque entreprise : Nom, Secteur exact, Adresse complète, Ville, Téléphone, Site web (ou "absent"), Note Google (/5), Nombre d'avis, Fréquence des avis (faible/moyenne/forte), Nombre de photos (faible/moyen/élevé), Posts Google (oui/non/inconnu).
+
+# 📈 ÉTAPE 3 — SCORING LEAD (OBLIGATOIRE)
+Attribue un score sur 100 selon ces critères :
+- Avis < 30 → +20 pts | Avis 30-100 → +15 pts | Avis > 100 → +5 pts
+- Note > 4.5 → +10 pts | Note 4.0-4.5 → +5 pts | Note < 4.0 → +0
+- Site web absent → +15 pts | Site faible/ancien → +10 pts | Site correct → +5 pts
+- Fiche inactive (peu de photos/posts) → +20 pts | Fiche moyenne → +10 pts | Fiche très active → +0
+- Peu d'avis récents → +15 pts | Avis récents réguliers → +0
+
+# 🎯 CLASSIFICATION AUTOMATIQUE
+- 🔥 HOT LEAD (70-100)
+- ⚠️ WARM LEAD (40-69)
+- ❌ COLD LEAD (0-39)
+
+# 🧠 ÉTAPE 4 — ANALYSE COMMERCIALE
+Pour chaque entreprise : 2 lignes d'analyse, problème principal probable (manque d'avis / mauvaise visibilité / site faible / fiche inactive / mauvaise conversion), angle d'approche (appel / email / LinkedIn).
+
+# 💬 ÉTAPE 5 — ANGLE DE PROSPECTION
+Pour les leads HOT uniquement : phrase d'accroche, promesse orientée résultat, proposition d'audit gratuit en 2 lignes.
+
+# 📊 ÉTAPE 6 — SORTIE STRUCTURÉE
+1. Tableau principal (toutes les entreprises)
+2. Top 10 HOT LEADS avec analyse détaillée
+3. Insights marché
+4. Script de prospection (appel court + email)
+
+# CONTRAINTE IMPORTANTE
+Ne pas inventer de données. Se baser uniquement sur des informations plausibles issues de Google Maps. Prioriser la qualité à la quantité.
+
+---
+
+À la fin de ta réponse, ajoute impérativement un bloc JSON structuré entre les balises ###LEADS_JSON### et ###END### avec le format suivant pour chaque entreprise (tableau) :
+###LEADS_JSON###
+[{"name":"...","city":"...","phone":"...","website":"...","rating":4.2,"reviewCount":18,"score":75,"category":"🔥 HOT","problem":"...","pitch":"..."}]
+###END###`;
+
+                  try {
+                    const res = await fetch("https://api.anthropic.com/v1/messages", {
+                      method:"POST",
+                      headers:{ "x-api-key":claudeKey, "anthropic-version":"2023-06-01", "content-type":"application/json" },
+                      body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:8000, messages:[{ role:"user", content:prompt }] }),
+                    });
+                    const data = await res.json();
+                    const raw = data?.content?.[0]?.text || "";
+                    setIaResult(raw.replace(/###LEADS_JSON###[\s\S]*?###END###/,"").trim());
+                    const jsonMatch = raw.match(/###LEADS_JSON###([\s\S]*?)###END###/);
+                    if (jsonMatch) {
+                      try { setIaLeads(JSON.parse(jsonMatch[1].trim())); } catch {}
+                    }
+                  } catch(err) { setIaError("Erreur : " + err.message); }
+                  finally { setIaLoading(false); }
+                },
+                style:{ padding:"9px 20px", borderRadius:8, border:"none", background: iaLoading||!iaSecteur.trim()?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color: iaLoading||!iaSecteur.trim()?"#9CA3AF":"white", fontWeight:700, fontSize:13, cursor: iaLoading||!iaSecteur.trim()?"default":"pointer", fontFamily:"inherit", whiteSpace:"nowrap" },
+                children: iaLoading ? "⏳ Analyse en cours (30-60s)..." : "🚀 Prospecter",
+              }),
+            ]}),
+            iaError && n.jsx("div", { style:{ marginTop:10, color:"#dc2626", fontSize:12, background:"#FEF2F2", borderRadius:8, padding:"8px 12px" }, children: iaError }),
+          ]}),
+
+          // Résultats IA — leads JSON parsés
+          iaLeads.length > 0 && n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", overflow:"hidden", marginBottom:14 }, children:[
+            n.jsxs("div", { style:{ padding:"14px 20px", borderBottom:"1px solid #F3F4F6", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }, children:[
+              n.jsxs("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:[
+                iaLeads.length, " prospects analysés",
+                n.jsxs("span", { style:{ marginLeft:10, fontSize:12, fontWeight:500, color:"#6B7280" }, children:[
+                  "🔥 ", iaLeads.filter(l=>l.category?.includes("HOT")).length, " HOT · ",
+                  "⚠️ ", iaLeads.filter(l=>l.category?.includes("WARM")).length, " WARM · ",
+                  "❌ ", iaLeads.filter(l=>l.category?.includes("COLD")).length, " COLD",
+                ]}),
+                iaSelected.size > 0 && n.jsxs("span", { style:{ marginLeft:8, color:"#6B40D8", fontWeight:600 }, children:["· ", iaSelected.size, " sélectionné(s)"] }),
+              ]}),
+              n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center" }, children:[
+                n.jsx("button", {
+                  onClick: () => { const all = new Set(iaLeads.map((_,i)=>i)); setIaSelected(iaSelected.size===iaLeads.length ? new Set() : all); },
+                  style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #E5E7EB", background:"white", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+                  children: iaSelected.size===iaLeads.length ? "Tout désélectionner" : "Tout sélectionner",
+                }),
+                n.jsx("button", {
+                  onClick: () => { const hot = new Set(iaLeads.map((l,i)=>l.category?.includes("HOT")?i:null).filter(i=>i!==null)); setIaSelected(hot); },
+                  style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #FCA5A5", background:"#FEF2F2", color:"#dc2626", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+                  children:"🔥 HOT uniquement",
+                }),
+                iaSelected.size > 0 && n.jsx("button", {
+                  onClick: () => {
+                    const toAdd = [...iaSelected].map(i => iaLeads[i]).filter(Boolean);
+                    const newProspects = toAdd.map(l => ({
+                      id: Date.now()+Math.random(),
+                      name: l.name || "",
+                      city: l.city || iaZone.split(",")[0]||"",
+                      address: "", phone: l.phone||"", email:"", website: l.website||"",
+                      category: iaSecteur, type:"", note: l.rating ? String(l.rating) : "",
+                      reviewCount: String(l.reviewCount||""),
+                      status: "prospect",
+                      dateAdded: new Date().toISOString(),
+                      notes: `Score IA : ${l.score||"?"}/100 · ${l.category||""}\n${l.problem||""}\nPitch : ${l.pitch||""}`,
+                      emails:[],
+                    }));
+                    H([...s, ...newProspects]);
+                    setIaAdded(toAdd.length);
+                    setIaSelected(new Set());
+                  },
+                  style:{ fontSize:12, padding:"6px 16px", borderRadius:7, border:"none", background:"linear-gradient(135deg,#6B40D8,#C03080)", color:"white", cursor:"pointer", fontFamily:"inherit", fontWeight:700 },
+                  children:`+ Ajouter ${iaSelected.size} au pipeline`,
+                }),
+                iaAdded > 0 && n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:700 }, children:`✓ ${iaAdded} ajouté(s) !` }),
+              ]}),
+            ]}),
+            n.jsx("div", { style:{ overflowX:"auto" }, children:
+              n.jsxs("table", { style:{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }, children:[
+                n.jsx("thead", { children:
+                  n.jsx("tr", { style:{ background:"#F9FAFB", borderBottom:"1px solid #E5E7EB" }, children:
+                    ["","Score","Catégorie","Nom","Ville","Note","Avis","Téléphone","Site","Problème"].map((h2,i2)=>
+                      n.jsx("th", { style:{ padding:"10px 12px", textAlign:"left", fontWeight:600, color:"#6B7280", fontSize:11, whiteSpace:"nowrap" }, children:h2 }, i2)
+                    )
+                  })
+                }),
+                n.jsx("tbody", { children:
+                  iaLeads.map((l, i2) => {
+                    const hotColor = l.category?.includes("HOT") ? "#FEF2F2" : l.category?.includes("WARM") ? "#FFFBEB" : "#F9FAFB";
+                    const sel = iaSelected.has(i2);
+                    return n.jsx("tr", {
+                      style:{ borderBottom:"1px solid #F3F4F6", background: sel?"#F5F3FF":hotColor, cursor:"pointer" },
+                      onClick: () => { const ns = new Set(iaSelected); ns.has(i2)?ns.delete(i2):ns.add(i2); setIaSelected(ns); },
+                      children:[
+                        n.jsx("td", { style:{ padding:"10px 12px" }, children: n.jsx("input", { type:"checkbox", checked:sel, readOnly:true, style:{ cursor:"pointer", width:15, height:15 } }) }),
+                        n.jsx("td", { style:{ padding:"10px 12px", fontWeight:700, fontSize:13, color: l.score>=70?"#dc2626":l.score>=40?"#d97706":"#6B7280" }, children: l.score ? l.score+"/100" : "—" }),
+                        n.jsx("td", { style:{ padding:"10px 12px", fontWeight:600, fontSize:13, whiteSpace:"nowrap" }, children: l.category || "—" }),
+                        n.jsx("td", { style:{ padding:"10px 12px", fontWeight:600, color:"#1E1B30", maxWidth:160 }, children: l.name }),
+                        n.jsx("td", { style:{ padding:"10px 12px", color:"#6B7280", whiteSpace:"nowrap" }, children: l.city||"—" }),
+                        n.jsx("td", { style:{ padding:"10px 12px", whiteSpace:"nowrap" }, children: l.rating ? n.jsxs("span",{style:{color:l.rating>=4?"#059669":l.rating>=3?"#d97706":"#dc2626",fontWeight:700},children:["⭐ ",l.rating]}) : n.jsx("span",{style:{color:"#D1D5DB"},children:"—"}) }),
+                        n.jsx("td", { style:{ padding:"10px 12px", color:"#6B7280", whiteSpace:"nowrap" }, children: l.reviewCount||"—" }),
+                        n.jsx("td", { style:{ padding:"10px 12px", whiteSpace:"nowrap" }, children: l.phone ? n.jsx("a",{href:`tel:${l.phone}`,onClick:e2=>e2.stopPropagation(),style:{color:"#3B5BDB",fontWeight:600,textDecoration:"none"},children:l.phone}) : n.jsx("span",{style:{color:"#D1D5DB"},children:"—"}) }),
+                        n.jsx("td", { style:{ padding:"10px 12px", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children: l.website && l.website!=="absent" ? n.jsx("a",{href:l.website,target:"_blank",onClick:e2=>e2.stopPropagation(),style:{color:"#6B40D8",fontSize:11},children:l.website.replace(/^https?:\/\//,"").slice(0,25)}) : n.jsx("span",{style:{color:"#dc2626",fontSize:11,fontWeight:600},children:"Absent"}) }),
+                        n.jsx("td", { style:{ padding:"10px 12px", color:"#6B7280", fontSize:11, maxWidth:180 }, children: l.problem||"—" }),
+                      ]
+                    }, i2);
+                  })
+                }),
+              ]})
+            }),
+          ]}),
+
+          // Rapport complet IA
+          iaResult && n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", overflow:"hidden", marginBottom:14 }, children:[
+            n.jsxs("div", { style:{ padding:"14px 20px", borderBottom:"1px solid #F3F4F6", display:"flex", alignItems:"center", justifyContent:"space-between" }, children:[
+              n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:"📋 Rapport complet IA" }),
+              n.jsx("button", {
+                onClick:()=>navigator.clipboard.writeText(iaResult),
+                style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #E5E7EB", background:"#F9FAFB", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+                children:"📋 Copier",
+              }),
+            ]}),
+            n.jsx("div", { style:{ padding:"16px 20px", fontSize:12.5, lineHeight:1.75, color:"#374151", maxHeight:500, overflowY:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word" }, children: iaResult }),
+          ]}),
+
+          !iaResult && !iaLoading && n.jsx("div", { style:{ textAlign:"center", padding:"60px 20px", color:"#9CA3AF" }, children:
+            n.jsxs("div", { children:[
+              n.jsx("div", { style:{ fontSize:40, marginBottom:12 }, children:"🤖" }),
+              n.jsx("div", { style:{ fontSize:14, fontWeight:600, marginBottom:6 }, children:"Prospection automatisée par IA" }),
+              n.jsx("div", { style:{ fontSize:13 }, children:"Entrez un secteur et une zone, l'IA trouve, score et classe vos prospects en HOT · WARM · COLD" }),
+            ]})
+          }),
+        ]}),
+
+        // ── MODE GOOGLE MAPS ──
+        searchMode === "maps" && n.jsxs("div", { children:[
+        n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"20px 22px", marginBottom:14 }, children:[
+          n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:4 }, children:"🔍 Rechercher des prospects sur Google Maps" }),
+          n.jsx("div", { style:{ fontSize:11.5, color:"#9CA3AF", marginBottom:14 }, children:"Trouvez des entreprises locales à contacter et ajoutez-les directement à votre pipeline." }),
+          n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:10, alignItems:"end" }, children:[
+            n.jsxs("div", { children:[
+              n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Type d'activité" }),
+              n.jsx("input", {
+                value: placesQuery,
+                onChange: e => setPlacesQuery(e.target.value),
+                onKeyDown: async e2 => { if (e2.key==="Enter") {
+                  if (!placesQuery.trim()) return;
+                  setPlacesLoading(true); setPlacesError(""); setPlacesResults([]); setPlacesSelected(new Set()); setPlacesAdded(0);
+                  try {
+                    const gKey = localStorage.getItem("bto_google_key") || "";
+                    if (!gKey) { setPlacesError("Clé API Google manquante — ajoutez-la dans Paramètres."); setPlacesLoading(false); return; }
+                    const q = encodeURIComponent(`${placesQuery} ${placesCity}`);
+                    const r2 = await fetch(`/api/places?query=${q}`);
+                    const d2 = await r2.json();
+                    if (d2.error) setPlacesError(d2.error);
+                    else setPlacesResults(d2.results || []);
+                  } catch(err) { setPlacesError(err.message); }
+                  finally { setPlacesLoading(false); }
+                }},
+                placeholder: "Ex : plombier, restaurateur, coiffeur, agence immobilière...",
+                style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"9px 12px", fontSize:13, fontFamily:"inherit", outline:"none", color:"#1E1B30", boxSizing:"border-box" },
+              }),
+            ]}),
+            n.jsxs("div", { children:[
+              n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Ville / Zone" }),
+              n.jsx("select", {
+                value: placesCity,
+                onChange: e => setPlacesCity(e.target.value),
+                style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"9px 12px", fontSize:13, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
+                children: ["Vannes","Lorient","Auray","Quimper","Pontivy","Ploërmel","Rennes","Brest","Saint-Brieuc","Lanester","Hennebont","Arradon","Baden","Carnac","Quiberon"].map(c => n.jsx("option", { value:c, children:c }, c)),
+              }),
+            ]}),
+            n.jsx("button", {
+              onClick: async () => {
+                if (!placesQuery.trim()) return;
+                setPlacesLoading(true); setPlacesError(""); setPlacesResults([]); setPlacesSelected(new Set()); setPlacesAdded(0);
+                try {
+                  const gKey = localStorage.getItem("bto_google_key") || "";
+                  if (!gKey) { setPlacesError("Clé API Google manquante — ajoutez-la dans Paramètres."); setPlacesLoading(false); return; }
+                  const q = encodeURIComponent(`${placesQuery} ${placesCity}`);
+                  const r2 = await fetch(`/api/places?query=${q}`);
+                  const d2 = await r2.json();
+                  if (d2.error) setPlacesError(d2.error);
+                  else setPlacesResults(d2.results || []);
+                } catch(err) { setPlacesError(err.message); }
+                finally { setPlacesLoading(false); }
+              },
+              disabled: placesLoading || !placesQuery.trim(),
+              style:{ padding:"9px 20px", borderRadius:8, border:"none", background: placesLoading||!placesQuery.trim() ? "#E5E7EB":"linear-gradient(135deg,#3B5BDB,#6B40D8)", color: placesLoading||!placesQuery.trim()?"#9CA3AF":"white", fontWeight:700, fontSize:13, cursor: placesLoading||!placesQuery.trim()?"default":"pointer", fontFamily:"inherit", whiteSpace:"nowrap" },
+              children: placesLoading ? "⏳ Recherche..." : "Rechercher",
+            }),
+          ]}),
+          placesError && n.jsx("div", { style:{ marginTop:10, color:"#dc2626", fontSize:12, background:"#FEF2F2", borderRadius:8, padding:"8px 12px" }, children: placesError }),
+        ]}),
+
+        // Résultats
+        placesResults.length > 0 && n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", overflow:"hidden" }, children:[
+          // Toolbar résultats
+          n.jsxs("div", { style:{ padding:"14px 20px", borderBottom:"1px solid #F3F4F6", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }, children:[
+            n.jsxs("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:[
+              placesResults.length, " établissements trouvés",
+              placesSelected.size > 0 && n.jsxs("span", { style:{ marginLeft:8, color:"#6B40D8", fontWeight:600 }, children:["· ", placesSelected.size, " sélectionné(s)"] }),
+            ]}),
+            n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center" }, children:[
+              n.jsx("button", {
+                onClick: () => { const all = new Set(placesResults.map(r2=>r2.place_id)); setPlacesSelected(placesSelected.size===placesResults.length ? new Set() : all); },
+                style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #E5E7EB", background:"white", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+                children: placesSelected.size===placesResults.length ? "Tout désélectionner" : "Tout sélectionner",
+              }),
+              placesSelected.size > 0 && n.jsx("button", {
+                onClick: () => {
+                  const toAdd = placesResults.filter(r2 => placesSelected.has(r2.place_id));
+                  const newProspects = toAdd.map(r2 => ({
+                    id: Date.now()+Math.random(),
+                    name: r2.name,
+                    city: r2.city || placesCity,
+                    address: r2.address,
+                    phone: r2.phone,
+                    email: "",
+                    website: r2.website,
+                    category: placesQuery,
+                    type: "",
+                    note: r2.rating ? String(r2.rating) : "",
+                    reviewCount: String(r2.reviewCount || ""),
+                    status: "prospect",
+                    dateAdded: new Date().toISOString(),
+                    notes: `Source : Google Maps · Note : ${r2.rating||"?"}/5 · ${r2.reviewCount||0} avis`,
+                    emails: [],
+                  }));
+                  const updated = [...s, ...newProspects];
+                  H(updated);
+                  setPlacesAdded(toAdd.length);
+                  setPlacesSelected(new Set());
+                  setPlacesResults(prev => prev.filter(r2 => !placesSelected.has(r2.place_id)));
+                },
+                style:{ fontSize:12, padding:"6px 16px", borderRadius:7, border:"none", background:"linear-gradient(135deg,#3B5BDB,#6B40D8)", color:"white", cursor:"pointer", fontFamily:"inherit", fontWeight:700 },
+                children: `+ Ajouter ${placesSelected.size} au pipeline`,
+              }),
+              placesAdded > 0 && n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:700 }, children:`✓ ${placesAdded} ajouté(s) !` }),
+            ]}),
+          ]}),
+
+          // Table
+          n.jsx("div", { style:{ overflowX:"auto" }, children:
+            n.jsxs("table", { style:{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }, children:[
+              n.jsx("thead", { children:
+                n.jsx("tr", { style:{ background:"#F9FAFB", borderBottom:"1px solid #E5E7EB" }, children:
+                  ["", "Nom", "Adresse", "Note", "Avis", "Téléphone", "Site web"].map((h2,i2) =>
+                    n.jsx("th", { style:{ padding:"10px 14px", textAlign:"left", fontWeight:600, color:"#6B7280", fontSize:11, whiteSpace:"nowrap" }, children:h2 }, i2)
+                  )
+                })
+              }),
+              n.jsx("tbody", { children:
+                placesResults.map((r2, i2) =>
+                  n.jsx("tr", {
+                    style:{ borderBottom:"1px solid #F3F4F6", background: placesSelected.has(r2.place_id)?"#F5F3FF":"white", cursor:"pointer" },
+                    onClick: () => {
+                      const ns = new Set(placesSelected);
+                      ns.has(r2.place_id) ? ns.delete(r2.place_id) : ns.add(r2.place_id);
+                      setPlacesSelected(ns);
+                    },
+                    children: [
+                      n.jsx("td", { style:{ padding:"10px 14px" }, children:
+                        n.jsx("input", { type:"checkbox", checked: placesSelected.has(r2.place_id), readOnly:true, style:{ cursor:"pointer", width:15, height:15 } })
+                      }),
+                      n.jsx("td", { style:{ padding:"10px 14px", fontWeight:600, color:"#1E1B30", maxWidth:180 }, children: r2.name }),
+                      n.jsx("td", { style:{ padding:"10px 14px", color:"#6B7280", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children: r2.address }),
+                      n.jsx("td", { style:{ padding:"10px 14px", whiteSpace:"nowrap" }, children:
+                        r2.rating ? n.jsxs("span", { style:{ color: r2.rating>=4?"#059669":r2.rating>=3?"#d97706":"#dc2626", fontWeight:700 }, children:["⭐ ", r2.rating] }) : n.jsx("span", { style:{ color:"#D1D5DB" }, children:"—" })
+                      }),
+                      n.jsx("td", { style:{ padding:"10px 14px", color:"#6B7280", whiteSpace:"nowrap" }, children: r2.reviewCount > 0 ? r2.reviewCount+" avis" : "—" }),
+                      n.jsx("td", { style:{ padding:"10px 14px", whiteSpace:"nowrap" }, children:
+                        r2.phone ? n.jsx("a", { href:`tel:${r2.phone}`, onClick:e2=>e2.stopPropagation(), style:{ color:"#3B5BDB", fontWeight:600, textDecoration:"none" }, children:r2.phone }) : n.jsx("span", { style:{ color:"#D1D5DB" }, children:"—" })
+                      }),
+                      n.jsx("td", { style:{ padding:"10px 14px", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children:
+                        r2.website ? n.jsx("a", { href:r2.website, target:"_blank", onClick:e2=>e2.stopPropagation(), style:{ color:"#6B40D8", fontSize:11 }, children: r2.website.replace(/^https?:\/\//,"").slice(0,30) }) : n.jsx("span", { style:{ color:"#D1D5DB" }, children:"—" })
+                      }),
+                    ]
+                  }, r2.place_id)
+                )
+              }),
+            ]})
+          }),
+        ]}),
+
+        placesResults.length === 0 && !placesLoading && !placesError && n.jsx("div", { style:{ textAlign:"center", padding:"60px 20px", color:"#9CA3AF" }, children:
+          n.jsxs("div", { children:[
+            n.jsx("div", { style:{ fontSize:40, marginBottom:12 }, children:"🗺️" }),
+            n.jsx("div", { style:{ fontSize:14, fontWeight:600, marginBottom:6 }, children:"Trouvez vos prochains clients" }),
+            n.jsx("div", { style:{ fontSize:13 }, children:'Tapez un type d\'activité et une ville, puis cliquez "Rechercher"' }),
+          ]})
+        }),
+        ]}),  // fin searchMode === "maps"
+      ]}),  // fin a === "search"
+
       p &&
         n.jsx(ProspectCard, {
           prospect: p,
@@ -3311,7 +3860,7 @@ function ProspectCard({
                       model: "claude-sonnet-4-20250514",
                       max_tokens: 1e3,
                       system:
-                        "Sara Baudouin, BeTheOne Vannes. Expert SEO local. Email de relance court et percutant. JSON uniquement.",
+                        "Sara Baudouin, Agence Be the one Vannes. Expert SEO local. Email de relance court et percutant. JSON uniquement.",
                       messages: [
                         {
                           role: "user",
@@ -6411,6 +6960,132 @@ async function fetchSignature(token) {
   } catch { return null; }
 }
 
+const MANUAL_ONB_KEY = (id) => `bto_manual_onb_${id}`;
+function ManualOnboardingForm({ clientId, upd }) {
+  const savedRaw = (() => { try { return JSON.parse(localStorage.getItem(MANUAL_ONB_KEY(clientId)) || "null"); } catch { return null; } })();
+  const [data, setData] = D.useState(savedRaw || {});
+  const [open, setOpen] = D.useState(false);
+  const [saved, setSaved] = D.useState(false);
+
+  const save = (d) => {
+    setData(d);
+    localStorage.setItem(MANUAL_ONB_KEY(clientId), JSON.stringify(d));
+    supaSet(MANUAL_ONB_KEY(clientId), JSON.stringify(d));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  const set = (k, v) => save({ ...data, [k]: v });
+
+  const hasSomeData = Object.values(data).some(v => v && String(v).trim());
+
+  const inp = { padding:"7px 10px", borderRadius:7, border:"1.5px solid #E5E7EB", fontSize:12.5, fontFamily:"inherit", width:"100%", background:"#F9FAFB", outline:"none" };
+  const ta = { ...inp, minHeight:60, resize:"vertical" };
+  const lbl = { fontSize:10.5, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:".4px", marginBottom:3, display:"block" };
+
+  const Field = ({ k, label, type="text", ph="" }) => n.jsxs("div", { style:{marginBottom:10}, children:[
+    n.jsx("label", { style:lbl, children: label }),
+    type === "textarea"
+      ? n.jsx("textarea", { style:ta, value:data[k]||"", onChange:e=>set(k, e.target.value), placeholder:ph })
+      : n.jsx("input", { type, style:inp, value:data[k]||"", onChange:e=>set(k, e.target.value), placeholder:ph }),
+  ]}, k);
+
+  const sections = [
+    { title:"📍 Établissement", fields:[
+      { k:"etablissement", label:"Nom affiché sur Google", ph:"Plomberie Dupont" },
+      { k:"adresse", label:"Adresse complète", ph:"12 rue du Port, 56000 Vannes" },
+      { k:"telephone", label:"Téléphone principal", ph:"06 12 34 56 78" },
+      { k:"website", label:"Site web", ph:"https://www.dupont.fr" },
+      { k:"lien_google", label:"Lien Google Business", ph:"https://maps.google.com/..." },
+      { k:"activite", label:"Activité / Description", type:"textarea", ph:"Ce que vous faites, votre spécialité, votre zone d'intervention…" },
+    ]},
+    { title:"🗺️ Zone desservie", fields:[
+      { k:"ville_principale", label:"Ville principale", ph:"Vannes" },
+      { k:"rayon_km", label:"Rayon d'intervention (km)", ph:"30" },
+      { k:"villes_secondaires", label:"Villes secondaires", type:"textarea", ph:"Auray, Lorient, Quimper…" },
+    ]},
+    { title:"🏆 Services", fields:[
+      { k:"service_1", label:"Service principal", ph:"Plomberie générale" },
+      { k:"service_2", label:"Service 2", ph:"Chauffage" },
+      { k:"service_3", label:"Service 3", ph:"Débouchage" },
+    ]},
+    { title:"🕐 Horaires", fields:[
+      { k:"lundi", label:"Lundi", ph:"9h–18h" },
+      { k:"mardi", label:"Mardi", ph:"9h–18h" },
+      { k:"mercredi", label:"Mercredi", ph:"9h–18h" },
+      { k:"jeudi", label:"Jeudi", ph:"9h–18h" },
+      { k:"vendredi", label:"Vendredi", ph:"9h–18h" },
+      { k:"samedi", label:"Samedi", ph:"Fermé" },
+      { k:"dimanche", label:"Dimanche", ph:"Fermé" },
+      { k:"fermetures", label:"Fermetures exceptionnelles", type:"textarea", ph:"Congés août…" },
+    ]},
+    { title:"⭐ Avis Google", fields:[
+      { k:"repondre_avis", label:"On répond aux avis en son nom ?", ph:"Oui / Non" },
+      { k:"signature_avis", label:"Signature pour les réponses", ph:"L'équipe Dupont Plomberie" },
+      { k:"consignes_avis", label:"Consignes (ton, sujets à éviter…)", type:"textarea", ph:"Toujours vouvoyer…" },
+      { k:"avis_actuel", label:"Nb d'avis actuellement", ph:"23" },
+    ]},
+    { title:"🎯 Offres & Contenu", fields:[
+      { k:"promo", label:"Promotion en cours", type:"textarea", ph:"10% sur le 1er devis…" },
+      { k:"produit_phare", label:"Produit / Service phare", ph:"Dépannage urgence 24h/24" },
+      { k:"evenement", label:"Événement à venir", ph:"Portes ouvertes en mai…" },
+    ]},
+    { title:"📱 Réseaux sociaux", fields:[
+      { k:"facebook", label:"Facebook", ph:"https://facebook.com/..." },
+      { k:"instagram", label:"Instagram", ph:"@dupont_plomberie" },
+      { k:"linkedin", label:"LinkedIn", ph:"https://linkedin.com/..." },
+      { k:"youtube", label:"YouTube", ph:"https://youtube.com/..." },
+    ]},
+    { title:"👤 Interlocuteur", fields:[
+      { k:"contact_nom", label:"Prénom et nom", ph:"Jean Dupont" },
+      { k:"contact_poste", label:"Poste / Fonction", ph:"Gérant" },
+      { k:"contact_email", label:"Email direct", ph:"jean@dupont.fr" },
+      { k:"contact_whatsapp", label:"WhatsApp / Téléphone direct", ph:"06 12 34 56 78" },
+      { k:"disponibilite", label:"Disponibilité préférée", ph:"Matin en semaine" },
+      { k:"infos_complementaires", label:"Infos complémentaires", type:"textarea", ph:"Tout ce qui peut être utile…" },
+    ]},
+  ];
+
+  return n.jsxs("div", { style:{ borderTop:"1px solid #F3F4F6" }, children:[
+    n.jsxs("div", {
+      style:{ padding:"10px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", background: hasSomeData ? "#F0FDF4" : "#F9FAFB" },
+      onClick:()=>setOpen(v=>!v),
+      children:[
+        n.jsxs("div", { style:{display:"flex",alignItems:"center",gap:8}, children:[
+          n.jsx("span", { style:{fontSize:13}, children: hasSomeData ? "✅" : "📋" }),
+          n.jsxs("span", { style:{fontSize:12,fontWeight:700,color: hasSomeData?"#059669":"#374151"}, children:[
+            hasSomeData ? "Onboarding rempli manuellement" : "Remplir l'onboarding en RDV",
+          ]}),
+          hasSomeData && n.jsx("span", { style:{fontSize:10,background:"#D1FAE5",color:"#065F46",borderRadius:10,padding:"1px 7px",fontWeight:700}, children:"Manuel" }),
+        ]}),
+        n.jsxs("div", { style:{display:"flex",alignItems:"center",gap:8}, children:[
+          saved && n.jsx("span", { style:{fontSize:11,color:"#059669",fontWeight:600}, children:"✓ Sauvegardé" }),
+          n.jsx("span", { style:{fontSize:11,color:"#9CA3AF"}, children: open ? "▲ Réduire" : "▼ Ouvrir le formulaire" }),
+        ]}),
+      ],
+    }),
+    open && n.jsxs("div", { style:{ padding:"16px 18px", background:"white" }, children:[
+      n.jsx("div", { style:{fontSize:12,color:"#6B7280",marginBottom:14,background:"#EEF2FF",border:"1px solid #C7D2FE",borderRadius:8,padding:"10px 14px"}, children:"📝 Ce formulaire est sauvegardé automatiquement sur la fiche. Il peut être complété en plusieurs fois. Si le client remplit son onboarding en ligne plus tard, ses réponses seront affichées à la place." }),
+      sections.map(sec => n.jsxs("div", { key:sec.title, style:{marginBottom:18}, children:[
+        n.jsx("div", { style:{fontSize:12,fontWeight:800,color:"#1E1B30",marginBottom:10,paddingBottom:6,borderBottom:"1px solid #F3F4F6"}, children:sec.title }),
+        n.jsx("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 14px"}, children:
+          sec.fields.map(f => n.jsx(Field, { ...f }, f.k))
+        }),
+      ]})),
+      n.jsx("div", { style:{borderTop:"1px solid #F3F4F6",paddingTop:12,marginTop:4,display:"flex",justifyContent:"flex-end",gap:8}, children:[
+        hasSomeData && n.jsx("button", {
+          onClick:()=>{ if(confirm("Effacer toutes les données saisies manuellement ?")){ save({}); } },
+          style:{fontSize:12,padding:"7px 14px",borderRadius:8,border:"1px solid #FECACA",background:"#FEF2F2",color:"#DC2626",cursor:"pointer",fontFamily:"inherit",fontWeight:600},
+          children:"🗑 Effacer",
+        }),
+        n.jsx("button", {
+          onClick:()=>setOpen(false),
+          style:{fontSize:12,padding:"7px 14px",borderRadius:8,border:"1px solid #E5E7EB",background:"white",color:"#374151",cursor:"pointer",fontFamily:"inherit",fontWeight:600},
+          children:"✓ Fermer",
+        }),
+      ]}),
+    ]}),
+  ]});
+}
 function OnboardingPanel({ clientId, onSigLoaded, getContract, upd }) {
   const [ob, setOb] = D.useState(null);
   const [sig, setSig] = D.useState(null);
@@ -6487,12 +7162,7 @@ function OnboardingPanel({ clientId, onSigLoaded, getContract, upd }) {
   if (loading) return n.jsx('div', { style:{padding:'10px 18px',fontSize:12,color:'#9CA3AF',borderTop:'1px solid #F3F4F6'}, children:'⏳ Chargement…' });
   if (ob === 'error') return n.jsx('div', { style:{padding:'10px 18px',fontSize:12,color:'#dc2626',borderTop:'1px solid #F3F4F6'}, children:'⚠️ Erreur Supabase.' });
 
-  if (!ob || ob === 'no_token') return n.jsxs('div', {
-    style:{padding:'10px 18px',borderTop:'1px solid #F3F4F6',display:'flex',alignItems:'center',gap:8},
-    children:[
-      n.jsx('span',{style:{fontSize:11,color:'#9CA3AF'},children:'📨 Aucun lien de signature envoyé — cliquez "Envoyer pour signature" pour démarrer'}),
-    ],
-  });
+  if (!ob || ob === 'no_token') return n.jsx(ManualOnboardingForm, { clientId, upd });
 
   if (!sig && ob === 'none') return n.jsxs('div', {
     style:{padding:'10px 18px',borderTop:'1px solid #F3F4F6',display:'flex',alignItems:'center',gap:8},
@@ -6568,6 +7238,1266 @@ function OnboardingPanel({ clientId, onSigLoaded, getContract, upd }) {
   });
 }
 
+// ─── ONGLET SITE WEB ────────────────────────────────────────────────────────
+const SITE_API = "https://agence-betheone.fr/api/articles";
+const SITE_PWD = "bto2026";
+const CAT_OPTIONS = [
+  { value: "strategie", label: "Stratégie", color: "#6B40D8" },
+  { value: "reputation", label: "Réputation", color: "#E85A30" },
+  { value: "fiche",      label: "Fiche GMB",  color: "#C03080" },
+  { value: "guide",      label: "Guide",      color: "#059669" },
+  { value: "ia",         label: "IA",         color: "#0EA5E9" },
+];
+const emptyForm = () => ({ titre:"", slug:"", metaTitle:"", metaDesc:"", motCle:"", categorie:"strategie", extrait:"", contenu:"", duree:"5 min", date: new Date().toISOString().slice(0,10), imageUrl:"", status:"published", scheduledAt:"" });
+
+const CONTENU_SECTIONS = [
+  { id:"analyse",    icon:"🔍", label:"Analyse SEO + Structure" },
+  { id:"blog",       icon:"📝", label:"Article SEO complet" },
+  { id:"micro",      icon:"📊", label:"Tableau micro-contenus" },
+  { id:"linkedin",   icon:"💼", label:"LinkedIn (4 posts)" },
+  { id:"facebook",   icon:"👥", label:"Facebook (2 publications)" },
+  { id:"gbp",        icon:"📍", label:"GBP (3 publications)" },
+  { id:"carrousel",  icon:"🎠", label:"Carrousels Instagram" },
+  { id:"reel",       icon:"🎬", label:"Scripts Reels" },
+  { id:"stories",    icon:"✨", label:"Stories Instagram" },
+  { id:"maillage",   icon:"🕸️", label:"Maillage SEO" },
+  { id:"cal30",      icon:"📅", label:"Plan 30 jours" },
+];
+
+const PLATFORMS = [
+  { id:"blog", label:"Blog", color:"#6B40D8", bg:"#F5F3FF" },
+  { id:"ig", label:"IG/FB", color:"#D85A30", bg:"#FEF0E8" },
+  { id:"linkedin", label:"LinkedIn", color:"#185FA5", bg:"#EBF4FD" },
+  { id:"gbp", label:"GBP", color:"#1D9E75", bg:"#E8F7F2" },
+  { id:"story", label:"Story", color:"#C03080", bg:"#FDE8F2" },
+];
+
+// Planning éditorial 48 semaines — Be the One 2026
+// Semaine 1 = lundi 5 jan. Lun=Blog, Mer=IG/FB, Jeu=LinkedIn, Ven=GBP, Sam=Story
+const PLANNING_48_SEMAINES = [
+  // Q1 — Fondamentaux & Acquisition
+  { blog:"Pourquoi votre fiche Google Business Profile est votre meilleur commercial en 2026", ig:"5 raisons d'optimiser votre fiche GMB dès maintenant", linkedin:"GMB : l'arme secrète des TPE/PME bretonnes", gbp:"Bienvenue sur notre fiche ! Découvrez nos services GMB", story:"Coulisses : notre équipe au travail" },
+  { blog:"Comment configurer Google Business Profile de A à Z (guide complet)", ig:"Checklist : est-ce que votre fiche est complète ?", linkedin:"Retour client : +40 % de visibilité en 3 mois à Vannes", gbp:"Nouveau service : audit gratuit de votre fiche GBP", story:"Avant / Après : optimisation de fiche client" },
+  { blog:"Les photos Google Business Profile : tout ce qu'il faut savoir pour se démarquer", ig:"Photo de qualité = +35 % de clics sur votre fiche", linkedin:"Pourquoi les photos sont cruciales pour votre image locale", gbp:"Partagez vos meilleurs moments avec vos clients !", story:"Story quiz : devinez le secteur d'activité" },
+  { blog:"Gestion des avis Google : stratégie pour obtenir 5 étoiles", ig:"Comment répondre à un avis négatif sans perdre de clients", linkedin:"Avis clients : levier numéro 1 de confiance en B2B local", gbp:"Merci à nos clients pour leurs avis ⭐", story:"Poll : vous répondez à vos avis ?"},
+  // Q1 suite — Février
+  { blog:"SEO local vs SEO national : quelles différences pour les entreprises bretonnes ?", ig:"SEO local : 3 erreurs qui vous coûtent des clients", linkedin:"SEO local en Bretagne : état des lieux 2026", gbp:"Nous sommes spécialisés en référencement local pour les pros", story:"Tip du lundi : votre NAP est-il cohérent ?" },
+  { blog:"Pack Local Google : comment décrocher le top 3 des résultats", ig:"Top 3 Google Maps : ce que ça change pour votre CA", linkedin:"Étude de cas : atteindre le Pack Local à Lorient", gbp:"Votre établissement mérite d'être en haut des résultats", story:"Sondage : où êtes-vous sur Google Maps ?" },
+  { blog:"Google Posts : le guide pour publier du contenu efficace sur GBP", ig:"Poster sur GBP = plus de visibilité gratuite", linkedin:"Google Posts : outil sous-estimé des pros du local SEO", gbp:"Publication de la semaine : découvrez notre offre du mois", story:"Démo : créer un Google Post en 2 minutes" },
+  { blog:"Attributs et catégories GBP : le guide pour choisir les bons", ig:"Avez-vous renseigné tous vos attributs sur GBP ?", linkedin:"Les catégories GBP : un impact direct sur votre classement", gbp:"Mise à jour : nos services sont maintenant tous renseignés", story:"Quiz : connaissez-vous toutes les catégories GBP ?" },
+  // Q1 — Mars
+  { blog:"Questions & réponses sur GBP : comment les utiliser pour convertir", ig:"La section Q&R GBP : souvent oubliée, toujours efficace", linkedin:"Q&R sur votre fiche = réduction des appels répétitifs", gbp:"Vous avez des questions ? Posez-les directement ici !", story:"Répondez à notre question en story !" },
+  { blog:"Google Business Profile : analyser ses statistiques pour progresser", ig:"Stats GBP : ce que les chiffres vous disent sur vos clients", linkedin:"Comment lire et interpréter vos KPIs GBP", gbp:"Ce mois-ci, +X recherches ont affiché notre fiche ✅", story:"Capture stat du mois : on dépasse les 500 vues !" },
+  { blog:"Fiche GMB : les 10 erreurs qui plombent votre visibilité", ig:"Erreur n°1 : horaires non mis à jour sur Google", linkedin:"Audit GBP : les 10 points à contrôler absolument", gbp:"Audit gratuit offert ce mois-ci — contactez-nous !", story:"Avez-vous fait votre check-up GMB ce trimestre ?" },
+  { blog:"Comment gérer plusieurs fiches GBP pour une enseigne multi-sites", ig:"Multi-sites : garder une cohérence de marque sur GBP", linkedin:"Stratégie multi-établissements sur Google Business Profile", gbp:"Nous gérons des portefeuilles multi-fiches pour nos clients", story:"Tip : dupliquer sans copier — les bonnes pratiques" },
+  { blog:"Bilan Q1 : nos apprentissages sur le SEO local en Bretagne", ig:"Q1 en chiffres : nos clients ont progressé de X % en moyenne", linkedin:"Rétrospective Q1 : tendances SEO local observées", gbp:"Merci pour votre confiance ce 1er trimestre !", story:"Vote : quel sujet vous a le plus aidé ce trimestre ?" },
+  // Q2 — Croissance & Optimisation — Avril
+  { blog:"Optimiser sa description GBP : les mots-clés qui font la différence", ig:"La description GBP : 750 caractères pour convaincre", linkedin:"Copywriting GBP : écrire pour Google ET pour l'humain", gbp:"Nous avons mis à jour notre description — lisez-la !", story:"Avant/Après : réécriture d'une description client" },
+  { blog:"Saisonnalité et GBP : adapter sa fiche tout au long de l'année", ig:"Printemps = mise à jour de vos photos et offres !", linkedin:"Saisonnalité locale : synchroniser GBP avec votre agenda", gbp:"Nouveautés du printemps : découvrez nos offres saisonnières", story:"Quoi de neuf dans votre secteur ce printemps ?" },
+  { blog:"Produits et services sur GBP : comment les renseigner pour vendre plus", ig:"Ajoutez vos services à votre fiche Google = plus de demandes", linkedin:"Fiche de services GBP : l'option que 80 % des pros oublient", gbp:"Découvrez tous nos services directement sur notre fiche", story:"Tip : ajouter un service en moins de 3 minutes" },
+  { blog:"Lien de partage d'avis Google : comment le créer et l'utiliser", ig:"Envoyez ce lien à vos clients pour collecter des avis", linkedin:"Automatiser la collecte d'avis : outils et bonnes pratiques", gbp:"Laissez-nous un avis — cela prend moins d'une minute", story:"Notre lien d'avis — enregistrez-le !" },
+  // Q2 — Mai
+  { blog:"GBP et réseaux sociaux : comment créer une synergie gagnante", ig:"GBP + Instagram : on vous explique comment les lier", linkedin:"Stratégie cross-canal : GBP + LinkedIn pour les pros", gbp:"Retrouvez-nous aussi sur Instagram et LinkedIn !", story:"Lien bio : on refait notre page de liens !" },
+  { blog:"Référencement local : les facteurs de classement décryptés en 2026", ig:"3 facteurs clés pour monter dans Google Maps", linkedin:"Algorithme local de Google : ce qui a changé en 2026", gbp:"Nous travaillons chaque semaine sur votre classement", story:"Sondage : connaissez-vous le Pack Local ?" },
+  { blog:"Comment gérer une crise de réputation en ligne pour une PME", ig:"Avis 1 étoile ? Voici comment réagir sans paniquer", linkedin:"Gestion de crise digitale : les 5 étapes pour s'en sortir", gbp:"Votre satisfaction est notre priorité — contactez-nous", story:"Cas concret : comment on a retourné une situation" },
+  { blog:"Fiches GBP et RGPD : ce que vous devez savoir en 2026", ig:"RGPD et avis en ligne : les règles à respecter", linkedin:"Conformité RGPD pour les professionnels du local SEO", gbp:"Nous respectons vos données — politique de confidentialité ici", story:"Info réglementaire : à connaître absolument" },
+  // Q2 — Juin
+  { blog:"Voix et recherche locale : comment optimiser pour Google Assistant", ig:"'OK Google, trouve un [métier] près de moi' — vous y êtes ?", linkedin:"Recherche vocale locale : préparer sa fiche GBP en 2026", gbp:"Cherchez-nous à la voix : 'Be the One Vannes'", story:"Démo : chercher une entreprise à la voix" },
+  { blog:"Google Maps : astuces pour maximiser ses clics itinéraires", ig:"Itinéraires sur GBP : un KPI sous-estimé", linkedin:"Données GBP : comment interpréter les 'demandes d'itinéraire'", gbp:"Nous sommes facilement accessibles — itinéraire en 1 clic", story:"Notre adresse en 30 secondes : story directe" },
+  { blog:"Étude de cas : comment un restaurant de Vannes a triplé ses réservations GBP", ig:"Étude de cas client : de 10 à 90 avis en 4 mois", linkedin:"Cas client : +300 % de visibilité locale pour un commerce breton", gbp:"Résultats concrets pour nos clients — demandez votre audit", story:"Témoignage client en story — partage d'expérience" },
+  { blog:"Les horaires exceptionnels sur GBP : jours fériés, vacances et events", ig:"Mettez à jour vos horaires avant le week-end de l'Ascension !", linkedin:"Horaires GBP : l'impact sur la satisfaction client", gbp:"Nos horaires d'été sont disponibles sur notre fiche", story:"Check : vos horaires sont-ils à jour ?" },
+  { blog:"Bilan S1 : les tendances du SEO local en Bretagne — mi-année", ig:"S1 terminé : nos tops publications et insights", linkedin:"Mi-année : bilan SEO local et objectifs S2 pour nos clients", gbp:"6 mois déjà — merci pour votre confiance !", story:"Récap S1 : vos moments forts en story" },
+  // Q3 — Fidélisation & Expertise — Juillet
+  { blog:"GBP pour les hôtels et hébergements touristiques en Bretagne", ig:"Tourisme breton + GBP : comment attirer les vacanciers", linkedin:"Saison estivale : optimiser sa fiche pour le tourisme", gbp:"Touristes bienvenus ! Découvrez nos partenaires locaux", story:"Été en Bretagne : vos bons plans en story" },
+  { blog:"Réseaux sociaux et SEO local : impact réel sur votre classement Google", ig:"Vos posts Instagram influencent-ils votre SEO local ?", linkedin:"Social signals et SEO local : ce que dit la recherche en 2026", gbp:"Suivez-nous sur les réseaux pour du contenu exclusif", story:"Linkage : GBP + réseaux — comment ça marche ?" },
+  { blog:"Gérer sa e-réputation : outils gratuits pour surveiller sa marque en ligne", ig:"Votre nom de marque est-il surveillé sur le web ?", linkedin:"E-réputation B2B : outils et stratégies pour les PME", gbp:"Notre réputation en ligne, c'est notre fierté — 5★", story:"Alerte Google : on vous montre comment paramétrer" },
+  { blog:"GBP pour les professions libérales : spécificités et bonnes pratiques", ig:"Médecins, avocats, consultants : GBP adapté à votre métier", linkedin:"Professions réglementées et GBP : ce qu'il faut savoir", gbp:"Nous accompagnons aussi les professions libérales", story:"Zoom métier : comment optimiser selon son secteur" },
+  // Q3 — Août
+  { blog:"Accessibilité et GBP : renseigner les attributs d'accessibilité sur sa fiche", ig:"PMR, accueil chien, parking : les attributs qui font la différence", linkedin:"Accessibilité en entreprise : comment le valoriser sur GBP", gbp:"Nous sommes accessibles à tous — retrouvez nos attributs", story:"Savez-vous quels attributs vous pouvez ajouter ?" },
+  { blog:"La concurrence locale sur Google Maps : comment surveiller et s'adapter", ig:"Vos concurrents sur Google Maps — ce qu'ils font mieux que vous", linkedin:"Veille concurrentielle SEO local : méthode et outils", gbp:"Nous nous améliorons chaque semaine pour vous servir mieux", story:"Tip : analyser ses concurrents locaux gratuitement" },
+  { blog:"Google Business Profile vs site web : lequel prioriser pour son lancement ?", ig:"GBP ou site web ? Les deux, dans le bon ordre !", linkedin:"Pour une TPE qui se lance : GBP avant le site web ?", gbp:"Vous démarrez ? Commencez par optimiser votre fiche Google", story:"Sondage : qu'avez-vous créé en premier ?" },
+  { blog:"Automatiser sa présence locale : outils, workflows et gains de temps", ig:"3 outils pour automatiser votre GBP et gagner du temps", linkedin:"Automatisation du local SEO : ce qui est possible en 2026", gbp:"Nous gérons votre fiche pour que vous vous concentriez sur votre métier", story:"Workflow de notre équipe : les outils qu'on utilise" },
+  { blog:"Témoignages clients : comment les intégrer dans sa stratégie GBP", ig:"Un témoignage bien placé = des dizaines de nouveaux clients", linkedin:"La preuve sociale locale : stratégie et mise en oeuvre", gbp:"Lisez ce que nos clients disent de nous !", story:"Story témoignage : on met le micro devant un client" },
+  // Q3 — Septembre
+  { blog:"Rentrée 2026 : réviser sa stratégie de contenu local pour Q4", ig:"Rentrée = nouveau départ pour votre stratégie digitale", linkedin:"Q4 approche : les actions SEO local à prioriser en septembre", gbp:"Rentrée 2026 : nos nouveaux packages sont disponibles", story:"Check-list de rentrée : votre fiche GBP est-elle à jour ?" },
+  { blog:"Intégration GBP / CRM : récupérer les données de votre fiche dans votre outil", ig:"GBP + CRM : la connexion que peu de pros connaissent", linkedin:"Intégration GBP dans votre stack marketing : guide pratique", gbp:"Nous utilisons les données GBP pour piloter notre activité", story:"Démo outil : comment on suit nos clients avec le CRM" },
+  { blog:"GBP et Google Ads Local : la combinaison gagnante pour dominer localement", ig:"Google Ads + GBP : le combo qui booste votre visibilité", linkedin:"Local Services Ads vs Google Ads : que choisir pour sa PME ?", gbp:"Besoin de visibilité rapide ? Découvrez nos offres publicité locale", story:"Avant/Après : campagne locale sur Google Ads" },
+  // Q4 — Performance & Bilan — Octobre
+  { blog:"Préparer sa fiche GBP pour les fêtes de fin d'année", ig:"Noël approche : votre fiche Google est-elle prête ?", linkedin:"Saisonnalité Q4 : adapter sa stratégie GBP pour décembre", gbp:"Horaires des fêtes : nous les mettrons à jour dès novembre", story:"Compte à rebours : il reste X semaines avant Noël !" },
+  { blog:"GBP et e-commerce local : vendre en ligne tout en dominant localement", ig:"Click & Collect + GBP : le duo gagnant pour les commerçants", linkedin:"Commerce local et digital : comment GBP soutient vos ventes en ligne", gbp:"Commandez en ligne, récupérez en boutique — lien dans la fiche", story:"Notre boutique en ligne : visite guidée en story" },
+  { blog:"Optimiser ses Google Posts pour les événements locaux", ig:"Event local ? Créez un Google Post dédié !", linkedin:"Events locaux et GBP : stratégie de communication intégrée", gbp:"Événement à venir : retrouvez-nous le [date] à [lieu]", story:"Save the date : notre prochain événement !" },
+  { blog:"GBP pour les franchises et réseaux de points de vente", ig:"Franchise et GBP : garder la cohérence partout", linkedin:"Piloter un réseau de fiches GBP : outils et bonnes pratiques", gbp:"Be the One accompagne les réseaux et franchises", story:"Zoom réseau : on gère X fiches en simultané" },
+  // Q4 — Novembre
+  { blog:"Les tendances du SEO local en 2027 : anticiper pour prendre de l'avance", ig:"2027 approche : les changements SEO local à anticiper", linkedin:"Prévisions SEO local 2027 : ce que les experts anticipent", gbp:"Nous préparons dès maintenant votre stratégie 2027", story:"Que prépare-t-on pour 2027 ? Sneak peek en story !" },
+  { blog:"Comment mesurer le ROI de sa stratégie Google Business Profile", ig:"ROI de votre GBP : comment le calculer simplement", linkedin:"Mesurer l'impact business de votre fiche GBP : métriques clés", gbp:"Chaque optimisation, un impact mesurable sur votre chiffre d'affaires", story:"Dashboard du mois : nos KPIs en story" },
+  { blog:"Témoignage : Be the One accompagne les PME bretonnes vers le top local", ig:"3 ans d'agence : ce qu'on a appris sur le SEO local breton", linkedin:"Rétrospective agence : les projets marquants de l'année", gbp:"Merci à tous nos clients pour cette belle année 2026 !", story:"Team Be the One : les coulisses de notre année" },
+  { blog:"Bilan annuel 2026 : le SEO local en Bretagne — chiffres et perspectives", ig:"2026 en chiffres : nos clients ont atteint leurs objectifs", linkedin:"Bilan 2026 et objectifs 2027 : notre vision du SEO local", gbp:"Bilan 2026 : une belle progression pour nos clients !", story:"Notre année en images — best-of 2026" },
+  { blog:"Guide de démarrage 2027 : construire sa présence locale sur Google", ig:"Démarrez 2027 avec une fiche GBP au top !", linkedin:"Résolutions SEO local 2027 : nos recommandations pour les pros", gbp:"2027 commence bientôt — réservez votre audit dès maintenant", story:"Vœux et objectifs 2027 — story de fin d'année" },
+];
+
+function buildDefaultPosts() {
+  const result = {};
+  const weekStart = new Date("2026-01-05"); // Lundi semaine 1
+  const addDays = (base, d) => { const dt = new Date(base); dt.setDate(dt.getDate()+d); return dt.toISOString().slice(0,10); };
+  PLANNING_48_SEMAINES.forEach((w, i) => {
+    const base = new Date(weekStart); base.setDate(base.getDate() + i*7);
+    const dayMap = [
+      { offset:0, platform:"blog",     titre: w.blog },
+      { offset:2, platform:"ig",       titre: w.ig },
+      { offset:3, platform:"linkedin", titre: w.linkedin },
+      { offset:4, platform:"gbp",      titre: w.gbp },
+      { offset:5, platform:"story",    titre: w.story },
+    ];
+    dayMap.forEach(({ offset, platform, titre }) => {
+      const key = addDays(base, offset);
+      if (!result[key]) result[key] = [];
+      result[key].push({ id: Date.now()+Math.random(), platform, titre, note:"", done:false });
+    });
+  });
+  return result;
+}
+
+function CalendrierContenu() {
+  const storageKey = "bto_cal_contenu";
+  const [currentDate, setCurrentDate] = D.useState(new Date());
+  const [posts, setPosts] = D.useState(() => { try { return JSON.parse(localStorage.getItem(storageKey)||"{}"); } catch { return {}; } });
+  const [modal, setModal] = D.useState(null); // { dateKey, post? }
+  const [form, setForm] = D.useState({ platform:"blog", titre:"", note:"", done:false });
+
+  const save = (newPosts) => { setPosts(newPosts); localStorage.setItem(storageKey, JSON.stringify(newPosts)); };
+
+  const year = currentDate.getFullYear(), month = currentDate.getMonth();
+  const firstDow = (new Date(year, month, 1).getDay()+6)%7; // lundi=0
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0,10);
+  const DAYS_LABELS = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+  const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+  const getDateKey = (d) => `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+  const openAdd = (dk) => { setForm({ platform:"blog", titre:"", note:"", done:false }); setModal({ dateKey:dk, post:null }); };
+  const openEdit = (dk, post) => { setForm({...post}); setModal({ dateKey:dk, post }); };
+
+  const savePost = () => {
+    if (!form.titre.trim()) return;
+    const dk = modal.dateKey;
+    const dayPosts = [...(posts[dk]||[])];
+    if (modal.post) {
+      const idx = dayPosts.findIndex(p=>p.id===modal.post.id);
+      if(idx>=0) dayPosts[idx] = {...form, id:modal.post.id};
+    } else {
+      dayPosts.push({...form, id: Date.now()});
+    }
+    save({...posts, [dk]: dayPosts});
+    setModal(null);
+  };
+
+  const toggleDone = (dk, postId) => {
+    const dayPosts = (posts[dk]||[]).map(p => p.id===postId ? {...p, done:!p.done} : p);
+    save({...posts, [dk]: dayPosts});
+  };
+
+  const deletePost = (dk, postId) => {
+    const dayPosts = (posts[dk]||[]).filter(p => p.id!==postId);
+    const newPosts = {...posts};
+    if(dayPosts.length===0) delete newPosts[dk]; else newPosts[dk]=dayPosts;
+    save(newPosts);
+    setModal(null);
+  };
+
+  const cardS = { background:"white", borderRadius:14, padding:"20px 22px", border:"1px solid #E5E7EB", marginBottom:14 };
+  const totalCells = Math.ceil((firstDow+daysInMonth)/7)*7;
+
+  return n.jsxs("div", { children:[
+    n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }, children:[
+      n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10 }, children:[
+        n.jsx("button", { onClick:()=>setCurrentDate(new Date(year,month-1,1)), style:{ border:"1px solid #E5E7EB", background:"white", borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", fontFamily:"inherit" }, children:"←" }),
+        n.jsx("div", { style:{ fontSize:16, fontWeight:700, color:"#1E1B30", minWidth:160, textAlign:"center" }, children: MONTHS_FR[month] + " " + year }),
+        n.jsx("button", { onClick:()=>setCurrentDate(new Date(year,month+1,1)), style:{ border:"1px solid #E5E7EB", background:"white", borderRadius:8, padding:"6px 12px", fontSize:13, cursor:"pointer", fontFamily:"inherit" }, children:"→" }),
+      ]}),
+      n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }, children:[
+        n.jsx("div", { style:{ display:"flex", gap:6, flexWrap:"wrap" }, children: PLATFORMS.map(p => n.jsxs("span", { style:{ fontSize:10, padding:"3px 8px", borderRadius:20, background:p.bg, color:p.color, fontWeight:600 }, children:[p.label] }, p.id)) }),
+        n.jsx("button", {
+          onClick:()=>{ if(!window.confirm("Charger les 48 semaines du planning éditorial ? Cela ajoutera les idées de contenu (sans supprimer vos posts existants).")) return; const def=buildDefaultPosts(); const merged={...def}; Object.keys(posts).forEach(k=>{ merged[k]=[...(def[k]||[]),...posts[k]]; }); save(merged); },
+          style:{ fontSize:11, padding:"5px 12px", borderRadius:8, border:"1px solid #6B40D8", background:"#F5F3FF", color:"#6B40D8", cursor:"pointer", fontWeight:600, whiteSpace:"nowrap", fontFamily:"inherit" },
+          children:"📥 Charger le planning 2026"
+        }),
+        Object.keys(posts).length > 0 && n.jsx("button", {
+          onClick:()=>{ if(!window.confirm("Réinitialiser le calendrier ? Tous vos posts seront supprimés.")) return; save({}); },
+          style:{ fontSize:11, padding:"5px 10px", borderRadius:8, border:"1px solid #E5E7EB", background:"white", color:"#9CA3AF", cursor:"pointer", fontFamily:"inherit" },
+          children:"🗑️"
+        }),
+      ]}),
+    ]}),
+
+    n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"repeat(7,minmax(0,1fr))", gap:1, background:"#E5E7EB", borderRadius:12, overflow:"hidden", border:"1px solid #E5E7EB" }, children:[
+      ...DAYS_LABELS.map(d => n.jsx("div", { style:{ background:"#F9FAFB", padding:"7px 4px", fontSize:10, fontWeight:700, color:"#9CA3AF", textAlign:"center", textTransform:"uppercase", letterSpacing:".04em" }, children:d }, d)),
+      ...[...Array(totalCells)].map((_,i) => {
+        const dayNum = i - firstDow + 1;
+        const isCurrentMonth = dayNum >= 1 && dayNum <= daysInMonth;
+        const dk = isCurrentMonth ? getDateKey(dayNum) : null;
+        const isToday = dk === todayKey;
+        const dayPosts = dk ? (posts[dk]||[]) : [];
+        return n.jsxs("div", {
+          style:{ background: isCurrentMonth ? "white" : "#FAFAFA", minHeight:90, padding:"6px 4px", position:"relative", cursor: isCurrentMonth ? "pointer" : "default" },
+          children:[
+            n.jsx("div", { style:{ fontSize:11, fontWeight:700, color: isToday?"white":"#9CA3AF", background: isToday?"#6B40D8":"transparent", borderRadius:"50%", width:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:3 }, children: isCurrentMonth ? dayNum : "" }),
+            ...dayPosts.map(post => {
+              const pl = PLATFORMS.find(p=>p.id===post.platform)||PLATFORMS[0];
+              return n.jsxs("div", {
+                onClick:(e)=>{ e.stopPropagation(); openEdit(dk,post); },
+                style:{ fontSize:9.5, background:post.done?"#F0FDF4":pl.bg, color:post.done?"#059669":pl.color, borderRadius:4, padding:"2px 5px", marginBottom:2, cursor:"pointer", display:"flex", alignItems:"center", gap:3, lineHeight:1.3, textDecoration:post.done?"line-through":"none", border:`1px solid ${post.done?"#BBF7D0":pl.color+"30"}` },
+                children:[
+                  n.jsx("span", { onClick:(e)=>{ e.stopPropagation(); toggleDone(dk,post.id); }, style:{cursor:"pointer",flexShrink:0}, children: post.done?"✓":"○" }),
+                  n.jsx("span", { style:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}, children: pl.label+" · "+post.titre }),
+                ]
+              }, post.id);
+            }),
+            isCurrentMonth && n.jsx("div", {
+              onClick:(e)=>{ e.stopPropagation(); openAdd(dk); },
+              style:{ fontSize:10, color:"#D1D5DB", cursor:"pointer", padding:"1px 4px", borderRadius:4, marginTop:2, display:"inline-block" },
+              children:"+ Ajouter"
+            }),
+          ]
+        }, i);
+      }),
+    ]}),
+
+    modal && n.jsx("div", { onClick:()=>setModal(null), style:{ position:"fixed", top:0, left:0, right:0, bottom:0, background:"rgba(0,0,0,.35)", zIndex:999, display:"flex", alignItems:"center", justifyContent:"center" }, children:
+      n.jsxs("div", { onClick:e=>e.stopPropagation(), style:{ background:"white", borderRadius:16, padding:"24px 28px", width:420, maxWidth:"90vw", boxShadow:"0 8px 40px rgba(0,0,0,.15)" }, children:[
+        n.jsx("div", { style:{ fontSize:14, fontWeight:700, color:"#1E1B30", marginBottom:16 }, children:(modal.post?"Modifier":"Ajouter")+" — "+modal.dateKey }),
+        n.jsxs("div", { style:{ marginBottom:12 }, children:[
+          n.jsx("div", { style:{ fontSize:12, fontWeight:600, color:"#374151", marginBottom:6 }, children:"Plateforme" }),
+          n.jsx("div", { style:{ display:"flex", gap:6, flexWrap:"wrap" }, children:
+            PLATFORMS.map(p => n.jsx("button", {
+              onClick:()=>setForm(f=>({...f,platform:p.id})),
+              style:{ border:`2px solid ${form.platform===p.id?p.color:"#E5E7EB"}`, background:form.platform===p.id?p.bg:"white", color:form.platform===p.id?p.color:"#6B7280", borderRadius:7, padding:"4px 10px", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+              children:p.label
+            },p.id))
+          }),
+        ]}),
+        n.jsxs("div", { style:{ marginBottom:12 }, children:[
+          n.jsx("div", { style:{ fontSize:12, fontWeight:600, color:"#374151", marginBottom:6 }, children:"Titre / Sujet" }),
+          n.jsx("input", { type:"text", value:form.titre, onChange:e=>setForm(f=>({...f,titre:e.target.value})), placeholder:"Ex : Comment obtenir plus d'avis Google ?", style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:13, fontFamily:"inherit", outline:"none" } }),
+        ]}),
+        n.jsxs("div", { style:{ marginBottom:16 }, children:[
+          n.jsx("div", { style:{ fontSize:12, fontWeight:600, color:"#374151", marginBottom:6 }, children:"Note (optionnel)" }),
+          n.jsx("textarea", { value:form.note, onChange:e=>setForm(f=>({...f,note:e.target.value})), placeholder:"Angle, idée, lien...", rows:2, style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", resize:"vertical", outline:"none" } }),
+        ]}),
+        n.jsxs("div", { style:{ display:"flex", gap:8, justifyContent:"space-between" }, children:[
+          modal.post && n.jsx("button", { onClick:()=>deletePost(modal.dateKey,modal.post.id), style:{ border:"1px solid #FCA5A5", background:"#FEF2F2", color:"#dc2626", borderRadius:8, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Supprimer" }),
+          n.jsxs("div", { style:{ display:"flex", gap:8, marginLeft:"auto" }, children:[
+            n.jsx("button", { onClick:()=>setModal(null), style:{ border:"1px solid #E5E7EB", background:"white", color:"#374151", borderRadius:8, padding:"8px 16px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Annuler" }),
+            n.jsx("button", { onClick:savePost, style:{ border:"none", background:"linear-gradient(135deg,#6B40D8,#C03080)", color:"white", borderRadius:8, padding:"8px 18px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }, children:"Enregistrer" }),
+          ]}),
+        ]}),
+      ]})
+    }),
+  ]});
+}
+
+function ContentMaitreTab() {
+  const [subTab, setSubTab] = D.useState("generateur");
+  const [sujet, setSujet] = D.useState("");
+  const [publicCible, setPublicCible] = D.useState("PME");
+  const [zoneGeo, setZoneGeo] = D.useState("Morbihan / Bretagne");
+  const [loading, setLoading] = D.useState(false);
+  const [result, setResult] = D.useState(null);
+  const [activeSection, setActiveSection] = D.useState("analyse");
+  const [copied, setCopied] = D.useState("");
+  const [error, setError] = D.useState("");
+  const [fullscreen, setFullscreen] = D.useState(null); // { id, label, content }
+  const [startDate, setStartDate] = D.useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + (1 - d.getDay() + 7) % 7 || 7); return d.toISOString().slice(0,10);
+  });
+  const [calAdded, setCalAdded] = D.useState(false);
+
+  const apiKey = (() => { try { return JSON.parse(localStorage.getItem("bto_settings")||"{}").claudeApiKey || ""; } catch { return ""; } })();
+
+  const generer = async () => {
+    if (!sujet.trim()) return;
+    if (!apiKey) { setError("Clé API Claude manquante (onglet Paramètres)."); return; }
+    setLoading(true); setError(""); setResult(null);
+
+    const prompt = `Tu es consultant SEO senior, expert Google Business Profile, référencement local, content marketing et stratégie éditoriale.
+Tu travailles pour l'Agence Be The One, spécialisée dans le référencement local, Google Business Profile et la visibilité sur Google Maps pour les entreprises du Morbihan et de Bretagne.
+
+À partir du sujet fourni, crée un écosystème complet de contenu permettant d'améliorer le référencement naturel, d'obtenir du trafic qualifié, de générer des prospects, d'alimenter LinkedIn, Facebook, Instagram et Google Business Profile, et de réutiliser un même contenu sur plusieurs semaines.
+
+CONTEXTE
+Sujet : ${sujet}
+Public cible : ${publicCible}
+Zone géographique : ${zoneGeo}
+
+Génère exactement les 12 sections ci-dessous. Commence chaque section par son identifiant entre balises ###SECTION_ID### et termine par ###END###.
+
+###ANALYSE###
+ÉTAPE 1 — ANALYSE SEO
+Intention de recherche : [Informationnelle / Commerciale / Transactionnelle] — explique pourquoi.
+Niveau de concurrence SEO : [Faible / Moyen / Élevé] — justifie.
+Opportunité locale : explique pourquoi ce sujet est pertinent pour une entreprise locale du Morbihan/Bretagne.
+Mots-clés :
+- 1 mot-clé principal
+- 15 mots-clés secondaires
+- 20 requêtes longue traîne
+- 20 questions que se posent les internautes
+- Variantes locales intégrant Vannes, Lorient, Auray, Morbihan et Bretagne
+
+ÉTAPE 2 — STRUCTURE DE L'ARTICLE
+Plan SEO complet avec H1, H2, H3, FAQ SEO et Conclusion.
+Objectif : dépasser les contenus concurrents.
+###END###
+
+###BLOG###
+ÉTAPE 3 — ARTICLE SEO COMPLET (1500 à 2500 mots)
+Consignes : ton expert, pédagogique, concret, sans jargon inutile, optimisé SEO, exemples locaux bretons, facile à lire.
+
+## STRUCTURE OBLIGATOIRE
+1. Introduction SEO (150 à 200 mots) — OBLIGATOIRE, avant tout autre contenu :
+   - Contextualiser le sujet pour un chef d'entreprise local
+   - Poser le problème ou l'enjeu clairement
+   - Annoncer ce que l'article va apporter
+   - Intégrer naturellement le mot-clé principal et 2-3 mots-clés secondaires
+   - Ne jamais entrer directement dans le vif du sujet sans cette introduction
+2. Corps de l'article : H2 + H3, paragraphes courts, exemples locaux
+3. FAQ de 4 à 6 questions-réponses — OBLIGATOIRE :
+   - Vraies questions de dirigeants/artisans bretons
+   - Réponses courtes et précises (50-100 mots)
+   - Optimisé pour "People Also Ask" Google
+4. Checklist récapitulative (5 à 8 points actionnables)
+5. Maximum deux appels à l'action (pas de discours commercial agressif)
+
+À la fin : META TITLE (60 car. max) / META DESCRIPTION (155 car. max) / SLUG / EXTRAIT BLOG (2 phrases)
+###END###
+
+###MICRO###
+ÉTAPE 4 — TABLEAU DES MICRO-CONTENUS
+Analyse l'article et identifie, sous forme de tableau avec colonnes Titre | Angle | Objectif | Format :
+- 10 idées LinkedIn
+- 10 idées Facebook
+- 10 idées Google Business Profile
+- 10 idées de Reels
+- 10 idées de Stories
+- 10 idées de Carrousels Instagram
+###END###
+
+###LINKEDIN###
+ÉTAPE 5a — 4 POSTS LINKEDIN
+Chaque post : Hook fort (1-2 lignes) / Développement (conseil ou insight) / Exemple concret local / Question finale engageante.
+Longueur : 150 à 300 mots par post.
+###END###
+
+###FACEBOOK###
+ÉTAPE 5b — 2 PUBLICATIONS FACEBOOK
+Ton accessible, local, communautaire. Avec question pour engager la communauté.
+Longueur : 100 à 200 mots par publication.
+###END###
+
+###GBP###
+ÉTAPE 5c — 3 PUBLICATIONS GOOGLE BUSINESS PROFILE
+1000 à 1500 caractères chacune. Sans emoji. Sans hashtags. Informatif, local, clair.
+###END###
+
+###CARROUSEL###
+ÉTAPE 5d — 2 CARROUSELS INSTAGRAM (8 slides chacun)
+Slide 1 : Titre accrocheur
+Slides 2 à 7 : Une idée par slide, texte ultra-court, visuel suggéré
+Slide 8 : Résumé + Question engageante + CTA
+###END###
+
+###REEL###
+ÉTAPE 5e — 2 SCRIPTS REELS (60 secondes max)
+Structure : Accroche 5 sec / Problème 10 sec / 3 conseils 30 sec / Conclusion + CTA 15 sec
+Indiquer les transitions et suggestions visuelles.
+###END###
+
+###STORIES###
+ÉTAPE 5f — 5 STORIES INSTAGRAM
+Une story de chaque type : Quiz / Vrai-Faux / Astuce du jour / Statistique choc / Question ouverte
+Pour chaque story : Texte à afficher + Type d'interaction (sondage, quiz, question)
+###END###
+
+
+###MAILLAGE###
+ÉTAPE 7 — MAILLAGE SEO & COCON SÉMANTIQUE
+- 5 articles à créer dans le futur (articles liés)
+- 5 articles parents (niveau supérieur dans le cocon)
+- 5 articles enfants (niveau inférieur, longue traîne)
+Pour chaque article : Titre suggéré + Angle + Mot-clé cible
+Décris la stratégie de cocon sémantique pour ce sujet.
+###END###
+
+###CAL30###
+ÉTAPE 8 — CALENDRIER ÉDITORIAL 30 JOURS
+À partir de ce seul article, planifie 30 jours de contenu multicanal.
+Objectif : minimum 20 contenus exploitables.
+Format tableau : Semaine | Jour | Canal | Type de contenu | Titre / Angle
+Canaux : LinkedIn / Facebook / Instagram / Google Business Profile
+###END###`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 16000, messages: [{ role: "user", content: prompt }] }),
+      });
+      const data = await res.json();
+      const raw = data?.content?.[0]?.text || "";
+      const sections = {};
+      CONTENU_SECTIONS.forEach(s => {
+        const re = new RegExp(`###${s.id.toUpperCase()}###([\\s\\S]*?)###END###`, "i");
+        const m = raw.match(re);
+        sections[s.id] = m ? m[1].trim() : "";
+      });
+      setResult(sections);
+      setActiveSection("analyse");
+      setCalAdded(false);
+    } catch(e) { setError("Erreur : " + e.message); }
+    finally { setLoading(false); }
+  };
+
+  const programmerCalendrier = () => {
+    const CAL_KEY = "bto_cal_contenu";
+    const base = new Date(startDate + "T12:00:00");
+    const addDays = (d, n) => { const dt = new Date(d); dt.setDate(dt.getDate()+n); return dt.toISOString().slice(0,10); };
+    // S'assurer que base est un lundi
+    const dow = base.getDay(); // 0=dim
+    const toMon = dow === 0 ? 1 : (dow === 1 ? 0 : 8 - dow);
+    if (toMon) base.setDate(base.getDate() + toMon);
+    const mon = base.toISOString().slice(0,10);
+
+    // Planning 4 semaines : 17 posts répartis sur le mois
+    const plan = [
+      { offset:0,  platform:"blog",       titre:`[ARTICLE] ${sujet}`,               note:"Publier sur le blog + partager le lien" },
+      { offset:2,  platform:"ig",         titre:`[CARROUSEL 1] ${sujet}`,            note:"Carrousel Instagram — voir section Carrousels" },
+      { offset:3,  platform:"linkedin",   titre:`[LINKEDIN 1] ${sujet}`,             note:"Post LinkedIn #1 — voir section LinkedIn" },
+      { offset:4,  platform:"gbp",        titre:`[GBP 1] ${sujet}`,                  note:"Publication GBP #1 — voir section GBP" },
+      { offset:5,  platform:"story",      titre:`[STORY 1-2] ${sujet}`,              note:"Stories #1 et #2 — voir section Stories" },
+      { offset:9,  platform:"ig",         titre:`[CARROUSEL 2] ${sujet}`,            note:"Carrousel Instagram #2 — voir section Carrousels" },
+      { offset:10, platform:"linkedin",   titre:`[LINKEDIN 2] ${sujet}`,             note:"Post LinkedIn #2 — voir section LinkedIn" },
+      { offset:11, platform:"gbp",        titre:`[GBP 2] ${sujet}`,                  note:"Publication GBP #2 — voir section GBP" },
+      { offset:12, platform:"story",      titre:`[STORY 3] ${sujet}`,                note:"Story #3 — voir section Stories" },
+      { offset:14, platform:"ig",         titre:`[REEL 1] ${sujet}`,                 note:"Script Reel #1 — voir section Reels" },
+      { offset:10+7, platform:"linkedin", titre:`[LINKEDIN 3] ${sujet}`,             note:"Post LinkedIn #3 — voir section LinkedIn" },
+      { offset:11+7, platform:"gbp",      titre:`[GBP 3] ${sujet}`,                  note:"Publication GBP #3 — voir section GBP" },
+      { offset:12+7, platform:"story",    titre:`[STORY 4] ${sujet}`,                note:"Story #4 — voir section Stories" },
+      { offset:21, platform:"ig",         titre:`[REEL 2] ${sujet}`,                 note:"Script Reel #2 — voir section Reels" },
+      { offset:24, platform:"linkedin",   titre:`[LINKEDIN 4] ${sujet}`,             note:"Post LinkedIn #4 — voir section LinkedIn" },
+      { offset:25, platform:"ig",         titre:`[FACEBOOK] ${sujet}`,               note:"Publications Facebook — voir section Facebook" },
+      { offset:26, platform:"story",      titre:`[STORY 5] ${sujet}`,                note:"Story #5 — voir section Stories" },
+    ];
+
+    let stored = {};
+    try { stored = JSON.parse(localStorage.getItem(CAL_KEY)||"{}"); } catch {}
+    plan.forEach(({ offset, platform, titre, note }) => {
+      const key = addDays(mon, offset);
+      if (!stored[key]) stored[key] = [];
+      stored[key].push({ id: Date.now()+Math.random(), platform, titre, note, done:false });
+    });
+    localStorage.setItem(CAL_KEY, JSON.stringify(stored));
+    setCalAdded(true);
+  };
+
+  const copySection = (id) => {
+    const text = result?.[id] || "";
+    navigator.clipboard.writeText(text).then(() => { setCopied(id); setTimeout(()=>setCopied(""), 2000); });
+  };
+
+  const cardStyle = { background:"white", borderRadius:14, padding:"20px 22px", border:"1px solid #E5E7EB", marginBottom:14 };
+
+  return n.jsxs("div", { style:{ padding:"28px 32px", background:"#F4F5FA", minHeight:"100%", overflowY:"auto" }, className:"fade", children:[
+    n.jsxs("div", { style:{ marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }, children:[
+      n.jsxs("div", { children:[
+        n.jsx("div", { style:{ fontSize:12, color:"#9CA3AF", marginBottom:4 }, children:"Contenu marketing" }),
+        n.jsx("div", { style:{ fontSize:24, fontWeight:900, color:"#1E1B30", letterSpacing:"-.02em" }, children:"✍️ Contenu maître" }),
+      ]}),
+    ]}),
+    n.jsx("div", { style:{ background:"white", borderRadius:10, padding:4, display:"inline-flex", gap:4, marginBottom:20, border:"1px solid #E5E7EB" }, children:
+      [{ id:"generateur", label:"🚀 Générateur" }, { id:"calendrier", label:"📅 Calendrier" }].map(t =>
+        n.jsx("button", { onClick:()=>setSubTab(t.id), style:{ border:"none", borderRadius:7, padding:"7px 18px", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", background:subTab===t.id?"white":"transparent", color:subTab===t.id?"#1E1B30":"#9CA3AF", boxShadow:subTab===t.id?"0 1px 4px rgba(0,0,0,.1)":"none" }, children:t.label }, t.id)
+      )
+    }),
+    subTab === "calendrier" && n.jsx(CalendrierContenu, {}),
+    subTab === "generateur" && n.jsxs("div", { children:[
+
+    n.jsxs("div", { style:{ ...cardStyle, borderLeft:"3px solid #6B40D8" }, children:[
+      n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:4 }, children:"🚀 Prompt Maître — 1 sujet = 1 mois de contenu multicanal" }),
+      n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginBottom:14 }, children:"8 étapes : analyse SEO · article · micro-contenus · LinkedIn · Facebook · GBP · Reels · Stories · Maillage · Plan 30 jours" }),
+
+      n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }, children:[
+        n.jsxs("div", { children:[
+          n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Public cible" }),
+          n.jsx("select", {
+            value: publicCible,
+            onChange: e => setPublicCible(e.target.value),
+            style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
+            children: ["Artisan","Commerçant","Profession libérale","PME","Agent immobilier","Restaurateur","TPE / Startup"].map(v => n.jsx("option", { value:v, children:v }, v))
+          }),
+        ]}),
+        n.jsxs("div", { children:[
+          n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Zone géographique" }),
+          n.jsx("select", {
+            value: zoneGeo,
+            onChange: e => setZoneGeo(e.target.value),
+            style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
+            children: ["Morbihan / Bretagne","Vannes","Lorient","Auray","Quimper","Rennes","Brest","Pontivy","Ploërmel"].map(v => n.jsx("option", { value:v, children:v }, v))
+          }),
+        ]}),
+      ]}),
+
+      n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Sujet / Titre de l'article" }),
+      n.jsx("textarea", {
+        value: sujet,
+        onChange: e => setSujet(e.target.value),
+        placeholder: "Ex : Photos Google Business Profile : le secret des artisans bretons qui attirent 3x plus de contacts\nEx : Comment apparaître dans Google Maps à Vannes ?\nEx : Référencement local vs Google Ads : que choisir pour une entreprise du Morbihan ?",
+        rows: 3,
+        style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"10px 14px", fontSize:13, fontFamily:"inherit", resize:"vertical", outline:"none", color:"#1E1B30" },
+      }),
+      error && n.jsx("div", { style:{ color:"#dc2626", fontSize:12, marginTop:8 }, children: error }),
+      n.jsxs("div", { style:{ marginTop:12, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }, children:[
+        n.jsx("button", {
+          onClick: generer,
+          disabled: loading || !sujet.trim(),
+          style:{ background: loading||!sujet.trim() ? "#E5E7EB" : "linear-gradient(135deg,#6B40D8,#C03080)", color: loading||!sujet.trim() ? "#9CA3AF" : "white", border:"none", borderRadius:9, padding:"11px 26px", fontSize:13, fontWeight:700, cursor: loading||!sujet.trim() ? "default" : "pointer", fontFamily:"inherit" },
+          children: loading ? "⏳ Génération en cours (60-90 sec)..." : "🚀 Générer les 8 étapes",
+        }),
+        result && n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:600 }, children:"✓ 12 sections générées — cliquez sur un onglet pour voir" }),
+      ]}),
+    ]}),
+
+    result && n.jsxs("div", { style:{ ...cardStyle, borderLeft:"3px solid #1D9E75", background:"#F0FDF9" }, children:[
+      n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }, children:[
+        n.jsxs("div", { children:[
+          n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#065F46", marginBottom:2 }, children:"📅 Programmer dans le calendrier" }),
+          n.jsx("div", { style:{ fontSize:11, color:"#059669" }, children:"17 posts répartis sur 4 semaines — LinkedIn · IG/Reels · GBP · Stories" }),
+        ]}),
+        n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8 }, children:[
+          n.jsxs("div", { children:[
+            n.jsx("label", { style:{ fontSize:11, color:"#065F46", fontWeight:600, display:"block", marginBottom:2 }, children:"Lundi de départ" }),
+            n.jsx("input", {
+              type:"date",
+              value: startDate,
+              onChange: e => { setStartDate(e.target.value); setCalAdded(false); },
+              style:{ border:"1px solid #6EE7B7", borderRadius:7, padding:"6px 10px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#065F46", background:"white" },
+            }),
+          ]}),
+          calAdded
+            ? n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8 }, children:[
+                n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:700 }, children:"✓ Ajouté au calendrier !" }),
+                n.jsx("button", {
+                  onClick: () => setSubTab("calendrier"),
+                  style:{ fontSize:12, padding:"7px 14px", borderRadius:8, border:"none", background:"#059669", color:"white", fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+                  children:"Voir le calendrier →"
+                }),
+              ]})
+            : n.jsx("button", {
+                onClick: programmerCalendrier,
+                style:{ fontSize:12, padding:"8px 18px", borderRadius:8, border:"none", background:"#059669", color:"white", fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" },
+                children:"📥 Ajouter au calendrier",
+              }),
+        ]}),
+      ]}),
+    ]}),
+
+    result && n.jsxs("div", { style: cardStyle, children:[
+      n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:14 }, children:"📦 " + sujet }),
+
+      n.jsx("div", { style:{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16, paddingBottom:14, borderBottom:"1px solid #F3F4F6" }, children:
+        CONTENU_SECTIONS.map(s => n.jsx("button", {
+          onClick: () => setActiveSection(s.id),
+          style:{
+            border: activeSection===s.id ? "2px solid #6B40D8" : "1px solid #E5E7EB",
+            background: activeSection===s.id ? "#F5F3FF" : "white",
+            color: activeSection===s.id ? "#6B40D8" : "#374151",
+            borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight: activeSection===s.id ? 700 : 500, cursor:"pointer", fontFamily:"inherit",
+          },
+          children: s.icon + " " + s.label,
+        }, s.id))
+      }),
+
+      CONTENU_SECTIONS.filter(s => s.id === activeSection).map(s => n.jsxs("div", { key: s.id, children:[
+        n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }, children:[
+          n.jsx("div", { style:{ fontSize:14, fontWeight:700, color:"#1E1B30" }, children: s.icon + " " + s.label }),
+          n.jsxs("div", { style:{ display:"flex", gap:6 }, children:[
+            n.jsx("button", {
+              onClick: () => setFullscreen({ id:s.id, label:s.icon+" "+s.label, content:result[s.id]||"" }),
+              style:{ background:"#F9FAFB", color:"#374151", border:"1px solid #E5E7EB", borderRadius:7, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+              children: "⛶ Plein écran",
+            }),
+            n.jsx("button", {
+              onClick: () => copySection(s.id),
+              style:{ background: copied===s.id ? "#F0FDF4" : "#F9FAFB", color: copied===s.id ? "#059669" : "#374151", border:"1px solid "+(copied===s.id?"#BBF7D0":"#E5E7EB"), borderRadius:7, padding:"6px 14px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" },
+              children: copied===s.id ? "✓ Copié !" : "📋 Copier",
+            }),
+          ]}),
+        ]}),
+        n.jsx("div", {
+          style:{ background:"#F9FAFB", borderRadius:10, padding:"16px", fontSize:13, lineHeight:1.7, color:"#374151", maxHeight:520, overflowY:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word", border:"1px solid #F3F4F6" },
+          children: result[s.id] || "—",
+        }),
+      ]})),
+    ]}),
+    ]}),
+
+    fullscreen && n.jsx("div", {
+      style:{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", zIndex:9999, display:"flex", alignItems:"stretch", justifyContent:"center", padding:"24px" },
+      onClick: e => { if(e.target===e.currentTarget) setFullscreen(null); },
+      children: n.jsxs("div", { style:{ background:"white", borderRadius:16, display:"flex", flexDirection:"column", width:"100%", maxWidth:900, overflow:"hidden", boxShadow:"0 24px 80px rgba(0,0,0,.3)" }, children:[
+        n.jsxs("div", { style:{ padding:"16px 22px", borderBottom:"1px solid #E5E7EB", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }, children:[
+          n.jsx("div", { style:{ fontSize:15, fontWeight:700, color:"#1E1B30" }, children: fullscreen.label }),
+          n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
+            n.jsx("button", {
+              onClick: () => { navigator.clipboard.writeText(fullscreen.content); },
+              style:{ fontSize:12, padding:"6px 14px", borderRadius:7, border:"1px solid #E5E7EB", background:"#F9FAFB", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
+              children:"📋 Copier",
+            }),
+            n.jsx("button", {
+              onClick: () => setFullscreen(null),
+              style:{ fontSize:13, padding:"6px 14px", borderRadius:7, border:"none", background:"#F3F4F6", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:700 },
+              children:"✕ Fermer",
+            }),
+          ]}),
+        ]}),
+        n.jsx("div", {
+          style:{ flex:1, overflowY:"auto", padding:"24px 28px", fontSize:13.5, lineHeight:1.85, color:"#1E1B30", whiteSpace:"pre-wrap", wordBreak:"break-word" },
+          children: fullscreen.content,
+        }),
+      ]}),
+    }),
+  ]});
+}
+
+function SiteWebTab() {
+  const [articles, setArticles] = D.useState([]);
+  const [loading, setLoading] = D.useState(true);
+  const [saving, setSaving] = D.useState(false);
+  const [form, setForm] = D.useState(emptyForm());
+  const [editId, setEditId] = D.useState(null);
+  const [msg, setMsg] = D.useState(null);
+  const [preview, setPreview] = D.useState(null);
+  const [aiLoading, setAiLoading] = D.useState(false);
+  const [idees, setIdees] = D.useState(() => { try { return JSON.parse(localStorage.getItem("bto_article_idees")||"[]"); } catch { return []; } });
+  const [newIdee, setNewIdee] = D.useState("");
+  const [ideeLoading, setIdeeLoading] = D.useState(false);
+  const [imgUploading, setImgUploading] = D.useState(false);
+  const [imgDragging, setImgDragging] = D.useState(false);
+  const [imgError, setImgError] = D.useState("");
+  const contenuRef = D.useRef(null);
+  const handleArticlePhoto = (file) => {
+    if (!file || !file.type.startsWith("image/")) { setImgError("Format non supporté — choisissez une image."); return; }
+    setImgUploading(true); setImgError("");
+    const canvas = document.createElement("canvas");
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      URL.revokeObjectURL(url);
+      setForm(f => ({...f, imageUrl: dataUrl}));
+      setImgUploading(false);
+    };
+    img.onerror = () => { setImgError("Impossible de lire l'image."); setImgUploading(false); URL.revokeObjectURL(url); };
+    img.src = url;
+  };
+
+  const saveIdees = (list) => { setIdees(list); localStorage.setItem("bto_article_idees", JSON.stringify(list)); };
+  const addIdee = () => { const t = newIdee.trim(); if (!t) return; saveIdees([...idees, t]); setNewIdee(""); };
+  const removeIdee = (i) => saveIdees(idees.filter((_,j)=>j!==i));
+  const useIdee = (titre) => { setForm(f=>({...f, titre})); removeIdee(idees.indexOf(titre)); window.scrollTo({top:0,behavior:"smooth"}); };
+
+  const genererIdees = async () => {
+    const apiKey = localStorage.getItem("bto_apikey") || "";
+    if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante (onglet Paramètres)." }); return; }
+    setIdeeLoading(true);
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{ "x-api-key":apiKey, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
+        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:600,
+          messages:[{ role:"user", content:`Génère 6 idées de titres d'articles de blog SEO pour une agence de référencement local (Google Maps, Google Business Profile) basée à Vannes, Morbihan. Les clients sont des PME, artisans, commerçants locaux en Bretagne.
+
+Contraintes :
+- Titres accrocheurs, orientés résultats concrets
+- Inclure des variations : question, liste, guide, erreurs, comparaison
+- Axés sur la visibilité locale, les avis Google, Google Maps, les fiches GMB
+- Pas de répétition des sujets déjà traités : apparaître Google Maps, avis négatifs, posts Google, erreurs GMB, délais visibilité, obtenir avis
+
+Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","titre 5","titre 6"]` }] })
+      });
+      const d = await r.json();
+      const raw = d.content?.[0]?.text || "[]";
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) { const list = JSON.parse(match[0]); saveIdees([...idees, ...list]); }
+    } catch(e) { setMsg({ ok:false, text:"Erreur IA : " + e.message }); }
+    setIdeeLoading(false);
+  };
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${SITE_API}/list?admin=1`, { headers:{ "x-admin-password": SITE_PWD } });
+      const data = await r.json();
+      setArticles(Array.isArray(data) ? data : []);
+    } catch { setArticles([]); }
+    setLoading(false);
+  };
+  D.useEffect(() => { load(); }, []);
+
+  const save = async (list) => {
+    setSaving(true);
+    try {
+      await fetch(`${SITE_API}/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-password": SITE_PWD },
+        body: JSON.stringify(list),
+      });
+      setArticles(list);
+      setMsg({ ok: true, text: "✅ Sauvegardé et publié sur le site !" });
+    } catch(e) { setMsg({ ok: false, text: "❌ Erreur : " + e.message }); }
+    setSaving(false);
+    setTimeout(() => setMsg(null), 4000);
+  };
+
+  const slugify = (str) => str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+
+  const handleSubmit = () => {
+    if (!form.titre.trim()) { setMsg({ ok: false, text: "Le titre est obligatoire." }); return; }
+    if (!form.extrait.trim()) { setMsg({ ok: false, text: "L'extrait est obligatoire." }); return; }
+    if (!form.contenu.trim()) { setMsg({ ok: false, text: "Le contenu est obligatoire." }); return; }
+    const finalSlug = form.slug.trim() || slugify(form.titre);
+    const finalStatus = form.status || "published";
+    if (finalStatus === "scheduled" && !form.scheduledAt) { setMsg({ ok:false, text:"Choisis une date et heure de publication." }); return; }
+    const finalForm = { ...form, slug: finalSlug, status: finalStatus };
+    let updated;
+    if (editId) {
+      updated = articles.map(a => a.id === editId ? { ...a, ...finalForm } : a);
+    } else {
+      const newArt = { ...finalForm, id: finalSlug + "-" + Date.now() };
+      updated = [newArt, ...articles];
+    }
+    save(updated);
+    setForm(emptyForm());
+    setEditId(null);
+  };
+
+  // ─── Toolbar Hn ─────────────────────────────────────────────────────────
+  const insertTag = (open, close) => {
+    const ta = contenuRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart, e = ta.selectionEnd;
+    const sel = form.contenu.slice(s, e) || "Texte ici";
+    const newVal = form.contenu.slice(0,s) + open + sel + close + form.contenu.slice(e);
+    setForm(f => ({...f, contenu: newVal}));
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(s + open.length, s + open.length + sel.length); }, 0);
+  };
+
+  // ─── Génération IA ───────────────────────────────────────────────────────
+  const genererIA = async () => {
+    if (!form.titre.trim()) { setMsg({ ok:false, text:"Remplis d'abord le titre." }); return; }
+    const apiKey = localStorage.getItem("bto_apikey") || "";
+    if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante (onglet Paramètres)." }); return; }
+    setAiLoading(true);
+    try {
+      const prompt = `Tu es consultant SEO local spécialisé Google Business Profile.
+
+Rédige un article de blog destiné aux dirigeants de TPE, PME, artisans et commerçants du Morbihan.
+
+## SUJET DE L'ARTICLE
+"${form.titre}"
+${form.motCle ? `\nMot-clé principal : "${form.motCle}" — à intégrer dans le premier paragraphe, dans au moins un H2, et naturellement dans le corps.` : ""}
+
+## OBJECTIFS
+
+Objectif principal : être le meilleur résultat sur Google pour cette requête — apporter la réponse la plus complète et utile possible.
+Objectif secondaire : générer des demandes d'audit pour Be The One, de manière naturelle et non commerciale.
+
+## CONSIGNES DE RÉDACTION
+
+- Longueur : 1500 à 2500 mots — article complet, ne pas tronquer.
+- Ton expert mais accessible — pas de jargon inutile, exemples concrets.
+- Répondre à toutes les questions qu'un dirigeant peut se poser sur ce sujet.
+- Inclure des exemples locaux concrets lorsque pertinent (Morbihan, Bretagne, villes locales).
+- Ajouter des données chiffrées lorsque possible.
+- Paragraphes courts.
+- Conseils immédiatement applicables.
+- Ne jamais transformer l'article en page commerciale.
+- Faire ressortir l'expertise de Be The One de manière naturelle, pas en argumentaire de vente.
+
+## STRUCTURE OBLIGATOIRE
+
+1. Introduction SEO (150 à 200 mots) — OBLIGATOIRE, avant tout autre contenu :
+   - Contextualiser le sujet et son importance pour les entreprises locales
+   - Poser le problème ou l'enjeu principal que rencontre le dirigeant
+   - Annoncer ce que l'article va apporter (sans lister mécaniquement les parties)
+   - Intégrer naturellement le mot-clé principal
+   - Aider Google à comprendre immédiatement le sujet de la page
+   - Ne jamais entrer directement dans le vif du sujet : toujours commencer par cette introduction
+2. Corps de l'article : H2 + H3, paragraphes courts
+3. FAQ de 4 à 6 questions-réponses fréquentes — OBLIGATOIRE, avec ces règles :
+   - Choisir les vraies questions que se posent les dirigeants sur ce sujet
+   - Réponses courtes et directes (3 à 6 lignes max par réponse)
+   - Utiliser le balisage HTML : <h3> pour la question, <p> pour la réponse
+   - Intégrer naturellement le mot-clé et des variantes sémantiques
+   - Optimisé pour apparaître en "People Also Ask" sur Google
+4. Checklist récapitulative (liste à puces)
+5. Maximum deux appels à l'action (discrets, contextuels, non commerciaux)
+
+## NOTIONS À INTÉGRER NATURELLEMENT (si pertinent)
+
+Intégrer comme conseils pratiques, pas comme argumentaire :
+- Analyse de visibilité sur grille locale
+- Optimisation Google Business Profile
+- Gestion et réponses aux avis Google
+- Publications Google Posts
+- Citations locales
+- Analyse concurrentielle locale
+- Importance des photos
+- Suivi mensuel des performances
+
+## RÈGLES HTML OBLIGATOIRES
+
+- <h2> pour les grandes sections
+- <h3> pour les sous-sections
+- <p> pour les paragraphes
+- <ul><li> pour les listes et la checklist
+- <strong> pour les termes importants
+- Pas de <h1> (géré par le site)
+- Pas de balises html/head/body
+
+Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
+
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
+        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:16000, messages:[{ role:"user", content: prompt }] }),
+      });
+      const data = await r.json();
+      const html = data.content?.[0]?.text || "";
+      if (html) {
+        setForm(f => ({...f, contenu: html}));
+        setMsg({ ok:true, text:"✅ Contenu généré par Claude ! Relis et ajuste si besoin avant de publier." });
+      } else {
+        setMsg({ ok:false, text:"❌ Réponse vide de Claude." });
+      }
+    } catch(e) { setMsg({ ok:false, text:"❌ Erreur IA : " + e.message }); }
+    setAiLoading(false);
+  };
+
+  const handleEdit = (a) => {
+    setForm({ titre:a.titre, slug:a.slug||"", metaTitle:a.metaTitle||"", metaDesc:a.metaDesc||"", motCle:a.motCle||"", categorie:a.categorie, extrait:a.extrait, contenu:a.contenu, duree:a.duree, date:a.date, imageUrl:a.imageUrl||"", status:a.status||"published", scheduledAt:a.scheduledAt||"" });
+    setEditId(a.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = (id) => {
+    if (!confirm("Supprimer cet article ?")) return;
+    save(articles.filter(a => a.id !== id));
+  };
+
+  const catInfo = (val) => CAT_OPTIONS.find(c => c.value === val) || CAT_OPTIONS[0];
+  const inp = { background:"#F9FAFB", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:13, width:"100%", boxSizing:"border-box" };
+  const lbl = (txt, sub) => n.jsxs("label", { style:{ fontSize:12, fontWeight:600, color:"#374151", display:"block", marginBottom:4 }, children:[txt, sub && n.jsx("span", { style:{fontWeight:400,color:"#9CA3AF",marginLeft:4}, children:sub })] });
+
+  // ─── SEO checks (temps réel) ─────────────────────────────────────────────
+  const kw = (form.motCle||"").toLowerCase().trim();
+  const slugVal = (form.slug||slugify(form.titre)).toLowerCase();
+  const kwInTitre  = kw && form.titre.toLowerCase().includes(kw);
+  const kwInSlug   = kw && slugVal.includes(kw.replace(/\s+/g,"-"));
+  const kwInMeta   = kw && (form.metaDesc||"").toLowerCase().includes(kw);
+  const kwInH2     = kw && (() => { const m=(form.contenu||"").match(/<h2[^>]*>(.*?)<\/h2>/gi); return m ? m.some(h=>h.toLowerCase().includes(kw)) : false; })();
+  const titleLen   = (form.metaTitle||"").length;
+  const descLen    = (form.metaDesc||"").length;
+  const Check = ({ok, txt}) => n.jsxs("div", { style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color: ok?"#166534":"#6B7280"}, children:[
+    n.jsx("span", { style:{fontSize:13}, children: ok ? "✅" : "⬜" }), txt
+  ]});
+
+  return n.jsxs("div", { style:{ maxWidth:980 }, children:[
+    /* HEADER */
+    n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }, children:[
+      n.jsxs("div", { children:[
+        n.jsx("div", { style:{ fontSize:20, fontWeight:800, color:"#1E1B30" }, children:"🌐 Site Web — Articles de blog" }),
+        n.jsx("div", { style:{ fontSize:12, color:"#6B7280", marginTop:2 }, children:"Les articles publiés ici apparaissent automatiquement sur agence-betheone.fr/blog" }),
+      ]}),
+      n.jsx("button", { onClick: load, style:{ fontSize:12, padding:"6px 14px", borderRadius:8, border:"1px solid #E5E7EB", background:"white", cursor:"pointer", color:"#6B7280" }, children:"🔄 Actualiser" }),
+    ]}),
+
+    msg && n.jsx("div", { style:{ background: msg.ok ? "#F0FDF4" : "#FEF2F2", border:`1px solid ${msg.ok ? "#BBF7D0" : "#FECACA"}`, borderRadius:8, padding:"10px 14px", fontSize:13, color: msg.ok ? "#166534" : "#991B1B", marginBottom:16 }, children: msg.text }),
+
+    /* MINI CALENDRIER ÉDITORIAL */
+    (() => {
+      const MOIS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+      const today = new Date();
+      const months = [0,1].map(offset => {
+        const d = new Date(today.getFullYear(), today.getMonth()+offset, 1);
+        return { year: d.getFullYear(), month: d.getMonth() };
+      });
+      const articlesByDate = {};
+      articles.forEach(a => {
+        if (a.date) {
+          const k = a.date.slice(0,10);
+          if (!articlesByDate[k]) articlesByDate[k] = [];
+          articlesByDate[k].push(a);
+        }
+      });
+      const statusColor = s => s==="published" ? "#059669" : s==="scheduled" ? "#0EA5E9" : "#9CA3AF";
+      const statusBg   = s => s==="published" ? "#F0FDF4" : s==="scheduled" ? "#EFF6FF" : "#F9FAFB";
+      const statusLabel= s => s==="published" ? "Publié" : s==="scheduled" ? "Programmé" : "Brouillon";
+
+      return n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"16px 20px", marginBottom:18 }, children:[
+        n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }, children:[
+          n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:"📅 Planning éditorial" }),
+          n.jsxs("div", { style:{ display:"flex", gap:12, marginLeft:"auto" }, children:[
+            [["published","#059669","Publié"],["scheduled","#0EA5E9","Programmé"],["draft","#9CA3AF","Brouillon"]].map(([s,c,l]) =>
+              n.jsxs("div", { key:s, style:{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:"#6B7280" }, children:[
+                n.jsx("div", { style:{ width:8, height:8, borderRadius:"50%", background:c } }),
+                l, " (", articles.filter(a=>(a.status||"draft")===s).length, ")"
+              ]})
+            )
+          ]}),
+        ]}),
+        n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }, children:
+          months.map(({ year, month }) => {
+            const firstDow = (new Date(year, month, 1).getDay()+6)%7;
+            const daysInMonth = new Date(year, month+1, 0).getDate();
+            const totalCells = Math.ceil((firstDow+daysInMonth)/7)*7;
+            return n.jsxs("div", { key:`${year}-${month}`, children:[
+              n.jsx("div", { style:{ fontSize:12, fontWeight:700, color:"#374151", marginBottom:8, textAlign:"center" }, children: MOIS_FR[month]+" "+year }),
+              n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2 }, children:[
+                ...["L","M","M","J","V","S","D"].map((d,i) =>
+                  n.jsx("div", { key:i, style:{ fontSize:9, fontWeight:600, color:"#9CA3AF", textAlign:"center", paddingBottom:2 }, children:d })
+                ),
+                ...Array.from({length:totalCells}).map((_,i) => {
+                  const dayNum = i - firstDow + 1;
+                  const isValid = dayNum >= 1 && dayNum <= daysInMonth;
+                  const dateKey = isValid ? `${year}-${String(month+1).padStart(2,"0")}-${String(dayNum).padStart(2,"0")}` : null;
+                  const dayArts = dateKey ? (articlesByDate[dateKey]||[]) : [];
+                  const isToday = dateKey === today.toISOString().slice(0,10);
+                  return n.jsx("div", {
+                    key:i,
+                    title: dayArts.map(a=>`${statusLabel(a.status||"draft")} : ${a.titre}`).join("\n") || undefined,
+                    style:{
+                      minHeight:34, borderRadius:6, padding:"2px 2px",
+                      background: !isValid ? "transparent" : isToday ? "#F5F3FF" : dayArts.length ? statusBg(dayArts[0].status||"draft") : "#FAFAFA",
+                      border: isToday ? "1.5px solid #6B40D8" : dayArts.length ? `1px solid ${statusColor(dayArts[0].status||"draft")}30` : "1px solid transparent",
+                      cursor: dayArts.length ? "pointer" : "default",
+                    },
+                    onClick: () => dayArts.length && setEditId(dayArts[0].id) && setForm({...dayArts[0]}),
+                    children: isValid && n.jsxs("div", { style:{ display:"flex", flexDirection:"column", alignItems:"center", gap:1 }, children:[
+                      n.jsx("div", { style:{ fontSize:10, fontWeight: isToday?700:500, color: isToday?"#6B40D8": dayArts.length?"#374151":"#9CA3AF" }, children: dayNum }),
+                      ...dayArts.slice(0,2).map((a,ai) =>
+                        n.jsx("div", { key:ai, style:{ width:"80%", height:3, borderRadius:2, background:statusColor(a.status||"draft") } })
+                      ),
+                      dayArts.length > 2 && n.jsx("div", { style:{ fontSize:7, color:"#6B40D8", fontWeight:700 }, children:`+${dayArts.length-2}` }),
+                    ]}),
+                  }, i);
+                }),
+              ]}),
+            ]}, `${year}-${month}`);
+          })
+        }),
+        articles.filter(a=>a.status==="scheduled").length > 0 && n.jsxs("div", { style:{ marginTop:14, paddingTop:12, borderTop:"1px solid #F3F4F6" }, children:[
+          n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#0EA5E9", marginBottom:6 }, children:"🗓 Prochains articles programmés" }),
+          n.jsx("div", { style:{ display:"flex", flexWrap:"wrap", gap:6 }, children:
+            articles.filter(a=>a.status==="scheduled" && a.date).sort((a,b)=>a.date>b.date?1:-1).slice(0,5).map(a =>
+              n.jsxs("div", {
+                key:a.id,
+                onClick:()=>{ setEditId(a.id); setForm({...a}); },
+                style:{ fontSize:11, padding:"4px 10px", borderRadius:20, background:"#EFF6FF", color:"#0369A1", fontWeight:600, cursor:"pointer", border:"1px solid #BAE6FD" },
+                children: [new Date(a.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"numeric",month:"short"}), " — ", a.titre?.slice(0,30), a.titre?.length>30?"…":""]
+              }, a.id)
+            )
+          }),
+        ]}),
+      ]});
+    })(),
+
+    /* FORMULAIRE — 2 colonnes : gauche=contenu / droite=SEO */
+    n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 340px", gap:14, marginBottom:20, alignItems:"start" }, children:[
+
+      /* ── COLONNE GAUCHE ── */
+      n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:20 }, children:[
+        n.jsx("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30", marginBottom:14 }, children: editId ? "✏️ Modifier l'article" : "➕ Nouvel article" }),
+
+        /* Titre */
+        n.jsxs("div", { style:{ marginBottom:12 }, children:[
+          lbl("Titre H1 *"),
+          n.jsx("input", { style:inp, value:form.titre, onChange:e=>{ const v=e.target.value; setForm(f=>({...f,titre:v,...(!f.slug&&{slug:slugify(v)}),...(!f.metaTitle&&{metaTitle:v.slice(0,60)})})); }, placeholder:"Comment optimiser sa fiche Google My Business à Vannes ?" }),
+        ]}),
+
+        /* Catégorie + Date + Durée */
+        n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:12 }, children:[
+          n.jsxs("div", { children:[
+            lbl("Catégorie"),
+            n.jsx("select", { style:inp, value:form.categorie, onChange:e=>setForm(f=>({...f,categorie:e.target.value})),
+              children: CAT_OPTIONS.map(c => n.jsx("option", { value:c.value, children:c.label }, c.value)) }),
+          ]}),
+          n.jsxs("div", { children:[
+            lbl("Date"),
+            n.jsx("input", { style:inp, type:"date", value:form.date, onChange:e=>setForm(f=>({...f,date:e.target.value})) }),
+          ]}),
+          n.jsxs("div", { children:[
+            lbl("Durée de lecture"),
+            n.jsx("input", { style:inp, value:form.duree, onChange:e=>setForm(f=>({...f,duree:e.target.value})), placeholder:"5 min" }),
+          ]}),
+        ]}),
+
+        /* Photo + Extrait */
+        n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }, children:[
+          n.jsxs("div", { children:[
+            lbl("🖼 Photo de l'article", "(optionnel)"),
+            n.jsx("input",{id:"articlePhotoInput",type:"file",accept:"image/*",style:{display:"none"},onChange:ev=>{const f=ev.target.files[0];if(f)handleArticlePhoto(f);ev.target.value="";}}),
+            form.imageUrl && !imgUploading
+              ? n.jsxs("div",{style:{marginTop:4,position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #E5E7EB"},children:[
+                  n.jsx("img",{src:form.imageUrl,alt:"",style:{width:"100%",height:110,objectFit:"cover",display:"block"}}),
+                  n.jsxs("div",{style:{position:"absolute",top:6,right:6,display:"flex",gap:5},children:[
+                    n.jsx("button",{type:"button",onClick:()=>document.getElementById("articlePhotoInput").click(),style:{background:"#6B40D8",color:"white",border:"none",borderRadius:6,padding:"4px 9px",fontSize:11,fontWeight:700,cursor:"pointer"},children:"Changer"}),
+                    n.jsx("button",{type:"button",onClick:()=>setForm(f=>({...f,imageUrl:""})),style:{background:"#DC2626",color:"white",border:"none",borderRadius:6,padding:"4px 9px",fontSize:11,fontWeight:700,cursor:"pointer"},children:"Supprimer"}),
+                  ]}),
+                ]})
+              : n.jsxs("div",{
+                  style:{marginTop:4,height:110,border:"2px dashed #D1D5DB",borderRadius:8,background:"#F9FAFB",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8},
+                  children:[
+                    imgUploading
+                      ? n.jsx("div",{style:{fontSize:12,fontWeight:700,color:"#6B40D8"},children:"Envoi en cours..."})
+                      : n.jsxs(D.Fragment,{children:[
+                          n.jsx("div",{style:{fontSize:22},children:"🖼️"}),
+                          n.jsx("button",{type:"button",onClick:()=>document.getElementById("articlePhotoInput").click(),style:{background:"#6B40D8",color:"white",border:"none",borderRadius:7,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer"},children:"Choisir une photo"}),
+                          n.jsx("div",{style:{fontSize:10,color:"#9CA3AF"},children:"ou glisser-déposer une image"}),
+                        ]}),
+                  ]
+                }),
+            imgError && n.jsx("div",{style:{fontSize:11,color:"#DC2626",marginTop:4,fontWeight:600},children:imgError}),
+          ]}),
+          n.jsxs("div", { children:[
+            lbl("Extrait blog *"),
+            n.jsx("textarea", { style:{...inp, height:80, resize:"vertical"}, value:form.extrait, onChange:e=>setForm(f=>({...f,extrait:e.target.value})), placeholder:"Résumé affiché sur la carte du blog (2-3 phrases)" }),
+          ]}),
+        ]}),
+
+        /* Contenu */
+        n.jsxs("div", { style:{ marginBottom:16 }, children:[
+          n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }, children:[
+            lbl("Contenu *"),
+            n.jsxs("div", { style:{ display:"flex", gap:4, flexWrap:"wrap" }, children:[
+              ...["H2","H3","B","I","🔗","📋"].map((tag, i) => {
+                const actions = [()=>insertTag("<h2>","</h2>"),()=>insertTag("<h3>","</h3>"),()=>insertTag("<strong>","</strong>"),()=>insertTag("<em>","</em>"),()=>insertTag('<a href="">','</a>'),()=>insertTag("<ul>\n  <li>","</li>\n</ul>")];
+                return n.jsx("button", { key:tag, onClick:actions[i], title:["H2","H3","Gras","Italique","Lien","Liste"][i], style:{ background:"#F3F4F6", border:"1px solid #E5E7EB", borderRadius:5, padding:"3px 8px", fontSize:11, fontWeight:700, cursor:"pointer", color:"#374151" }, children: tag });
+              }),
+              n.jsx("button", { onClick:()=>insertTag(`\n<div style="background:linear-gradient(135deg,#EEF2FF,#F3F0FF);border:1.5px solid #C7D2FE;border-radius:14px;padding:20px 24px;margin:2rem 0;text-align:center">\n  <p style="font-weight:800;font-size:1rem;color:#1E1B30;margin:0 0 6px">🎯 Besoin d'aide pour votre visibilité locale ?</p>\n  <p style="font-size:.875rem;color:#6B7280;margin:0 0 14px">Audit de fiche Google offert sous 48h — sans engagement.</p>\n  <a href="/contact" style="background:linear-gradient(135deg,#3B5BDB,#6B40D8);color:white;font-weight:700;font-size:.8rem;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block">Demander mon audit offert →</a>\n</div>`, ""), title:"Insérer un bloc CTA", style:{ background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:5, padding:"3px 8px", fontSize:11, fontWeight:700, cursor:"pointer", color:"#C2410C" }, children: "CTA" }),
+              n.jsx("button", { onClick:genererIA, disabled:aiLoading, style:{ background: aiLoading?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color:"white", border:"none", borderRadius:5, padding:"3px 10px", fontSize:11, fontWeight:700, cursor:"pointer", marginLeft:4 }, children: aiLoading?"⏳ IA...":"✨ Générer Claude" }),
+            ]}),
+          ]}),
+          n.jsx("textarea", { ref:contenuRef, style:{...inp, height:280, resize:"vertical", fontFamily:"monospace", fontSize:12}, value:form.contenu, onChange:e=>setForm(f=>({...f,contenu:e.target.value})), placeholder:"<h2>Titre de section</h2>\n<p>Paragraphe...</p>\n\nOu clique ✨ Générer Claude" }),
+          n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", marginTop:3 }, children:"H1 = titre (auto) · Utilise H2 pour les sections · H3 pour les sous-sections" }),
+        ]}),
+
+        /* Bloc publication */
+        n.jsxs("div", { style:{ background:"#F8FAFC", border:"1px solid #E5E7EB", borderRadius:10, padding:"14px 16px", marginBottom:14 }, children:[
+          n.jsx("div", { style:{ fontWeight:700, fontSize:12, color:"#1E1B30", marginBottom:10 }, children:"⏰ Publication" }),
+
+          /* Sélecteur de mode */
+          n.jsxs("div", { style:{ display:"flex", gap:6, marginBottom:12 }, children:[
+            [["published","🚀 Maintenant"],["scheduled","📅 Programmer"],["draft","📝 Brouillon"]].map(([s,label]) =>
+              n.jsx("button", { key:s, onClick:()=>setForm(f=>({...f,status:s})),
+                style:{ padding:"6px 14px", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer",
+                  border: form.status===s ? "none" : "1px solid #E5E7EB",
+                  background: form.status===s ? (s==="published"?"#6B40D8":s==="scheduled"?"#0EA5E9":"#6B7280") : "white",
+                  color: form.status===s ? "white" : "#6B7280" },
+                children: label })
+            ),
+          ]}),
+
+          /* Date/heure — visible seulement si "Programmer" */
+          form.status === "scheduled" && n.jsxs("div", { style:{ marginBottom:4 }, children:[
+            n.jsx("input", { type:"datetime-local", style:inp, value:form.scheduledAt||"",
+              onChange:e=>setForm(f=>({...f,scheduledAt:e.target.value})),
+              min: new Date().toISOString().slice(0,16) }),
+            form.scheduledAt && n.jsx("div", { style:{ fontSize:11, color:"#0EA5E9", marginTop:4 }, children:
+              `Sera publié le ${new Date(form.scheduledAt).toLocaleString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"})}` }),
+          ]}),
+        ]}),
+
+        /* Bouton de soumission unique + Aperçu */
+        n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }, children:[
+          n.jsx("button", { onClick:()=>handleSubmit(), disabled:saving,
+            style:{ background: form.status==="scheduled"?"#0EA5E9": form.status==="draft"?"#6B7280":"#6B40D8",
+              color:"white", border:"none", borderRadius:8, padding:"10px 22px", fontWeight:700, fontSize:13, cursor:"pointer" },
+            children: saving ? "Sauvegarde…" : editId ? "💾 Mettre à jour" :
+              form.status==="scheduled" ? "📅 Programmer l'article" :
+              form.status==="draft"     ? "📝 Enregistrer le brouillon" :
+                                          "🚀 Publier l'article" }),
+          form.titre && n.jsx("button", { onClick:()=>setPreview({ ...form, slug: form.slug || slugify(form.titre), id: "preview" }),
+            style:{ background:"white", border:"1px solid #6B40D8", color:"#6B40D8", borderRadius:8, padding:"10px 16px", fontWeight:700, fontSize:13, cursor:"pointer" },
+            children:"👁 Aperçu" }),
+          editId && n.jsx("button", { onClick:()=>{ setEditId(null); setForm(emptyForm()); },
+            style:{ background:"white", color:"#9CA3AF", border:"1px solid #E5E7EB", borderRadius:8, padding:"10px 14px", fontSize:13, cursor:"pointer" },
+            children:"Annuler" }),
+        ]}),
+      ]}),
+
+      /* ── COLONNE DROITE : SEO ── */
+      n.jsxs("div", { style:{ display:"flex", flexDirection:"column", gap:12 }, children:[
+
+        /* Bloc SEO fields */
+        n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:18 }, children:[
+          n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30", marginBottom:14, display:"flex", alignItems:"center", gap:6 }, children:"🔍 SEO" }),
+
+          /* Slug */
+          n.jsxs("div", { style:{ marginBottom:12 }, children:[
+            lbl("Slug URL *"),
+            n.jsxs("div", { style:{ display:"flex", gap:6, alignItems:"center" }, children:[
+              n.jsx("input", { style:{...inp, flex:1}, value:form.slug, onChange:e=>setForm(f=>({...f,slug:e.target.value.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")})), placeholder:"visibilite-google-business-vannes" }),
+              n.jsx("button", { onClick:()=>setForm(f=>({...f,slug:slugify(f.titre)})), title:"Regénérer depuis le titre", style:{ background:"#F3F4F6", border:"1px solid #E5E7EB", borderRadius:7, padding:"7px 10px", fontSize:11, cursor:"pointer", whiteSpace:"nowrap", color:"#374151" }, children:"↺" }),
+            ]}),
+            form.slug && n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", marginTop:3 }, children:`agence-betheone.fr/blog/${form.slug||slugify(form.titre)}` }),
+          ]}),
+
+          /* Meta Title */
+          n.jsxs("div", { style:{ marginBottom:12 }, children:[
+            n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4 }, children:[
+              lbl("Meta Title"),
+              n.jsx("span", { style:{ fontSize:11, fontWeight:600, color: titleLen>60?"#DC2626":titleLen>=50?"#059669":"#9CA3AF" }, children:`${titleLen}/60` }),
+            ]}),
+            n.jsx("input", { style:{...inp, borderColor: titleLen>60?"#FCA5A5":"#E5E7EB"}, value:form.metaTitle, onChange:e=>setForm(f=>({...f,metaTitle:e.target.value})), placeholder:"Comment améliorer sa fiche Google Business à Vannes ?" }),
+          ]}),
+
+          /* Meta Description */
+          n.jsxs("div", { style:{ marginBottom:12 }, children:[
+            n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", marginBottom:4 }, children:[
+              lbl("Meta Description"),
+              n.jsx("span", { style:{ fontSize:11, fontWeight:600, color: descLen>160?"#DC2626":descLen>=150?"#059669":descLen>=100?"#F59E0B":"#9CA3AF" }, children:`${descLen}/160` }),
+            ]}),
+            n.jsx("textarea", { style:{...inp, height:80, resize:"vertical", borderColor: descLen>160?"#FCA5A5":"#E5E7EB"}, value:form.metaDesc, onChange:e=>setForm(f=>({...f,metaDesc:e.target.value})), placeholder:"Découvrez les meilleures techniques pour améliorer votre visibilité locale à Vannes grâce à Google Business Profile." }),
+            n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", marginTop:2 }, children:"Idéal : 150-160 caractères" }),
+          ]}),
+
+          /* Mot-clé principal */
+          n.jsxs("div", { children:[
+            lbl("Mot-clé principal"),
+            n.jsx("input", { style:inp, value:form.motCle, onChange:e=>setForm(f=>({...f,motCle:e.target.value})), placeholder:"google business profile vannes" }),
+          ]}),
+        ]}),
+
+        /* Bloc vérifications SEO */
+        kw && n.jsxs("div", { style:{ background:"#F8FAFC", borderRadius:14, border:"1px solid #E5E7EB", padding:16 }, children:[
+          n.jsx("div", { style:{ fontWeight:700, fontSize:12, color:"#1E1B30", marginBottom:10 }, children:"📊 Vérifications SEO" }),
+          n.jsxs("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:[
+            n.jsx(Check, { ok: kwInTitre, txt:"Mot-clé dans le titre H1" }),
+            n.jsx(Check, { ok: kwInSlug,  txt:"Mot-clé dans l'URL (slug)" }),
+            n.jsx(Check, { ok: kwInMeta,  txt:"Mot-clé dans la meta description" }),
+            n.jsx(Check, { ok: kwInH2,    txt:"Mot-clé dans un H2" }),
+            n.jsx(Check, { ok: titleLen>=10 && titleLen<=60, txt:`Meta title ≤ 60 car. (${titleLen})` }),
+            n.jsx(Check, { ok: descLen>=150 && descLen<=160, txt:`Meta desc 150-160 car. (${descLen})` }),
+          ]}),
+          n.jsxs("div", { style:{ marginTop:10, padding:"8px 10px", borderRadius:8, background:"white", border:"1px solid #E5E7EB", fontSize:11 }, children:[
+            n.jsxs("div", { style:{ fontWeight:700, color:"#1E1B30", marginBottom:4 }, children:["Score SEO : ", (() => { const sc=[kwInTitre,kwInSlug,kwInMeta,kwInH2,titleLen>=10&&titleLen<=60,descLen>=150&&descLen<=160].filter(Boolean).length; return n.jsxs("span", { style:{color:sc>=5?"#059669":sc>=3?"#F59E0B":"#DC2626"}, children:[sc,"/6"] }); })() ]}),
+            n.jsx("div", { style:{ color:"#6B7280" }, children:"Optimise jusqu'à 6/6 avant de publier" }),
+          ]}),
+        ]}),
+
+        /* ── Bloc Idées d'articles ── */
+        n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:18 }, children:[
+          n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }, children:[
+            n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:"💡 Idées d'articles" }),
+            n.jsx("button", { onClick:genererIdees, disabled:ideeLoading, style:{ background: ideeLoading?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color:"white", border:"none", borderRadius:7, padding:"5px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }, children: ideeLoading ? "⏳ Génère…" : "✨ Générer Claude" }),
+          ]}),
+
+          /* Champ ajout manuel */
+          n.jsxs("div", { style:{ display:"flex", gap:6, marginBottom:12 }, children:[
+            n.jsx("input", { style:{ flex:1, border:"1px solid #E5E7EB", borderRadius:7, padding:"7px 10px", fontSize:12, outline:"none" },
+              value:newIdee, onChange:e=>setNewIdee(e.target.value),
+              onKeyDown:e=>e.key==="Enter"&&addIdee(),
+              placeholder:"Ajouter un titre d'idée…" }),
+            n.jsx("button", { onClick:addIdee, style:{ background:"#6B40D8", color:"white", border:"none", borderRadius:7, padding:"7px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }, children:"+" }),
+          ]}),
+
+          /* Liste des idées */
+          idees.length === 0
+            ? n.jsx("div", { style:{ textAlign:"center", color:"#9CA3AF", fontSize:12, padding:"12px 0" }, children:"Aucune idée pour l'instant — clique ✨ Générer Claude !" })
+            : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:
+                idees.map((idee, i) =>
+                  n.jsxs("div", { key:i, style:{ display:"flex", alignItems:"center", gap:6, padding:"8px 10px", borderRadius:8, background:"#F8FAFC", border:"1px solid #F3F4F6" }, children:[
+                    n.jsx("div", { style:{ flex:1, fontSize:12, color:"#1E1B30", lineHeight:1.4 }, children: idee }),
+                    n.jsx("button", { onClick:()=>useIdee(idee), title:"Utiliser ce titre", style:{ background:"#EEF2FF", border:"none", borderRadius:6, padding:"4px 10px", fontSize:11, fontWeight:700, cursor:"pointer", color:"#6B40D8", whiteSpace:"nowrap" }, children:"→ Utiliser" }),
+                    n.jsx("button", { onClick:()=>removeIdee(i), title:"Supprimer", style:{ background:"#FEF2F2", border:"none", borderRadius:6, padding:"4px 8px", fontSize:11, cursor:"pointer", color:"#DC2626" }, children:"✕" }),
+                  ]}, i)
+                )
+            }),
+        ]}),
+      ]}),
+    ]}),
+
+    /* LISTE DES ARTICLES */
+    n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:20 }, children:[
+      n.jsxs("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30", marginBottom:14, display:"flex", alignItems:"center", gap:10 }, children:[
+        "📄 Articles (",articles.length,")",
+        n.jsxs("span", { style:{ fontSize:11, fontWeight:600, color:"#6B7280" }, children:[
+          n.jsx("span", { style:{ color:"#059669" }, children: articles.filter(a=>a.status==="published").length + " publiés" }),
+          " · ",
+          n.jsx("span", { style:{ color:"#0EA5E9" }, children: articles.filter(a=>a.status==="scheduled").length + " programmés" }),
+          " · ",
+          n.jsx("span", { style:{ color:"#9CA3AF" }, children: articles.filter(a=>a.status==="draft"||!a.status).length + " brouillons" }),
+        ]}),
+      ]}),
+      loading
+        ? n.jsx("div", { style:{ textAlign:"center", color:"#9CA3AF", padding:30 }, children:"Chargement..." })
+        : articles.length === 0
+          ? n.jsx("div", { style:{ textAlign:"center", color:"#9CA3AF", padding:30, fontSize:13 }, children:"Aucun article pour l'instant. Crée ton premier article ci-dessus !" })
+          : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:10 }, children:
+            articles.map(a => {
+              const cat = catInfo(a.categorie);
+              return n.jsxs("div", {
+                style:{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, border:"1px solid #F3F4F6", background:"#FAFAFA" },
+                children:[
+                  n.jsx("span", { style:{ background: cat.color + "18", color: cat.color, fontSize:10, fontWeight:800, padding:"3px 8px", borderRadius:20, whiteSpace:"nowrap" }, children: cat.label }),
+                  n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
+                    n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:6 }, children:[
+                      n.jsx("div", { style:{ fontWeight:600, fontSize:13, color:"#1E1B30", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }, children: a.titre }),
+                      a.status === "scheduled" && n.jsx("span", { style:{ background:"#E0F2FE", color:"#0EA5E9", fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20, whiteSpace:"nowrap" }, children:"📅 Programmé" }),
+                      a.status === "draft"     && n.jsx("span", { style:{ background:"#F3F4F6", color:"#6B7280", fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20, whiteSpace:"nowrap" }, children:"📝 Brouillon" }),
+                    ]}),
+                    n.jsxs("div", { style:{ fontSize:11, color:"#9CA3AF", marginTop:2 }, children:[
+                      a.status==="scheduled" && a.scheduledAt
+                        ? `📅 Publication le ${new Date(a.scheduledAt).toLocaleString("fr-FR",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}`
+                        : a.date,
+                      " · ", a.duree,
+                      a.slug && n.jsxs("span", { children:[" · ", n.jsx("a", { href:`https://agence-betheone.fr/blog/${a.slug}`, target:"_blank", rel:"noreferrer", style:{color:"#6B40D8",textDecoration:"none"}, children:`/blog/${a.slug}` })] }),
+                    ]}),
+                  ]}),
+                  n.jsx("button", { onClick:()=>setPreview(a),
+                    style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:7, padding:"5px 12px", fontSize:12, cursor:"pointer", color:"#6B7280" }, children:"👁 Voir" }),
+                  n.jsx("button", { onClick:()=>handleEdit(a),
+                    style:{ background:"#EEF2FF", border:"none", borderRadius:7, padding:"5px 12px", fontSize:12, cursor:"pointer", color:"#6B40D8", fontWeight:600 }, children:"✏️ Modifier" }),
+                  n.jsx("button", { onClick:()=>handleDelete(a.id),
+                    style:{ background:"#FEF2F2", border:"none", borderRadius:7, padding:"5px 12px", fontSize:12, cursor:"pointer", color:"#DC2626", fontWeight:600 }, children:"🗑" }),
+                ]
+              }, a.id);
+            })
+          }),
+    ]}),
+
+    /* MODAL PREVIEW */
+    preview && n.jsx("div", { onClick:()=>setPreview(null), style:{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }, children:
+      n.jsxs("div", { onClick:e=>e.stopPropagation(), style:{ background:"white", borderRadius:16, padding:30, maxWidth:700, width:"100%", maxHeight:"80vh", overflow:"auto" }, children:[
+        n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }, children:[
+          n.jsx("h2", { style:{ margin:0, fontSize:18, fontWeight:800, color:"#1E1B30", flex:1, paddingRight:16 }, children: preview.titre }),
+          n.jsx("button", { onClick:()=>setPreview(null), style:{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#6B7280" }, children:"✕" }),
+        ]}),
+        n.jsxs("div", { style:{ fontSize:12, color:"#9CA3AF", marginBottom:16 }, children:[preview.date, " · ", preview.duree, " · ", catInfo(preview.categorie).label] }),
+        n.jsx("p", { style:{ fontSize:13, color:"#4B5563", fontStyle:"italic", borderLeft:"3px solid #6B40D8", paddingLeft:12, marginBottom:16 }, children: preview.extrait }),
+        n.jsx("div", { style:{ fontSize:13, color:"#374151", lineHeight:1.7 }, dangerouslySetInnerHTML:{ __html: preview.contenu } }),
+      ]}),
+    }),
+  ]});
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 function ContratTab({ clients: e, getContract: t, upd: ed }) {
   const [hOpen, setHOpen] = D.useState(null);
   const [suppModal, setSuppModal] = D.useState(null);
@@ -6607,13 +8537,14 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
           year: "numeric",
         }),
         f = `BTO-${z}${g}-${String(e.indexOf(x) + 1).padStart(3, "0")}`,
-        c = localStorage.getItem("ag_name") || "Be The One",
+        c = localStorage.getItem("ag_name") || "Agence Be the one",
         agSiret = localStorage.getItem("ag_siret") || "105 096 291 00015",
         agAddr  = localStorage.getItem("ag_address") || "6 Keryvarho, 56450 Le Hézo",
         agEmail = localStorage.getItem("ag_email") || "contact@agence-betheone.fr",
         agPhone = localStorage.getItem("ag_phone") || "06 51 17 69 10",
-        agIban  = localStorage.getItem("ag_iban")  || "",
-        agBic   = localStorage.getItem("ag_bic")   || "",
+        agIban      = localStorage.getItem("ag_iban")      || "",
+        agBic       = localStorage.getItem("ag_bic")       || "",
+        agTitulaire = localStorage.getItem("ag_titulaire") || "",
         contractLabels = { setup: "Setup Local", leader: "Leader Local — 6 mois", leader_annuel: "Leader Local — Annuel" },
         contractLabel = contractLabels[j.typeContrat] || "Prestation GMB",
         isSetupInvoice = j.typeContrat === "setup",
@@ -6625,9 +8556,9 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
         prestaList = `<ul style="margin:6px 0 0;padding-left:18px;color:#6B7280;font-size:12px;line-height:1.8">${prestaItems.map((pi) => `<li>${pi}</li>`).join("")}</ul>`,
         items = [{ label: contractLabel, desc: `${x.name} · ${h}${prestaList}`, amount: baseAmount }];
       if (supp && supp.amount) items.push({ label: supp.label || "Supplément", desc: `Prestation complémentaire · ${x.name} · ${h}`, amount: Math.round(supp.amount) });
-      if (!isSetupInvoice && parrainage === "filleul1") items.push({ label: "Remise parrainage — 1 filleul", desc: `Réduction 50% · Programme de parrainage Be The One`, amount: -Math.round(baseAmount * 0.5), discount: true });
-      if (!isSetupInvoice && parrainage === "filleul2") items.push({ label: "Remise parrainage — 1 mois offert", desc: `Mois offert · Programme de parrainage Be The One`, amount: -baseAmount, discount: true });
-      if (!isSetupInvoice && parrainage === "filleul3") items.push({ label: "Remise parrainage — 1 mois offert (filleul suppl.)", desc: `Mois offert par filleul supplémentaire · Programme de parrainage Be The One`, amount: -baseAmount, discount: true });
+      if (!isSetupInvoice && parrainage === "filleul1") items.push({ label: "Remise parrainage — 1 filleul", desc: `Réduction 50% · Programme de parrainage Agence Be the one`, amount: -Math.round(baseAmount * 0.5), discount: true });
+      if (!isSetupInvoice && parrainage === "filleul2") items.push({ label: "Remise parrainage — 1 mois offert", desc: `Mois offert · Programme de parrainage Agence Be the one`, amount: -baseAmount, discount: true });
+      if (!isSetupInvoice && parrainage === "filleul3") items.push({ label: "Remise parrainage — 1 mois offert (filleul suppl.)", desc: `Mois offert par filleul supplémentaire · Programme de parrainage Agence Be the one`, amount: -baseAmount, discount: true });
       const total = items.reduce((s, it) => s + it.amount, 0),
         rows = items.map((it) => `<tr style="${it.discount ? 'color:#059669' : ''}"><td><strong>${it.label}</strong><br/><small style="color:${it.discount ? '#059669' : '#6B7280'}">${it.desc}</small></td><td style="white-space:nowrap;${it.discount ? 'color:#059669;font-weight:700' : ''}">${it.amount}&nbsp;€</td><td style="white-space:nowrap">—</td><td style="white-space:nowrap;${it.discount ? 'color:#059669;font-weight:700' : ''}">${it.amount}&nbsp;€</td></tr>`).join(""),
         u = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Facture ${f}</title>
@@ -6672,7 +8603,7 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
     <p class="mention">Auto-entrepreneur — TVA non applicable, art. 293 B du CGI</p>
     <div class="rp-section">Conditions de règlement</div>
     <div class="terms">${isSetupInvoice ? "Paiement unique à réception de facture. Prestation démarrée après réception du règlement." : "Abonnement mensuel — paiement à réception de facture, sous 10 jours."}</div>
-    ${agIban ? `<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:11pt"><p style="margin:0 0 4px"><strong>Coordonnées bancaires (virement)</strong></p><p style="margin:2px 0">Titulaire : Sara Baudouin — Be The One</p><p style="margin:2px 0">IBAN : ${agIban}</p>${agBic ? `<p style="margin:2px 0">BIC : ${agBic}</p>` : ""}</div>` : ""}
+    ${agIban ? `<div style="background:#F0FDF4;border:1px solid #86EFAC;border-radius:10px;padding:12px 16px;margin:10px 0;font-size:11pt"><p style="margin:0 0 4px"><strong>Coordonnées bancaires (virement)</strong></p><p style="margin:2px 0">Titulaire : ${agTitulaire || "Sara Baudouin EI"}</p><p style="margin:2px 0">IBAN : ${agIban}</p>${agBic ? `<p style="margin:2px 0">BIC : ${agBic}</p>` : ""}</div>` : ""}
     <div class="footer">Merci pour votre confiance · ${c} · ${agEmail}</div></div></body></html>`,
         m = win || window.open("", "_blank");
       (m.document.write(u),
@@ -7047,7 +8978,7 @@ function FactureTab({ clients: e, getContract: t }) {
     s = o ? t(o.id) : {},
     l = () => {
       if (!o) return;
-      const d = localStorage.getItem("ag_name") || "Be The One",
+      const d = localStorage.getItem("ag_name") || "Agence Be the one",
         agEmail2 = localStorage.getItem("ag_email") || "contact@agence-betheone.fr",
         contractTypeLbls = { setup:"⚡ Setup Local", leader:"Leader Local — 6 mois", leader_annuel:"Leader Local — Annuel" },
         ctLabel = contractTypeLbls[s.typeContrat] || "Accompagnement GMB",
@@ -7102,7 +9033,7 @@ function FactureTab({ clients: e, getContract: t }) {
     ${s.parrain ? `<div class="card" style="border-left:3px solid #6B40D8;background:linear-gradient(135deg,#F8F6FF,#FDF8FF)"><h2>🎁 Parrainage</h2>
     <p style="font-size:13px;color:#374151;margin:0 0 8px">Vous avez été recommandé par :</p>
     <p style="font-size:15px;font-weight:700;color:#6B40D8;margin:0 0 12px">${s.parrain}</p>
-    <p style="font-size:12px;color:#6B7280;margin:0">Merci de faire confiance à l'Agence Be The One suite à cette recommandation !</p></div>` : ""}
+    <p style="font-size:12px;color:#6B7280;margin:0">Merci de faire confiance à l'Agence Agence Be the one suite à cette recommandation !</p></div>` : ""}
     <button class="btn" onclick="this.textContent='✓ Envoyé !';this.style.opacity='.7';alert('Merci ! Renvoyez ce formulaire rempli par email à ${agEmail2}\\n\\nN\\'oubliez pas d\\'envoyer vos photos en pièce jointe.')">✓ Terminer le formulaire</button>
     <div class="footer">${d} · Ce formulaire est confidentiel · ${agEmail2}</div>
     </div></body></html>`,
@@ -7907,7 +9838,7 @@ function App() {
     [b, x] = D.useState(loadClients()),
     [j, I] = D.useState(() => localStorage.getItem("bto_apikey") || ""),
     z = (T) => {
-      (localStorage.setItem("bto_apikey", T), I(T));
+      (localStorage.setItem("bto_apikey", T), supaSet("bto_apikey", T), I(T));
     },
     [g, h] = D.useState(() => localStorage.getItem("bto_google_key") || ""),
     [f, c] = D.useState(30),
@@ -7939,7 +9870,7 @@ function App() {
         }
         // Charger les contracts
         const KEYS_TO_SYNC = ["bto_contracts","bto_paiements","gmb_monthly_obj",
-          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","bto_apikey","bto_sara_notes",
+          "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","ag_titulaire","ag_titulaire","bto_apikey","bto_sara_notes",
           "betheone_prospects_v1"];
         for (const key of KEYS_TO_SYNC) {
           const val = await supaGet(key);
@@ -7974,7 +9905,7 @@ function App() {
         b.forEach((y) => {
           const O = y.date ? new Date(y.date).getTime() : 0;
           U - O > G &&
-            new Notification("BeTheOne — Rappel", {
+            new Notification("Agence Be the one — Rappel", {
               body: `${y.name} n'a pas été mis à jour depuis plus de ${Math.floor((U - O) / V)} jours`,
               icon: "/favicon.ico",
               tag: `reminder_${y.id}`,
@@ -8389,7 +10320,7 @@ function ChatBot({
     [d, p] = D.useState([
       {
         role: "assistant",
-        text: "Bonjour Sara 👋 Je suis votre assistant BeTheOne. Posez-moi n'importe quelle question sur vos clients, vos scores, votre stratégie GMB ou la plateforme.",
+        text: "Bonjour Sara 👋 Je suis votre assistant Agence Be the one. Posez-moi n'importe quelle question sur vos clients, vos scores, votre stratégie GMB ou la plateforme.",
       },
     ]),
     [b, x] = D.useState(""),
@@ -8442,7 +10373,7 @@ function ChatBot({
 ${(P = y.insights) != null && P.summary ? `- Synthèse IA : ${y.insights.summary.slice(0, 200)}…` : ""}
 ${(((T = y.insights) == null ? void 0 : T.quickWins) || []).length ? `- Quick wins : ${y.insights.quickWins.slice(0, 3).join(" · ")}` : ""}`;
       }
-      return `Tu es l'assistant expert de Sara Baudouin, fondatrice de l'agence BeTheOne (Vannes), spécialisée en optimisation Google Business Profile (GMB).
+      return `Tu es l'assistant expert de Sara Baudouin, fondatrice de l'agence Agence Be the one (Vannes), spécialisée en optimisation Google Business Profile (GMB).
 
 === CONTEXTE AGENCE ===
 - ${u} client(s) en portefeuille
@@ -8565,11 +10496,11 @@ Réponds en français, de façon concise et actionnable. Si Sara parle d'un clie
                         fontWeight: 700,
                         color: "white",
                       },
-                      children: "Assistant BeTheOne",
+                      children: "Assistant Agence Be the one",
                     }),
                     n.jsx("div", {
                       style: { fontSize: 11, color: "rgba(255,255,255,.65)" },
-                      children: "Be The One",
+                      children: "Agence Be the one",
                     }),
                   ],
                 }),
@@ -9017,7 +10948,7 @@ function LoginPage({ code: e, setCode: t, err: i, login: r }) {
                               color: "#1E1B30",
                               letterSpacing: "-.02em",
                             },
-                            children: "Be The One",
+                            children: "Agence Be the one",
                           }),
                           n.jsxs("div", {
                             style: { fontSize: 12, color: "#64748B", marginTop: 1, display:"flex", alignItems:"center", gap:5 },
@@ -9114,7 +11045,7 @@ function LoginPage({ code: e, setCode: t, err: i, login: r }) {
               fontSize: 11.5,
               color: "#94A3B8",
             },
-            children: "BeTheOne · Expert Google My Business · Vannes",
+            children: "Agence Be the one · Expert Google My Business · Vannes",
           }),
         ],
       }),
@@ -9256,7 +11187,7 @@ function Sidebar({
                         letterSpacing: "-.01em",
                         whiteSpace: "nowrap",
                       },
-                      children: "BeTheOne",
+                      children: "Agence Be the one",
                     }),
                     n.jsx("div", {
                       style: {
@@ -9690,7 +11621,7 @@ function Sidebar({
                   }),
                   n.jsxs("div", {
                     style: { fontSize: 10, color: "#9CA3AF", display:"flex", alignItems:"center", gap:4 },
-                    children: ["Mon espace · BeTheOne", n.jsx("span", { style:{ fontSize:9, background:"#F0FDF4", color:"#059669", borderRadius:4, padding:"1px 5px", fontWeight:700 }, children:"☁ sync" })],
+                    children: ["Mon espace · Agence Be the one", n.jsx("span", { style:{ fontSize:9, background:"#F0FDF4", color:"#059669", borderRadius:4, padding:"1px 5px", fontWeight:700 }, children:"☁ sync" })],
                   }),
                 ],
               }),
@@ -9874,7 +11805,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                             window.location.reload());
                         } catch {
                           window.alert(
-                            "Fichier invalide — utilisez un backup BeTheOne .json",
+                            "Fichier invalide — utilisez un backup Agence Be the one .json",
                           );
                         }
                       }),
@@ -10012,6 +11943,8 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
           n.jsx(G, { id: "tableau_bord", label: "📊 Tableau de bord" }),
           n.jsx(G, { id: "contrats", label: "📋 Contrats" }),
           n.jsx(G, { id: "facturation", label: "💶 Facturation" }),
+          n.jsx(G, { id: "site_web", label: "🌐 Site Web" }),
+          n.jsx(G, { id: "contenu_maitre", label: "✍️ Contenu" }),
           n.jsx(G, { id: "parametres", label: "⚙️ Paramètres" }),
         ],
       }),
@@ -10483,11 +12416,12 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                                   n.jsxs("div",{style:{display:"flex",gap:6,flexWrap:"wrap"},children:[
                                   !H && false && n.jsx("button",{
                                     onClick:()=>{
-                                      const ag=localStorage.getItem("ag_name")||"Be The One",agA=localStorage.getItem("ag_address")||"6 Keryvarho, 56450 Le Hézo",agS=localStorage.getItem("ag_siret")||"105 096 291 00015",agE=localStorage.getItem("ag_email")||"contact@agence-betheone.fr",agP=localStorage.getItem("ag_phone")||"06 51 17 69 10";
+                                      const ag=localStorage.getItem("ag_name")||"Agence Be the one",agA=localStorage.getItem("ag_address")||"6 Keryvarho, 56450 Le Hézo",agS=localStorage.getItem("ag_siret")||"105 096 291 00015",agE=localStorage.getItem("ag_email")||"contact@agence-betheone.fr",agP=localStorage.getItem("ag_phone")||"06 51 17 69 10";
                                       const cd={setup:{label:"⚡ Setup Local",price:"299€",type:"Paiement unique",desc:"Configuration complète de la fiche GBP, optimisation SEO locale, audit concurrentiel, 2 posts de lancement et 5 photos.",eng:"Prestation ponctuelle sans abonnement."},leader:{label:"Leader Local — 6 mois",price:"139€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 6 mois minimum. Résiliation avec 30j de préavis par email ou lettre recommandée."},leader_annuel:{label:"Leader Local — Annuel",price:"119€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 12 mois. Résiliation avec 30j de préavis par email ou lettre recommandée."}}[O.typeContrat]||{label:"Prestation GMB",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation",desc:"Accompagnement Google Business Profile.",eng:"Selon devis."};
                                       const today=new Date().toLocaleDateString("fr-FR");
-                                      const agIban = localStorage.getItem("ag_iban") || "";
-                                      const agBic  = localStorage.getItem("ag_bic")  || "";
+                                      const agIban       = localStorage.getItem("ag_iban")      || "";
+                                      const agBic        = localStorage.getItem("ag_bic")       || "";
+                                      const agTitulaire  = localStorage.getItem("ag_titulaire") || "Sara Baudouin EI";
                                       const isAbo = cd.type === "Abonnement mensuel";
                                       const startDate = O.dateDebut ? new Date(O.dateDebut).toLocaleDateString("fr-FR") : "____/____/______";
                                       const annexeDetails = {
@@ -10538,7 +12472,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
 <!-- EN-TÊTE -->
 <div class="hdr">
   <div>
-    <div class="logo">Be The One</div>
+    <div class="logo">Agence Be the one</div>
     <div class="logo-sub">Sara Baudouin — Entreprise individuelle</div>
     <div class="logo-sub">${agA}</div>
     <div class="logo-sub">SIRET : ${agS}</div>
@@ -10560,7 +12494,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
 <div class="parties">
   <div class="box">
     <div class="box-title">Le Prestataire</div>
-    <p><strong>Be The One</strong></p>
+    <p><strong>Agence Be the one</strong></p>
     <p>Sara Baudouin — Entreprise individuelle</p>
     <p>${agA}</p>
     <p>${agE}</p>
@@ -10624,7 +12558,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
 <h2>Article 8 — Tarifs et conditions de paiement</h2>
 <p><strong>Montant :</strong> ${O.montant ? `${O.montant} €${isAbo ? " HT/mois" : ""}` : cd.price} — TVA non applicable, article 293 B du CGI.</p>
 <p><strong>Modalités :</strong> ${isAbo ? "Facturation mensuelle, émise le 1er de chaque mois. Paiement attendu sous 10 jours. En cas de retard, pénalités de retard au taux légal en vigueur, majorées d'une indemnité forfaitaire de 40 € pour frais de recouvrement." : "Paiement intégral exigible à la commande, avant démarrage des travaux."}</p>
-${agIban ? `<div class="rib-block"><p><strong>Coordonnées bancaires (virement)</strong></p><p>Titulaire : Sara Baudouin — Be The One</p><p>IBAN : ${agIban}</p>${agBic ? `<p>BIC : ${agBic}</p>` : ""}</div>` : ""}
+${agIban ? `<div class="rib-block"><p><strong>Coordonnées bancaires (virement)</strong></p><p>Titulaire : ${agTitulaire || "Sara Baudouin EI"}</p><p>IBAN : ${agIban}</p>${agBic ? `<p>BIC : ${agBic}</p>` : ""}</div>` : ""}
 
 <!-- ART 9 -->
 <h2>Article 9 — Durée du contrat</h2>
@@ -10661,7 +12595,7 @@ ${isAbo ? `<p>Passé la période initiale de ${O.typeContrat === "leader_annuel"
 <h2>Article 15 — Signatures</h2>
 <p style="color:#444">Fait en deux exemplaires originaux. Chaque partie reconnaît avoir lu, compris et accepté l'ensemble des conditions du présent contrat ainsi que ses annexes. La signature électronique vaut accord contractuel.</p>
 
-<div class="footer">Be The One · Sara Baudouin · Entreprise individuelle · SIRET ${agS} · ${agE} · agence-betheone.fr/cgv</div>
+<div class="footer">Agence Be the one · Sara Baudouin · Entreprise individuelle · SIRET ${agS} · ${agE} · agence-betheone.fr/cgv</div>
 
 <!-- ===== ANNEXE 1 ===== -->
 <div class="page-break">
@@ -10698,7 +12632,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
   <li>Évolution du nombre et de la note des avis clients</li>
   <li>Score global de la fiche (audit mensuel)</li>
 </ul>` : ""}
-<div class="footer">Be The One · Sara Baudouin · SIRET ${agS} · ${agE}</div>
+<div class="footer">Agence Be the one · Sara Baudouin · SIRET ${agS} · ${agE}</div>
 </div>
 
 <!-- ===== ANNEXE 2 ===== -->
@@ -10743,7 +12677,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                                   n.jsx("button", {
                                     onClick: () => {
                                       // Générer le lien de signature
-                                      const agN=localStorage.getItem("ag_name")||"Be The One";
+                                      const agN=localStorage.getItem("ag_name")||"Agence Be the one";
                                       const agA2=localStorage.getItem("ag_address")||"6 Keryvarho, 56450 Le Hézo";
                                       const agS2=localStorage.getItem("ag_siret")||"105 096 291 00015";
                                       const agE2=localStorage.getItem("ag_email")||"contact@agence-betheone.fr";
@@ -10779,7 +12713,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                                     if (saraSigned) return null;
                                     return n.jsx("button", {
                                       onClick: async () => {
-                                        const agN2 = localStorage.getItem("ag_name") || "Be The One";
+                                        const agN2 = localStorage.getItem("ag_name") || "Agence Be the one";
                                         const now = new Date().toISOString();
                                         const sd = { name: `${agN2} — Sara Baudouin`, signed_at: now };
                                         localStorage.setItem(saraSigKey, JSON.stringify(sd));
@@ -11108,6 +13042,8 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
         });
         })(),
       f === "facturation" && n.jsx(ContratTab, { clients: e, getContract: E, upd: ed }),
+      f === "site_web" && n.jsx(SiteWebTab, {}),
+      f === "contenu_maitre" && n.jsx(ContentMaitreTab, {}),
       f === "parametres" &&
         n.jsxs("div", {
           style: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:900 },
@@ -11260,7 +13196,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                       const keys = [
                         "gmb_crm_v10","betheone_prospects_v1",
                         "bto_contracts","bto_paiements","gmb_monthly_obj",
-                        "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic",
+                        "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","ag_titulaire",
                         "bto_apikey","bto_google_key","bto_sara_notes",
                       ];
                       const backup = { version: "bto-v1", date: new Date().toISOString() };
@@ -11288,11 +13224,11 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                           reader.onload = (e2) => {
                             try {
                               const data = JSON.parse(e2.target.result);
-                              if (!data.version || data.version !== "bto-v1") { alert("Fichier invalide — ce n'est pas une sauvegarde BeTheOne."); return; }
+                              if (!data.version || data.version !== "bto-v1") { alert("Fichier invalide — ce n'est pas une sauvegarde Agence Be the one."); return; }
                               const restoreKeys = [
                                 "gmb_crm_v10","betheone_prospects_v1",
                                 "bto_contracts","bto_paiements","gmb_monthly_obj",
-                                "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic",
+                                "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","ag_titulaire",
                                 "bto_apikey","bto_google_key","bto_sara_notes",
                               ];
                               restoreKeys.forEach(k => { if (data[k]) { localStorage.setItem(k, data[k]); supaSet(k, data[k]); } });
@@ -11343,13 +13279,14 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                 n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30", marginBottom:10 }, children:"🏢 Informations factures" }),
                 n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginBottom:10 }, children:"Apparaissent sur vos factures clients" }),
                 ...[
-                  { k:"ag_name", l:"Nom commercial", ph:"Be The One", def:"Be The One" },
+                  { k:"ag_name", l:"Nom commercial", ph:"Agence Be the one", def:"Agence Be the one" },
                   { k:"ag_siret", l:"SIRET", ph:"105 096 291 00015", def:"105 096 291 00015" },
                   { k:"ag_address", l:"Adresse", ph:"6 Keryvarho, 56450 Le Hézo", def:"6 Keryvarho, 56450 Le Hézo" },
                   { k:"ag_email", l:"Email", ph:"contact@agence-betheone.fr", def:"contact@agence-betheone.fr" },
                   { k:"ag_phone", l:"Téléphone", ph:"06 51 17 69 10", def:"06 51 17 69 10" },
                   { k:"ag_iban", l:"IBAN (virement)", ph:"FR76 XXXX XXXX XXXX XXXX XXXX XXX", def:"" },
                   { k:"ag_bic", l:"BIC", ph:"XXXXXXXX", def:"" },
+                  { k:"ag_titulaire", l:"Titulaire du compte", ph:"Sara Baudouin EI", def:"" },
                 ].map(({k: ky, l: lbl, ph, def}) =>
                   n.jsxs("div", { style:{marginBottom:8}, key:ky, children:[
                     n.jsx("div", { style:{fontSize:11, fontWeight:600, color:"#374151", marginBottom:3}, children:lbl }),
@@ -11372,7 +13309,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                 n.jsx("input", {
                   className:"inp", type:"password",
                   defaultValue: localStorage.getItem("bto_apikey") || "",
-                  onChange: (y) => localStorage.setItem("bto_apikey", y.target.value),
+                  onChange: (y) => { localStorage.setItem("bto_apikey", y.target.value); supaSet("bto_apikey", y.target.value); },
                   placeholder:"sk-ant-...",
                   style:{ margin:0, fontSize:12 },
                 }),
@@ -11472,125 +13409,39 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
     className: "fade",
     children: [
       n.jsxs("div", {
-        style: {
-          marginBottom: 24,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-        },
+        style: { marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 },
         children: [
-          n.jsxs("div", {
-            children: [
-              n.jsxs("div", {
-                style: { fontSize: 13, color: "#6B7280", marginBottom: 4 },
-                children: [
-                  c,
-                  " 👋 · ",
-                  d.toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                  }),
-                ],
-              }),
-              n.jsx("div", {
-                style: {
-                  fontSize: 28,
-                  fontWeight: 900,
-                  color: "#1E1B30",
-                  letterSpacing: "-.02em",
-                },
-                children: "Vue d'ensemble agence",
-              }),
-            ],
-          }),
-          n.jsxs("div", { style:{display:"flex", alignItems:"center", gap:10}, children:[
+          n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: [
+            n.jsxs("div", { style: { fontSize: 12, color: "#9CA3AF" }, children: [c, " 👋 · ", d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })] }),
+          ]}),
+          n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
             n.jsx(NotificationBell, {}),
-            n.jsx("button", {
-              className: "btn",
-              onClick: () => i("audit"),
-              style: { fontSize: 13, padding: "10px 20px" },
-              children: "+ Nouvel audit",
-            }),
+            n.jsx("button", { className: "btn", onClick: () => i("audit"), style: { fontSize: 13, padding: "9px 18px" }, children: "+ Nouvel audit" }),
           ]}),
         ],
       }),
       n.jsx("div", {
-        style: {
-          display: "grid",
-          gridTemplateColumns: "repeat(4,1fr)",
-          gap: 12,
-          marginBottom: 16,
-        },
-        children: [
-          {
-            label: "Clients actifs",
-            value: e.length,
-            sub: "fiches gérées",
-            c: "#6B40D8",
-          },
-          {
-            label: "Score moyen",
-            value: e.length && l ? `${l}/100` : "—",
-            sub: e.length ? ((a && a.label) || "Aucun") : "Aucun client",
-            c: e.length ? ((a && a.color) || "#6B7280") : "#9CA3AF",
-          },
-          {
-            label: "Avis sans réponse",
-            value: u.length,
-            sub: u.length ? "À traiter" : "Tout est à jour",
-            c: u.length ? "#E85A30" : "#059669",
-          },
-          {
-            label: "Audits ce mois",
-            value: x,
-            sub: `/ ${j} objectif`,
-            c: "#C03080",
-          },
-        ].map((B) =>
-          n.jsxs(
-            "div",
-            {
-              style: {
-                background: "white",
-                borderRadius: 12,
-                padding: "18px 20px",
-                border: "1px solid #E5E7EB",
-                borderTop: `3px solid ${B.c}`,
-                textAlign: "center",
-              },
-              children: [
-                n.jsx("div", {
-                  style: {
-                    fontSize: 30,
-                    fontWeight: 900,
-                    color: B.c,
-                    lineHeight: 1,
-                    letterSpacing: "-.02em",
-                    marginBottom: 6,
-                  },
-                  children: B.value,
-                }),
-                n.jsx("div", {
-                  style: {
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#374151",
-                    marginBottom: 3,
-                  },
-                  children: B.label,
-                }),
-                n.jsx("div", {
-                  style: { fontSize: 11, color: "#9CA3AF" },
-                  children: B.sub,
-                }),
-              ],
-            },
-            B.label,
-          ),
-        ),
+        style: { display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 8, marginBottom: 14 },
+        children: (() => {
+          const progCount = e.filter(B => { const sc = (B.history||[]).map(h=>h&&h.scores?o(h.scores||{}):0).filter(s2=>s2>0); return sc.length>0 && o({...(B.scores||{}), ...(B.manualOverrides||{})}) > sc[0]; }).length;
+          return [
+            { icon: "👥", label: "Clients actifs", value: e.length, sub: "fiches gérées", c: "#6B40D8" },
+            { icon: "📊", label: "Score moyen", value: e.length && l ? `${l}/100` : "—", sub: e.length ? ((a && a.label) || "—") : "—", c: e.length ? ((a && a.color) || "#6B7280") : "#9CA3AF" },
+            { icon: "📈", label: "En progression", value: progCount, sub: "clients qui progressent", c: "#059669" },
+            { icon: "💬", label: "Avis sans réponse", value: u.length, sub: u.length ? "À traiter" : "Tout à jour ✓", c: u.length ? "#E85A30" : "#059669" },
+            { icon: "🎯", label: "Audits ce mois", value: x, sub: `objectif : ${j}`, c: "#C03080" },
+          ].map(B => n.jsxs("div", {
+            style: { background: "white", borderRadius: 12, padding: "12px 14px", border: "1px solid #E5E7EB", borderLeft: `3px solid ${B.c}`, display: "flex", alignItems: "center", gap: 10, minWidth: 0 },
+            children: [
+              n.jsx("div", { style: { fontSize: 22, lineHeight: 1 }, children: B.icon }),
+              n.jsxs("div", { children: [
+                n.jsx("div", { style: { fontSize: 20, fontWeight: 900, color: B.c, lineHeight: 1.1, letterSpacing: "-.02em" }, children: B.value }),
+                n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#374151", marginTop: 2 }, children: B.label }),
+                n.jsx("div", { style: { fontSize: 10, color: "#9CA3AF" }, children: B.sub }),
+              ]}),
+            ],
+          }, B.label));
+        })(),
       }),
       /* === ALERTES PAIEMENTS + ONBOARDING === */
       (() => {
@@ -11624,118 +13475,8 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
         } catch { return null; }
       })(),
       n.jsxs("div", {
-        style: {
-          display: "grid",
-          gridTemplateColumns: "1.5fr 1fr",
-          gap: 14,
-          marginBottom: 14,
-        },
+        style: { marginBottom: 14 },
         children: [
-          e.length >= 2 &&
-            (() => {
-              const B = e.map((N) => {
-                  var E, M;
-                  return {
-                    name: N.name,
-                    scores:
-                      ((M =
-                        (E = N.history) == null
-                          ? void 0
-                          : E.map((P) => ({
-                              date: P.date,
-                              score: o(P.scores || {}),
-                            }))) == null
-                        ? void 0
-                        : M.filter((P) => P.score > 0)) || [],
-                    current: o({
-                      ...(N.scores || {}),
-                      ...(N.manualOverrides || {}),
-                    }),
-                  };
-                }),
-                k = B.filter((N) => {
-                  var E;
-                  return (
-                    N.scores.length > 0 &&
-                    N.current > ((E = N.scores[0]) == null ? void 0 : E.score)
-                  );
-                }).length,
-                R = e.length
-                  ? Math.round(B.reduce((N, E) => N + E.current, 0) / e.length)
-                  : 0;
-              return (
-                e.forEach((N) => {
-                  N.date &&
-                    new Date(N.date).toLocaleDateString("fr-FR", {
-                      month: "short",
-                      year: "2-digit",
-                    });
-                }),
-                n.jsxs("div", {
-                  style: {
-                    background: "white",
-                    borderRadius: 14,
-                    padding: "20px 22px",
-                    border: "1px solid #E5E7EB",
-                    borderTop: "3px solid #059669",
-                    marginBottom: 14,
-                  },
-                  children: [
-                    n.jsx("div", {
-                      style: {
-                        fontWeight: 700,
-                        fontSize: 14,
-                        color: "#1E1B30",
-                        marginBottom: 14,
-                      },
-                      children: "📈 Évolution du portefeuille",
-                    }),
-                    n.jsx("div", {
-                      style: {
-                        display: "grid",
-                        gridTemplateColumns: "repeat(4,1fr)",
-                        gap: 12,
-                      },
-                      children: [
-                        { l: "Score moyen", v: `${R}/100`, c: "#6B40D8" },
-                        { l: "Clients en progression", v: k, c: "#059669" },
-                        { l: "Fiches gérées", v: e.length, c: "#C03080" },
-                        { l: "Audits ce mois", v: x, c: "#E85A30" },
-                      ].map(({ l: N, v: E, c: M }) =>
-                        n.jsxs(
-                          "div",
-                          {
-                            style: {
-                              textAlign: "center",
-                              padding: "12px",
-                              background: "#F4F5FA",
-                              borderRadius: 10,
-                              border: "1px solid #E5E7EB",
-                            },
-                            children: [
-                              n.jsx("div", {
-                                style: {
-                                  fontSize: 24,
-                                  fontWeight: 900,
-                                  color: M,
-                                  marginBottom: 4,
-                                },
-                                children: E,
-                              }),
-                              n.jsx("div", {
-                                style: { fontSize: 11, color: "#6B7280" },
-                                children: N,
-                              }),
-                            ],
-                          },
-                          N,
-                        ),
-                      ),
-                    }),
-                  ],
-                })
-              );
-            })(),
           (() => {
             const B = new Date(),
               k = new Date(B);
@@ -14319,17 +16060,11 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     const { lat: W, lng: L } = w;
     m.current.setView([W, L], 10);
     const $ = Math.floor(p / 2), X = 111320;
-    const rayonM = rayon * 1000; // rayon en mètres
 
     let te = 0;
     for (let Z = 0; Z < p; Z++)
       for (let Y = 0; Y < p; Y++) {
         const K = Z === $ && Y === $;
-        /* Distance réelle en mètres depuis le centre */
-        const drM = ($ - Z) * x;
-        const dcM = (Y - $) * x;
-        const distM = Math.sqrt(drM * drM + dcM * dcM);
-        if (distM > rayonM && !K) { te++; continue; } // hors du cercle → skip
         const ee = (($ - Z) * x) / X,
           v = ((Y - $) * x) / (X * Math.cos((W * Math.PI) / 180)),
           A = W + ee, q = L + v,
@@ -14356,7 +16091,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
   const y = async (addr) => {
     const tryNominatim = async (q) => {
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, { headers: { "User-Agent": "BeTheOne-CRM" } });
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, { headers: { "User-Agent": "BTO-CRM" } });
         const j = await r.json();
         return j && j[0] ? { lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon) } : null;
       } catch { return null; }
@@ -14380,9 +16115,10 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
   };
 
   /* ── Helpers matching ── */
+  const _LEGAL_FORMS = new Set(["sarl","sas","sasu","eurl","sa","snc","sci","scm","scp","ste","sté","société","entreprise","cabinet","atelier","agence","studio","group","groupe","holding","association","asso","assoc"]);
   const buildNameTokens = (myName, cityLow) => {
     const clean = cityLow ? (myName||"").toLowerCase().replace(new RegExp(`\\b${cityLow}\\b`,"gi"),"").trim() : (myName||"").toLowerCase().trim();
-    return clean.split(/\s+/).filter(k => k.length > 2);
+    return clean.split(/\s+/).filter(k => k.length > 2 && !_LEGAL_FORMS.has(k));
   };
   const scoreMatch = (nm, addr, nameTokens, cityLow, postalCode) => {
     const n = nm.toLowerCase(), a = addr.toLowerCase();
@@ -14487,17 +16223,9 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     const { lat: W, lng: L } = w, $ = Math.floor(p / 2), X = 111320,
       cells = [], cellData = [], myName = (e == null ? void 0 : e.name) || "";
     let quotaErrors = 0;
-    const rayonM = rayon * 1000;
     for (let K = 0; K < p; K++)
       for (let ie = 0; ie < p; ie++) {
         const isCenter = K === $ && ie === $;
-        const drM = ($ - K) * x;
-        const dcM = (ie - $) * x;
-        const distM = Math.sqrt(drM * drM + dcM * dcM);
-        if (distM > rayonM && !isCenter) {
-          cells.push(null); cellData.push(null); // hors cercle → pas de scan
-          h(Math.round(((K * p + ie + 1) / M) * 100)); continue;
-        }
         if (isCenter) {
           cells.push(1); cellData.push({ rank: 1, top10: [{ name: myName, isMe: true, rank: 1 }] });
           h(Math.round(((K * p + ie + 1) / M) * 100)); continue;
@@ -14807,7 +16535,57 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       !selCell.top10.length && n.jsx("div",{style:{textAlign:"center",padding:"20px",color:"#9CA3AF",fontSize:13},children:"Pas de données — relancez le scan pour voir les concurrents à cet endroit"}),
     ]}),
 
-    /* MINI GRID removed — interaction via carte Leaflet uniquement */
+    /* === MINI GRID 7×7 === */
+    (() => {
+      const mid = Math.floor(p / 2);
+      const cellSize = 52;
+      return n.jsxs("div", { style:{ marginBottom:14 }, children:[
+        n.jsxs("div", { style:{ fontSize:11, fontWeight:700, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:".5px", marginBottom:8, display:"flex", alignItems:"center", gap:8 }, children:[
+          `📐 Grille ${p}×${p} — ${p*p} points`,
+          n.jsx("span", { style:{ fontSize:10, background:"#F4F5FA", border:"1px solid #E5E7EB", borderRadius:6, padding:"2px 8px", color:"#6B7280", fontWeight:500 }, children:"Cliquez un point pour voir les concurrents" }),
+        ]}),
+        n.jsx("div", {
+          style:{ display:"grid", gridTemplateColumns:`repeat(${p}, ${cellSize}px)`, gap:3, width:"fit-content" },
+          children: Array.from({ length: p * p }, (_, idx) => {
+            const row = Math.floor(idx / p), col = idx % p;
+            const isCenter = row === mid && col === mid;
+            const rank = E[idx];
+            const bg = isCenter ? "#1E1B30" : rank == null ? "#E5E7EB" : rank <= 3 ? "#059669" : rank <= 10 ? "#E85A30" : rank <= 20 ? "#DC2626" : "#94A3B8";
+            const label = isCenter ? "📍" : rank == null ? "—" : rank > 20 ? "20+" : String(rank);
+            const cellInfo = cellDataFull[idx];
+            return n.jsx("div", {
+              onClick: () => !isCenter && setSelCell({ idx, row, col, rank, top10: (cellInfo && cellInfo.top10) || [] }),
+              title: isCenter ? "Centre — votre établissement" : rank ? `Position #${rank} — cliquez pour voir les concurrents` : "Pas de données",
+              style:{
+                width: cellSize, height: cellSize,
+                background: bg,
+                borderRadius: isCenter ? 10 : 8,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize: isCenter ? 16 : rank != null && rank <= 9 ? 15 : 13,
+                fontWeight: 900,
+                color: "white",
+                cursor: isCenter ? "default" : "pointer",
+                border: isCenter ? "3px solid white" : selCell?.idx === idx ? "3px solid #6B40D8" : "none",
+                boxShadow: isCenter ? "0 0 0 3px #1E1B30" : selCell?.idx === idx ? "0 0 0 2px #a78bfa" : "none",
+                transition: "transform .1s, box-shadow .1s",
+                userSelect: "none",
+              },
+              onMouseEnter: e => { if (!isCenter) { e.currentTarget.style.transform = "scale(1.12)"; e.currentTarget.style.zIndex = 2; } },
+              onMouseLeave: e => { e.currentTarget.style.transform = ""; e.currentTarget.style.zIndex = ""; },
+              children: label,
+            }, idx);
+          }),
+        }),
+        n.jsxs("div", { style:{ display:"flex", gap:14, marginTop:10, flexWrap:"wrap" }, children:[
+          [{c:"#059669",l:"TOP 3"},{c:"#E85A30",l:"4-10"},{c:"#DC2626",l:"11-20"},{c:"#94A3B8",l:">20"},{c:"#E5E7EB",l:"—",tc:"#9CA3AF"}].map(({c,l,tc})=>
+            n.jsxs("div",{ key:l, style:{ display:"flex", alignItems:"center", gap:5, fontSize:11.5, color:tc||"#374151", fontWeight:600 }, children:[
+              n.jsx("div",{ style:{ width:14, height:14, borderRadius:4, background:c, border:"1px solid rgba(0,0,0,.08)" } }),
+              l,
+            ]})
+          ),
+        ]}),
+      ]});
+    })(),
 
     /* === EMPTY STATE compact === */
     !I && E.length === 0 && n.jsxs("div",{style:{textAlign:"center",padding:"16px",color:"#9CA3AF"},children:[
@@ -17982,10 +19760,12 @@ function PostsTab({
     [replyAvisText, setReplyAvisText] = D.useState(""),
     [replyNote, setReplyNote] = D.useState(5),
     [replyAuthor, setReplyAuthor] = D.useState(""),
+    [replyDate, setReplyDate] = D.useState(new Date().toISOString().slice(0,10)),
     [replyVouvoie, setReplyVouvoie] = D.useState(true),
     [replyResult, setReplyResult] = D.useState(""),
     [replyLoading, setReplyLoading] = D.useState(false),
     [replyCopied, setReplyCopied] = D.useState(false),
+    [replySaved, setReplySaved] = D.useState(false),
     // Stats mensuelles manuelles
     [monthlyStats, setMonthlyStats] = D.useState(() => { try { return JSON.parse(localStorage.getItem(`bto_monthly_stats_${e.id}`)||"[]"); } catch { return []; } }),
     [statsForm, setStatsForm] = D.useState({ mois: new Date().toISOString().slice(0,7), note:"", nbAvis:"", appels:"", vues:"", clics:"", tauxReponse:"" }),
@@ -18479,8 +20259,8 @@ Mon établissement :
           // Saisie de l'avis + critères
           n.jsxs("div", { style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",borderTop:"3px solid #6B40D8",padding:"20px 22px"}, children:[
             n.jsx("div", { style:{fontWeight:700,fontSize:14,color:"#1E1B30",marginBottom:14}, children:"📋 L'avis reçu" }),
-            // Ligne 1 : note + auteur + vouvoiement
-            n.jsxs("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}, children:[
+            // Ligne 1 : note + auteur + date + vouvoiement
+            n.jsxs("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:12}, children:[
               n.jsxs("div", { children:[
                 n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Note" }),
                 n.jsx("select", { value:replyNote, onChange:ev=>setReplyNote(parseInt(ev.target.value)), className:"inp", style:{margin:0}, children:
@@ -18490,6 +20270,10 @@ Mon établissement :
               n.jsxs("div", { children:[
                 n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Prénom du client" }),
                 n.jsx("input", { value:replyAuthor, onChange:ev=>setReplyAuthor(ev.target.value), className:"inp", placeholder:"ex : Jean", style:{margin:0} }),
+              ]}),
+              n.jsxs("div", { children:[
+                n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Date de l'avis" }),
+                n.jsx("input", { type:"date", value:replyDate, onChange:ev=>setReplyDate(ev.target.value), className:"inp", style:{margin:0} }),
               ]}),
               n.jsxs("div", { children:[
                 n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Ton de la réponse" }),
@@ -18553,11 +20337,23 @@ Mon établissement :
           replyResult && n.jsxs("div", { style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",borderTop:"3px solid #059669",padding:"20px 22px"}, children:[
             n.jsxs("div", { style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}, children:[
               n.jsx("div", { style:{fontWeight:700,fontSize:14,color:"#1E1B30"}, children:"✅ Réponse générée" }),
-              n.jsx("button", {
-                onClick:()=>{navigator.clipboard.writeText(replyResult);setReplyCopied(true);setTimeout(()=>setReplyCopied(false),2000);},
-                style:{padding:"7px 16px",borderRadius:8,border:"1.5px solid #059669",background:replyCopied?"#059669":"white",color:replyCopied?"white":"#059669",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
-                children:replyCopied?"✓ Copié !":"📋 Copier",
-              }),
+              n.jsxs("div", { style:{display:"flex",gap:8}, children:[
+                n.jsx("button", {
+                  onClick:()=>{navigator.clipboard.writeText(replyResult);setReplyCopied(true);setTimeout(()=>setReplyCopied(false),2000);},
+                  style:{padding:"7px 16px",borderRadius:8,border:"1.5px solid #059669",background:replyCopied?"#059669":"white",color:replyCopied?"white":"#059669",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                  children:replyCopied?"✓ Copié !":"📋 Copier",
+                }),
+                n.jsx("button", {
+                  onClick:()=>{
+                    const newAvis={ auteur:replyAuthor, note:replyNote, texte:replyAvisText, reponse:replyResult, date:replyDate, id:Date.now() };
+                    const v={ ...b, recentAvis:[...(b.recentAvis||[]), newAvis] };
+                    x(v); i(t.map(cl=>cl.id===e.id?{...cl,avisData:v}:cl));
+                    setReplySaved(true); setTimeout(()=>setReplySaved(false),2500);
+                  },
+                  style:{padding:"7px 16px",borderRadius:8,border:"none",background:replySaved?"#6B40D8":"#F5F3FF",color:replySaved?"white":"#6B40D8",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+                  children:replySaved?"✓ Enregistré !":"💾 Enregistrer",
+                }),
+              ]}),
             ]}),
             n.jsx("textarea", { value:replyResult, onChange:ev=>setReplyResult(ev.target.value), rows:6, style:{width:"100%",border:"1px solid #E5E7EB",borderRadius:9,padding:"12px",fontSize:13,fontFamily:"inherit",resize:"vertical",lineHeight:1.6,boxSizing:"border-box",color:"#1E1B30"} }),
             n.jsx("div", { style:{fontSize:11,color:"#9CA3AF",marginTop:8}, children:"💡 Copiez et collez sur votre fiche Google Business Profile." }),
@@ -18569,6 +20365,32 @@ Mon établissement :
       m === "analyse" &&
         n.jsxs("div", {
           children: [
+            // ── CE QUE DISENT VOS CLIENTS ──
+            (() => {
+              const _ar = l.reviews || {};
+              const _themes = (_ar.positiveThemes||[]).filter(t=>t&&!t.includes("thème")).slice(0,4);
+              if (!_themes.length) return null;
+              return n.jsxs("div",{style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"18px 20px",marginBottom:14},children:[
+                n.jsx("div",{style:{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:".5px",color:"#6B40D8",marginBottom:16},children:"💬 Ce que disent vos clients"}),
+                n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20},children:[
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:10},children:"Mots les plus cités"}),
+                    n.jsx("div",{style:{display:"flex",flexWrap:"wrap",gap:7},children:
+                      _themes.map(t=>n.jsx("span",{key:t,style:{background:"#F5F3FF",border:"1px solid #E9D5FF",color:"#534AB7",fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:20},children:t}))
+                    }),
+                  ]}),
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:10},children:"Thèmes récurrents"}),
+                    n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:6},children:
+                      _themes.map(t=>n.jsxs("div",{key:t,style:{display:"flex",gap:7,alignItems:"flex-start",fontSize:12.5,color:"#374151",lineHeight:1.4},children:[
+                        n.jsx("span",{style:{color:"#6B40D8",fontWeight:900,flexShrink:0},children:"→"}),t
+                      ]}))
+                    }),
+                  ]}),
+                ]}),
+              ]});
+            })(),
+
             ((w = l.reviews) == null ? void 0 : w.analysis) &&
               !l.reviews.analysis.includes("3 phrases") &&
               n.jsxs("div", {
@@ -19574,42 +21396,55 @@ function EReputationTab({ client: e, clients: t, upd: i }) {
                 {
                   icon: "💬",
                   label: "SMS",
-                  text: `Bonjour [Prénom] 👋
+                  text: `Bonjour [Prénom],
 
-Merci pour votre confiance !
-Votre avis nous aiderait beaucoup 🙏
+Nous espérons que votre expérience avec [Nom de l'entreprise] a répondu à vos attentes.
 
-👉 ${U || "[lien]"}
+Si vous en avez le temps, un avis Google nous aiderait à continuer à nous améliorer et à faire connaître notre travail :
+${U || "[lien]"}
 
-1 minute suffit — merci !`,
+Merci pour votre confiance.
+[Prénom] - [Nom de l'entreprise]`,
                 },
                 {
                   icon: "📧",
                   label: "Email",
-                  text: `Objet : Votre avis compte beaucoup pour nous ⭐
+                  text: `Objet : Votre retour nous serait précieux
 
 Bonjour [Prénom],
 
-Nous espérons que vous êtes satisfait(e) de nos services. Un avis Google nous aiderait enormément à nous faire connaître.
+Nous tenions à vous remercier pour votre confiance et espérons avoir répondu à vos attentes.
 
-👉 ${U || "[lien]"}
+Votre satisfaction est notre priorité. Si vous avez quelques minutes, votre avis sur Google nous aiderait à améliorer notre accompagnement et à nous faire connaître auprès de nouveaux clients :
 
-Merci !`,
+${U || "[lien]"}
+
+N'hésitez pas à nous contacter si vous avez la moindre question ou remarque.
+
+Cordialement,
+[Prénom] - [Nom de l'entreprise]`,
                 },
                 {
                   icon: "💚",
                   label: "WhatsApp",
-                  text: `Bonjour [Prénom] 😊 Merci de nous avoir fait confiance ! Un petit avis Google ferait vraiment la différence 🙏 → ${U || "[lien]"}`,
+                  text: `Bonjour [Prénom], merci pour votre confiance.
+
+Si vous êtes satisfait(e) de notre travail, votre avis Google nous aiderait beaucoup — cela ne prend qu'une minute :
+${U || "[lien]"}
+
+Bonne journée.`,
                 },
                 {
                   icon: "🧾",
                   label: "Facture / Carte de visite",
-                  text: `Vous êtes satisfait(e) ?
-Laissez-nous un avis Google ⭐
+                  text: `Votre satisfaction, notre engagement.
 
-[QR Code]
+Si notre travail vous a satisfait, partagez votre expérience sur Google — cela nous aide à continuer à bien faire.
 
-Merci de votre confiance !`,
+Scannez le QR code ci-dessous pour laisser un avis.
+
+Merci pour votre confiance.
+[Nom de l'entreprise]`,
                 },
               ].map((v, A) =>
                 n.jsxs(
@@ -22861,7 +24696,7 @@ function CalendrierGrid({
                       model: "claude-sonnet-4-20250514",
                       max_tokens: 2500,
                       system:
-                        "Tu es Sara Baudouin, experte SEO local a Vannes, fondatrice de BeTheOne. Tu rediges des emails de prospection percutants bases sur un vrai audit GMB avec une promesse chiffree de progression. Reponds UNIQUEMENT en JSON valide.",
+                        "Tu es Sara Baudouin, experte SEO local a Vannes, fondatrice de Agence Be the one. Tu rediges des emails de prospection percutants bases sur un vrai audit GMB avec une promesse chiffree de progression. Reponds UNIQUEMENT en JSON valide.",
                       messages: [
                         {
                           role: "user",
@@ -22875,7 +24710,7 @@ TOP 3 PROBLEMES CRITIQUES (arguments de vente) :
 ${C.slice(0, 3).map((L, $) => `${$ + 1}. ${L.label} — ${L.action}`).join(`
 `)}
 
-PROJECTION 3 MOIS avec BeTheOne :
+PROJECTION 3 MOIS avec Agence Be the one :
 - Score actuel : ${u}/100
 - Score projete en 3 mois : ${R}/100 (+${E} points)
 - Niveau atteint : ${N.label}
@@ -22897,7 +24732,7 @@ REGLES ABSOLUES :
 - Email 1 "Impact" : commencer par le score, montrer l ecart avec la concurrence, la projection 3 mois, CTA appel 15 min
 - Email 2 "Curiosite" : commencer par une question sur leur visibilite, le score comme revelation, la promesse chiffree en conclusion
 - WhatsApp : 60 mots max avec le score et la projection
-- Ton direct, humain, pas corporate - signer Sara Baudouin, BeTheOne Vannes 06 51 17 69 10
+- Ton direct, humain, pas corporate - signer Sara Baudouin, Agence Be the one Vannes 06 51 17 69 10
 
 JSON : {"emails":[{"label":"Impact","subject":"...","body":"..."},{"label":"Curiosite","subject":"...","body":"..."}],"whatsapp":"..."}`,
                         },
@@ -23865,7 +25700,7 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
       const data = await res.json();
       if (data.success) {
         // Log dans publishedPosts
-        const logEntry = { id: Date.now(), title: (eventTitle || summary.slice(0,60)), type: postType === "EVENT" ? "Actualite" : postType === "OFFER" ? "Offre" : "Actualite", date: new Date().toISOString().slice(0,10), note: "Publié sur Google (" + postType + ")" };
+        const logEntry = { id: Date.now(), title: (eventTitle || summary.slice(0,60)), text: summary, type: postType === "EVENT" ? "Actualite" : postType === "OFFER" ? "Offre" : "Actualite", date: new Date().toISOString().slice(0,10), note: "Publié sur Google (" + postType + ")", photoUrl: photoUrl || undefined };
         upd(clients.map(cl => cl.id === client.id ? { ...cl, publishedPosts: [...(cl.publishedPosts||[]), logEntry] } : cl));
         setSuccess(true);
         setTimeout(() => { setSuccess(false); onClose(); }, 2000);
@@ -24113,6 +25948,25 @@ function PublicationsTab({ client: e, clients: t, upd: i, hasEnvKey: r, apiKey: 
   const publishedPosts = e.publishedPosts || [];
   const [showAddPost, setShowAddPost] = D.useState(false);
   const [newPost, setNewPost] = D.useState({ title: "", type: "Realisation", date: new Date().toISOString().slice(0,10), photoCount: 0, note: "" });
+  const [editingPublishedPost, setEditingPublishedPost] = D.useState(null);
+  const [editPhotoUploading, setEditPhotoUploading] = D.useState(false);
+  const [editPhotoDragging, setEditPhotoDragging] = D.useState(false);
+  const handleEditPhotoFile = async (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setEditPhotoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const r = await fetch("/api/gmb/upload-photo", { method: "POST", body: formData });
+      const data = await r.json();
+      if (data.url) setEditingPublishedPost(p => ({...p, photoUrl: data.url}));
+    } catch(err) { console.error(err); }
+    finally { setEditPhotoUploading(false); }
+  };
+  const saveEditedPublishedPost = (updated) => {
+    i(t.map(cl => cl.id === e.id ? { ...cl, publishedPosts: (cl.publishedPosts||[]).map(p2 => p2.id === updated.id ? updated : p2) } : cl));
+    setEditingPublishedPost(null);
+  };
 
   // Compositeur de post unifié
   const [composerConfig, setComposerConfig] = D.useState(null); // {mode,prefillText,prefillType,prefillDate}
@@ -25141,25 +26995,72 @@ Rédige la publication GMB.`;
                   // List
                   [...publishedPosts].reverse().map(p2 => n.jsxs("div", {
                     key: p2.id,
-                    style: { background: "white", border: "1px solid #E5E7EB", borderRadius: 11, padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 },
+                    style: { background: "white", border: "1px solid #E5E7EB", borderRadius: 11, overflow: "hidden" },
                     children: [
-                      n.jsx("div", { style: { width: 36, height: 36, background: `${typeColors[p2.type] || "#6B40D8"}15`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }, children: typeIcons[p2.type] || "📝" }),
-                      n.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                        n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }, children: [
-                          n.jsx("span", { style: { fontSize: 13, fontWeight: 700, color: "#1E1B30" }, children: p2.title }),
-                          n.jsx("span", { style: { background: typeColors[p2.type] || "#6B40D8", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 10, fontWeight: 700 }, children: p2.type }),
-                          p2.photoCount > 0 && n.jsxs("span", { style: { fontSize: 11, color: "#0EA5E9", fontWeight: 600 }, children: ["📷 ", p2.photoCount, " photo", p2.photoCount > 1 ? "s" : ""] }),
+                      p2.photoUrl && n.jsx("img", { src: p2.photoUrl, alt: "", style: { width: "100%", maxHeight: 160, objectFit: "cover", display: "block" } }),
+                      n.jsxs("div", { style: { padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }, children: [
+                        n.jsx("div", { style: { width: 36, height: 36, background: `${typeColors[p2.type] || "#6B40D8"}15`, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }, children: typeIcons[p2.type] || "📝" }),
+                        n.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+                          n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }, children: [
+                            n.jsx("span", { style: { fontSize: 13, fontWeight: 700, color: "#1E1B30" }, children: p2.title }),
+                            n.jsx("span", { style: { background: "#D1FAE5", color: "#065F46", borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 700 }, children: "● En ligne" }),
+                            n.jsx("span", { style: { background: typeColors[p2.type] || "#6B40D8", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 10, fontWeight: 700 }, children: p2.type }),
+                          ]}),
+                          n.jsxs("div", { style: { fontSize: 11, color: "#9CA3AF", marginTop: 2 }, children: [
+                            p2.date && new Date(p2.date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
+                            p2.note && n.jsxs("span", { children: [" · ", p2.note] }),
+                          ]}),
                         ]}),
-                        n.jsxs("div", { style: { fontSize: 11, color: "#9CA3AF", marginTop: 2 }, children: [
-                          p2.date && new Date(p2.date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
-                          p2.note && n.jsxs("span", { children: [" · ", p2.note] }),
-                        ]}),
+                        n.jsx("button", { onClick: () => setEditingPublishedPost({...p2}), style: { background: "none", border: "1px solid #E5E7EB", borderRadius: 7, cursor: "pointer", color: "#6B40D8", fontSize: 12, fontWeight: 600, padding: "5px 10px", fontFamily: "inherit" }, children: "✏️ Modifier" }),
+                        n.jsx("button", { onClick: () => deletePost(p2.id), style: { background: "none", border: "none", cursor: "pointer", color: "#D1D5DB", fontSize: 14, padding: 4 }, children: "✕" }),
                       ]}),
-                      n.jsx("button", { onClick: () => deletePost(p2.id), style: { background: "none", border: "none", cursor: "pointer", color: "#D1D5DB", fontSize: 14, padding: 4 }, children: "✕" }),
                     ],
                   })),
                 ]}),
           ]}),
+
+          // ── MODAL ÉDITION POST PUBLIÉ ──
+          editingPublishedPost && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setEditingPublishedPost(null),children:
+            n.jsxs("div",{style:{background:"white",borderRadius:16,padding:"28px",width:480,maxWidth:"90vw",boxShadow:"0 20px 60px rgba(0,0,0,.2)"},onClick:ev=>ev.stopPropagation(),children:[
+              n.jsx("div",{style:{fontSize:15,fontWeight:800,color:"#1E1B30",marginBottom:20},children:"Modifier le post"}),
+              n.jsxs("div",{style:{marginBottom:14},children:[
+                n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:".4px"},children:"Titre"}),
+                n.jsx("input",{value:editingPublishedPost.title||"",onChange:ev=>setEditingPublishedPost(p=>({...p,title:ev.target.value})),style:{width:"100%",padding:"9px 12px",border:"1.5px solid #E5E7EB",borderRadius:8,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}),
+              ]}),
+              n.jsxs("div",{style:{marginBottom:14},children:[
+                n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:".4px"},children:"Photo"}),
+                n.jsxs("label",{
+                  htmlFor:"editPhotoFileInput",
+                  onDragOver:ev=>{ev.preventDefault();setEditPhotoDragging(true);},
+                  onDragLeave:()=>setEditPhotoDragging(false),
+                  onDrop:ev=>{ev.preventDefault();setEditPhotoDragging(false);const f=ev.dataTransfer.files[0];if(f)handleEditPhotoFile(f);},
+                  style:{display:"block",border:`2px dashed ${editPhotoDragging?"#6B40D8":"#D1D5DB"}`,borderRadius:10,padding:"18px 12px",textAlign:"center",background:editPhotoDragging?"#F5F3FF":"#FAFAFA",cursor:"pointer",transition:"all .15s"},
+                  children:[
+                    editPhotoUploading
+                      ? n.jsx("div",{style:{fontSize:12,color:"#6B40D8",fontWeight:600},children:"Envoi en cours..."})
+                      : editingPublishedPost.photoUrl
+                        ? n.jsxs("div",{children:[
+                            n.jsx("img",{src:editingPublishedPost.photoUrl,alt:"",style:{maxHeight:120,maxWidth:"100%",objectFit:"cover",borderRadius:8,display:"block",margin:"0 auto"}}),
+                            n.jsx("div",{style:{marginTop:6,fontSize:11,color:"#9CA3AF"},children:"Cliquer pour changer la photo"}),
+                          ]})
+                        : n.jsxs("div",{style:{color:"#9CA3AF",fontSize:12},children:[
+                            n.jsx("div",{style:{fontSize:22,marginBottom:4},children:"🖼️"}),
+                            n.jsx("div",{children:"Glisser une image ici ou cliquer pour choisir"}),
+                          ]}),
+                    n.jsx("input",{id:"editPhotoFileInput",type:"file",accept:"image/*",style:{display:"none"},onChange:ev=>{const f=ev.target.files[0];if(f)handleEditPhotoFile(f);ev.target.value="";}}),
+                  ]
+                }),
+              ]}),
+              n.jsxs("div",{style:{marginBottom:14},children:[
+                n.jsx("label",{style:{fontSize:11,fontWeight:700,color:"#6B7280",display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:".4px"},children:"Note"}),
+                n.jsx("input",{value:editingPublishedPost.note||"",onChange:ev=>setEditingPublishedPost(p=>({...p,note:ev.target.value})),style:{width:"100%",padding:"9px 12px",border:"1.5px solid #E5E7EB",borderRadius:8,fontSize:13,boxSizing:"border-box",fontFamily:"inherit"}}),
+              ]}),
+              n.jsxs("div",{style:{display:"flex",gap:10,justifyContent:"flex-end",marginTop:20},children:[
+                n.jsx("button",{onClick:()=>setEditingPublishedPost(null),style:{padding:"9px 18px",borderRadius:9,border:"1.5px solid #E5E7EB",background:"white",color:"#374151",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
+                n.jsx("button",{onClick:()=>saveEditedPublishedPost(editingPublishedPost),style:{padding:"9px 20px",borderRadius:9,border:"none",background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"},children:"Enregistrer"}),
+              ]}),
+            ]})
+          }),
 
           // ── PLANIFIÉS (hidden — merged into calendar) ──
           subTab === "scheduled_hidden" && n.jsxs("div",{className:"fade",children:[
@@ -25277,7 +27178,7 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
   const statsMonthLabel = (statsMonthOptions.find(o=>o.key===statsMonth) || {}).label || statsMonth;
   const gmbStats = gmbStatsAll[statsMonth] || {};
   const [editingGmb, setEditingGmb] = D.useState(false);
-  const [gmbForm, setGmbForm] = D.useState({ vuesRecherche:"", vuesMaps:"", appels:"", reservations:"", clicsWeb:"", itineraires:"", vuesPhotos:"", prevVuesRecherche:"", prevVuesMaps:"", prevAppels:"", prevReservations:"", prevClicsWeb:"", prevItineraires:"", prevVuesPhotos:"" });
+  const [gmbForm, setGmbForm] = D.useState({ interactions:"", vuesRecherche:"", vuesMaps:"", appels:"", reservations:"", clicsWeb:"", itineraires:"", vuesPhotos:"", prevInteractions:"", prevVuesRecherche:"", prevVuesMaps:"", prevAppels:"", prevReservations:"", prevClicsWeb:"", prevItineraires:"", prevVuesPhotos:"" });
   const [evoMonthsCount, setEvoMonthsCount] = D.useState(6);
   const [gmbPasteText, setGmbPasteText] = D.useState("");
   const [gmbParsed, setGmbParsed] = D.useState(null);
@@ -25626,6 +27527,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
   const openGmbForm = () => {
     setGmbForm({
+      interactions: gmbStats.interactions || "",
       vuesRecherche: gmbStats.vuesRecherche || "",
       vuesMaps: gmbStats.vuesMaps || "",
       appels: gmbStats.appels || "",
@@ -25633,6 +27535,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
       clicsWeb: gmbStats.clicsWeb || "",
       itineraires: gmbStats.itineraires || "",
       vuesPhotos: gmbStats.vuesPhotos || "",
+      prevInteractions: gmbStats.prevInteractions || "",
       prevVuesRecherche: gmbStats.prevVuesRecherche || "",
       prevVuesMaps: gmbStats.prevVuesMaps || "",
       prevAppels: gmbStats.prevAppels || "",
@@ -25679,7 +27582,8 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
     const knownLabel = (lbl) => {
       const s = lbl.toLowerCase();
-      if (/utilisateurs? ont vu|vues? (du|de votre) profil|ont vu (la|votre) fiche|interactions/i.test(s)) return "vuesRecherche";
+      if (/interactions? avec la fiche/i.test(s)) return "interactions";
+      if (/utilisateurs? ont vu|vues? (du|de votre) profil|ont vu (la|votre) fiche/i.test(s)) return "vuesRecherche";
       if (/recherches? ont affich/i.test(s)) return "vuesMaps";
       if (/^appels?\b/.test(s) || /ont appel/i.test(s)) return "appels";
       if (/^r[ée]servations?\b/.test(s)) return "reservations";
@@ -25806,7 +27710,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
   // ── Report HTML ──
   const buildReportHtml = () => {
-    const agencyName = localStorage.getItem("ag_name") || localStorage.getItem("agencyName") || "Be The One";
+    const agencyName = localStorage.getItem("ag_name") || localStorage.getItem("agencyName") || "Agence Be the one";
     const agencyEmail = localStorage.getItem("ag_email") || localStorage.getItem("agencyEmail") || "contact@agence-betheone.fr";
     const agencyPhone = localStorage.getItem("ag_phone") || localStorage.getItem("agencyPhone") || "06 51 17 69 10";
     const clientName = extracted.name || e.name || "Client";
@@ -26374,7 +28278,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
         <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
           <div style="font-size:15px;font-weight:800;color:#1E1B30;margin-bottom:5px;text-align:center">Une question sur ce rapport ?</div>
-          ${(() => { const _nm = agencyName || "Agence Be The One"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full} · à votre disposition</div>`; })()}
+          ${(() => { const _nm = agencyName || "Agence Agence Be the one"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full} · à votre disposition</div>`; })()}
           <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
             <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📧</span><strong style="color:#6B40D8">${agencyEmail || "contact@agence-betheone.fr"}</strong></div>
             <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📞</span><strong style="color:#6B40D8">${agencyPhone || "06 51 17 69 10"}</strong></div>
@@ -26533,6 +28437,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
   const cardStyle = {background:"white",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"18px 22px",marginBottom:16};
   const sectionTitle = {fontSize:14,fontWeight:800,color:"#1E1B30",marginBottom:12};
   const gmbStatFields = [
+    {key:"interactions",prevKey:"prevInteractions",icon:"🖱️",label:"Interactions avec la fiche"},
     {key:"vuesRecherche",prevKey:"prevVuesRecherche",icon:"👁️",label:"Utilisateurs ayant vu la fiche"},
     {key:"vuesMaps",prevKey:"prevVuesMaps",icon:"🔎",label:"Recherches ayant affiché la fiche"},
     {key:"appels",prevKey:"prevAppels",icon:"📞",label:"Appels"},
@@ -27181,10 +29086,13 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                 ]}),
                 n.jsx("div",{style:{fontSize:12,color:"#6B7280",margin:"4px 0 12px"},children:"Comparez l'évolution mois par mois des statistiques copiées-collées depuis votre fiche Google Business. Le badge sous chaque valeur indique la variation par rapport au mois précédent."}),
                 n.jsx("div",{style:{overflowX:"auto"},children:
-                  n.jsxs("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:evoMonthsCount>6?960:560},children:[
+                  n.jsxs("table",{style:{width:"100%",borderCollapse:"collapse",minWidth:evoMonthsCount>6?1100:620},children:[
                     n.jsx("thead",{children:n.jsxs("tr",{children:[
                       n.jsx("th",{style:{background:"#F9FAFB",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".4px",color:"#9CA3AF",padding:"8px 12px",textAlign:"left"},children:"Indicateur"}),
-                      ...rows.map(rw => n.jsx("th",{key:rw.key,style:{background:"#F9FAFB",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".4px",color:"#9CA3AF",padding:"8px 12px",textAlign:"center"},children:rw.label})),
+                      ...rows.map((rw,ri) => [
+                        ri>0 && n.jsx("th",{key:rw.key+"-delta",style:{background:"#F9FAFB",width:64,padding:"4px 0"},children:""}),
+                        n.jsx("th",{key:rw.key,style:{background:"#F9FAFB",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:".4px",color:"#9CA3AF",padding:"8px 12px",textAlign:"center"},children:rw.label}),
+                      ]).flat().filter(Boolean),
                     ]})}),
                     n.jsx("tbody",{children:
                       gmbStatFields.map(f2 => n.jsxs("tr",{key:f2.key,children:[
@@ -27200,11 +29108,16 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                             const pct = ((cur - prv) / Math.abs(prv)) * 100;
                             delta = { pct, up: pct > 0 };
                           }
-                          return n.jsxs("td",{key:rw.key,style:{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center"},children:[
+                          const n1Change = rw.stats && rw.stats.changes && rw.stats.changes[f2.key];
+                          const deltaCell = ri>0 ? n.jsx("td",{key:rw.key+"-delta",style:{padding:"0 4px",borderBottom:"1px solid #F3F4F6",textAlign:"center",verticalAlign:"middle",width:64},children:
+                            delta ? n.jsxs("div",{style:{fontSize:9.5,fontWeight:600,whiteSpace:"nowrap",color: delta.pct===0?"#9CA3AF":(delta.up?"#16A34A":"#DC2626"),display:"inline-block"},children:[delta.up?"▲":(delta.pct<0?"▼":"–")," ",(delta.pct>0?"+":"")+delta.pct.toFixed(1),"%"]}) : n.jsx("span",{style:{color:"#E5E7EB",fontSize:11},children:"→"})
+                          }) : null;
+                          const valCell = n.jsxs("td",{key:rw.key,style:{padding:"9px 12px",borderBottom:"1px solid #F3F4F6",textAlign:"center"},children:[
                             n.jsx("div",{style:{fontSize:13,fontWeight:700,color: hasV ? "#1E1B30" : "#D1D5DB"},children: hasV ? parseInt(v).toLocaleString("fr-FR") : "—"}),
-                            delta && n.jsxs("div",{style:{fontSize:10,fontWeight:700,marginTop:2,color: delta.pct===0 ? "#9CA3AF" : (delta.up ? "#059669" : "#dc2626")},children:[delta.up?"▲":(delta.pct<0?"▼":"–")," ",(delta.pct>0?"+":"")+delta.pct.toFixed(1),"%"]}),
+                            n1Change && n.jsxs("div",{title:"Comparaison N-1 fournie par Google",style:{fontSize:9.5,fontWeight:600,marginTop:3,color: /^[-−]/.test(n1Change.pct) ? "#B45309" : "#0369A1",background: /^[-−]/.test(n1Change.pct) ? "#FEF3C7" : "#E0F2FE",borderRadius:4,padding:"1px 5px",display:"inline-block"},children:[(n1Change.pct.match(/^[+\-−]/)?n1Change.pct:"+"+n1Change.pct)+"%"+" vs N-1"]}),
                           ]});
-                        }),
+                          return [deltaCell, valCell].filter(Boolean);
+                        }).flat(),
                       ]},f2.key))
                     }),
                   ]}),
@@ -27293,6 +29206,181 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
           // ── AVIS ──
           subTab==="avis" && n.jsxs("div",{className:"fade",children:[
+
+            // ── CE QUE DISENT VOS CLIENTS ──
+            (() => {
+              const _auditRev = ((e.data||{}).reviews || {});
+              const _themes = (_auditRev.positiveThemes||[]).filter(t=>t&&!t.includes("thème")).slice(0,4);
+              if (!_themes.length) return null;
+              return n.jsxs("div",{style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:14,padding:"18px 20px",marginBottom:18},children:[
+                n.jsx("div",{style:{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:".5px",color:"#6B40D8",marginBottom:16},children:"💬 Ce que disent vos clients"}),
+                n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20},children:[
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:10},children:"Mots les plus cités"}),
+                    n.jsx("div",{style:{display:"flex",flexWrap:"wrap",gap:7},children:
+                      _themes.map(t=>n.jsx("span",{key:t,style:{background:"#F5F3FF",border:"1px solid #E9D5FF",color:"#534AB7",fontSize:12,fontWeight:600,padding:"4px 12px",borderRadius:20},children:t}))
+                    }),
+                  ]}),
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:10},children:"Thèmes récurrents"}),
+                    n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:6},children:
+                      _themes.map(t=>n.jsxs("div",{key:t,style:{display:"flex",gap:7,alignItems:"flex-start",fontSize:12.5,color:"#374151",lineHeight:1.4},children:[
+                        n.jsx("span",{style:{color:"#6B40D8",fontWeight:900,flexShrink:0},children:"→"}),t
+                      ]}))
+                    }),
+                  ]}),
+                ]}),
+              ]});
+            })(),
+
+            (() => {
+              return null; // diagnostic complet désactivé — sera réactivé avec API Google connectée
+
+              // Distribution étoiles
+              const _dist = {5:0,4:0,3:0,2:0,1:0};
+              if (_reviews) _reviews.forEach(r => { if (r.rating >= 1 && r.rating <= 5) _dist[r.rating]++; });
+
+              // Sentiment depuis les vrais avis (4-5★ = positif, 3★ = neutre, 1-2★ = négatif)
+              const _pos = _reviews ? _reviews.filter(r=>r.rating>=4).length : null;
+              const _neu = _reviews ? _reviews.filter(r=>r.rating===3).length : null;
+              const _neg = _reviews ? _reviews.filter(r=>r.rating<=2).length : null;
+              const _sentimentPct = _reviews && _reviews.length ? Math.round(_pos/_reviews.length*100) : (_auditRev.sentimentScore||null);
+
+              // Mots les plus cités (depuis textes réels)
+              const _stopWords = new Set(["les","des","une","avec","pour","dans","sur","qui","que","est","pas","très","bien","avoir","été","nous","vous","ils","elle","mais","donc","par","plus","tout","cette","comme","son","ses","mon","mes","votre","notre","leur","au","aux","en","de","du","le","la","et","un","je","il","nous","ce","se","ne","si","me","ma","lui","y","à","été","fait","nous","on","être","peu","lors","car"]);
+              const _topWords = (() => {
+                if (!_reviews) return (_auditRev.positiveThemes||[]).slice(0,3).map(t=>({w:t,n:0}));
+                const freq = {};
+                _reviews.forEach(r => {
+                  (r.text||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z\s]/g," ").split(/\s+/).filter(w=>w.length>3&&!_stopWords.has(w)).forEach(w=>{ freq[w]=(freq[w]||0)+1; });
+                });
+                return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([w,n])=>({w,n}));
+              })();
+
+              // Thèmes depuis audit
+              const _themes = [...(_auditRev.positiveThemes||[]).filter(t=>t&&!t.includes("thème")).slice(0,4)];
+              const _negThemes = [...(_auditRev.negativeThemes||[]).filter(t=>t&&!t.includes("point")).slice(0,2)];
+
+              // Taux de réponse
+              const _replied = _reviews ? _reviews.filter(r=>r.reply).length : null;
+              const _responseRate = _replied !== null && _totalRev > 0 ? Math.round(_replied/_totalRev*100) : null;
+
+              // Jours depuis dernier avis
+              const _lastDate = _reviews && _reviews.length ? _reviews.map(r=>r.date).filter(Boolean).sort().at(-1) : null;
+              const _daysSince = _lastDate ? Math.floor((Date.now()-new Date(_lastDate))/(1000*60*60*24)) : null;
+
+              // Proportion 5★
+              const _pct5 = _totalRev > 0 ? Math.round((_dist[5]/_totalRev)*100) : null;
+
+              // Forces & Points d'attention (calculés)
+              const _forces = [];
+              const _attn = [];
+              if (_rating !== null) { if (_rating >= 4.5) _forces.push(`Note Google excellente (${_rating.toFixed(1)}/5)`); else if (_rating >= 4.0) _forces.push(`Bonne note Google (${_rating.toFixed(1)}/5)`); else _attn.push(`Note Google faible (${_rating.toFixed(1)}/5) — à améliorer en priorité`); }
+              if (_pct5 !== null) { if (_pct5 >= 80) _forces.push(`Excellente proportion d'avis 5 étoiles (${_pct5}%)`); else if (_pct5 >= 60) _forces.push(`Bonne proportion d'avis 5 étoiles (${_pct5}%)`); else _attn.push(`Proportion d'avis 5 étoiles insuffisante (${_pct5}%)`); }
+              if (_sentimentPct !== null) { if (_sentimentPct >= 75) _forces.push(`Sentiment global très positif (${_sentimentPct}% positif)`); else if (_sentimentPct >= 55) _forces.push(`Sentiment global positif (${_sentimentPct}% positif)`); else _attn.push(`Sentiment mitigé (${_sentimentPct}% positif) — des avis négatifs freinent la conversion`); }
+              if (_themes.length >= 3) _forces.push(`Thèmes récurrents bien identifiés (${_themes.length} thèmes)`);
+              if (_totalRev > 0 && _totalRev < 15) _attn.push(`Très peu d'avis (${_totalRev}) — frein majeur à la conversion`);
+              if (_daysSince !== null && _daysSince > 90) _attn.push(`Plus de 3 mois sans nouvel avis (${_daysSince} j) — pénalise votre ranking`);
+              if (_responseRate !== null && _responseRate < 50) _attn.push(`Taux de réponse faible (${_responseRate}%) — opportunité d'engagement manquée`);
+              else if (_replied !== null && _replied === 0) _attn.push(`Pas de réponses aux avis — opportunité d'engagement manquée`);
+              if (_reviews && _reviews.filter(r=>r.hasPhoto||r.photo).length === 0) _attn.push(`Aucun avis avec photo — manque de social proof visuel`);
+
+              if (_totalRev === 0 && !_reviews && _rating === null && !_auditRev.analysis && !_themes.length) return null;
+
+              return n.jsxs("div",{style:{background:"white",border:"1.5px solid #E5E7EB",borderRadius:16,overflow:"hidden",marginBottom:18,boxShadow:"0 2px 8px rgba(0,0,0,0.05)"},children:[
+                // Header
+                n.jsxs("div",{style:{background:"linear-gradient(135deg,#6B40D8,#C03080)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"},children:[
+                  n.jsx("div",{style:{fontSize:13,fontWeight:800,color:"white",textTransform:"uppercase",letterSpacing:".6px"},children:"⭐ Analyse des avis"}),
+                  n.jsx("div",{style:{fontSize:11,color:"rgba(255,255,255,.7)",fontWeight:600},children:"DIAGNOSTIC"}),
+                ]}),
+
+                n.jsxs("div",{style:{padding:"20px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20},children:[
+
+                  // Colonne 1 : Note + distribution
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".5px",color:"#6B7280",marginBottom:12},children:"Note Google"}),
+                    n.jsxs("div",{style:{display:"flex",alignItems:"flex-end",gap:8,marginBottom:4},children:[
+                      n.jsx("div",{style:{fontSize:48,fontWeight:900,color:"#1E1B30",lineHeight:1},children:_rating!==null?_rating.toFixed(1):"—"}),
+                      n.jsx("div",{style:{fontSize:16,color:"#9CA3AF",paddingBottom:6},children:"/ 5"}),
+                    ]}),
+                    n.jsx("div",{style:{fontSize:12,color:"#9CA3AF",marginBottom:2},children:`${_totalRev} avis cumulés`}),
+                    _reviews && n.jsx("div",{style:{fontSize:11,color:"#059669",fontWeight:700},children:`+${_reviews.filter(r=>{ const d=new Date(r.date||0); const now=new Date(); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }).length} ce mois`}),
+                    n.jsx("div",{style:{marginTop:14},children:
+                      n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".5px",color:"#6B7280",marginBottom:10},children:"Distribution"}),
+                    }),
+                    ...[5,4,3,2,1].map(star => {
+                      const cnt = _dist[star];
+                      const pct = _totalRev > 0 ? Math.round(cnt/_totalRev*100) : 0;
+                      return n.jsxs("div",{key:star,style:{display:"flex",alignItems:"center",gap:8,marginBottom:5},children:[
+                        n.jsx("div",{style:{fontSize:12,fontWeight:700,color:"#1E1B30",width:10,textAlign:"right"},children:star}),
+                        n.jsx("div",{style:{flex:1,height:6,background:"#F4F5FA",borderRadius:3,overflow:"hidden"},children:
+                          n.jsx("div",{style:{width:`${pct}%`,height:"100%",background:star>=4?"#059669":star===3?"#d97706":"#dc2626",borderRadius:3,transition:"width .4s"}})
+                        }),
+                        n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",width:28,textAlign:"right"},children:`${pct}%`}),
+                        n.jsx("div",{style:{fontSize:11,color:"#374151",fontWeight:600,width:16,textAlign:"right"},children:cnt||"0"}),
+                      ]});
+                    }),
+                  ]}),
+
+                  // Colonne 2 : Sentiment + mots + thèmes
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".5px",color:"#6B7280",marginBottom:12},children:"Indicateurs clés"}),
+                    _sentimentPct !== null && n.jsxs("div",{style:{background:"#F9FAFB",borderRadius:12,padding:"12px 14px",marginBottom:12},children:[
+                      n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:10},children:"Sentiment"}),
+                      n.jsxs("div",{style:{display:"flex",flexDirection:"column",gap:6},children:[
+                        ...[
+                          {label:"Positif",pct:_sentimentPct,col:"#059669"},
+                          {label:"Neutre",pct:_neu!==null&&_totalRev>0?Math.round(_neu/_totalRev*100):null,col:"#d97706"},
+                          {label:"Négatif",pct:_neg!==null&&_totalRev>0?Math.round(_neg/_totalRev*100):null,col:"#dc2626"},
+                        ].map(s => s.pct !== null ? n.jsxs("div",{key:s.label,style:{display:"flex",alignItems:"center",gap:8},children:[
+                          n.jsx("div",{style:{width:54,fontSize:10,color:"#6B7280"},children:s.label}),
+                          n.jsx("div",{style:{flex:1,height:5,background:"#E5E7EB",borderRadius:3,overflow:"hidden"},children:n.jsx("div",{style:{width:`${s.pct}%`,height:"100%",background:s.col,borderRadius:3}})}),
+                          n.jsx("div",{style:{fontSize:11,fontWeight:700,color:s.col,width:30,textAlign:"right"},children:`${s.pct}%`}),
+                        ]}) : null),
+                      ]}),
+                    ]}),
+                    _topWords.length > 0 && n.jsxs("div",{style:{marginBottom:12},children:[
+                      n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:8},children:"Mots les plus cités"}),
+                      n.jsx("div",{style:{display:"flex",flexWrap:"wrap",gap:6},children:
+                        _topWords.map(({w,n:cnt})=>n.jsx("span",{key:w,style:{background:"#F5F3FF",border:"1px solid #E9D5FF",color:"#6B40D8",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20},children:w}))
+                      }),
+                    ]}),
+                    _themes.length > 0 && n.jsxs("div",{children:[
+                      n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".4px",color:"#6B7280",marginBottom:8},children:"Thèmes récurrents"}),
+                      n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:5},children:
+                        _themes.map(t=>n.jsxs("div",{key:t,style:{display:"flex",gap:6,alignItems:"flex-start",fontSize:12,color:"#374151"},children:[
+                          n.jsx("span",{style:{color:"#6B40D8",fontWeight:900,flexShrink:0},children:"→"}),
+                          t,
+                        ]}))
+                      }),
+                    ]}),
+                  ]}),
+
+                  // Colonne 3 : Forces & Attention
+                  n.jsxs("div",{children:[
+                    n.jsx("div",{style:{fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:".5px",color:"#6B7280",marginBottom:12},children:"Forces & Points d'attention"}),
+                    _forces.length > 0 && n.jsxs("div",{style:{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"10px 12px",marginBottom:10},children:[
+                      n.jsx("div",{style:{fontSize:10,fontWeight:800,color:"#059669",textTransform:"uppercase",letterSpacing:".4px",marginBottom:7},children:"✓ Ce qui marche"}),
+                      n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:5},children:
+                        _forces.map(f=>n.jsxs("div",{key:f,style:{display:"flex",gap:6,fontSize:11.5,color:"#374151",lineHeight:1.4},children:[
+                          n.jsx("span",{style:{color:"#059669",fontWeight:900,flexShrink:0},children:"✓"}),f
+                        ]}))
+                      }),
+                    ]}),
+                    _attn.length > 0 && n.jsxs("div",{style:{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"10px 12px",marginBottom:10},children:[
+                      n.jsx("div",{style:{fontSize:10,fontWeight:800,color:"#DC2626",textTransform:"uppercase",letterSpacing:".4px",marginBottom:7},children:"! À améliorer"}),
+                      n.jsx("div",{style:{display:"flex",flexDirection:"column",gap:5},children:
+                        _attn.map(a=>n.jsxs("div",{key:a,style:{display:"flex",gap:6,fontSize:11.5,color:"#374151",lineHeight:1.4},children:[
+                          n.jsx("span",{style:{color:"#DC2626",fontWeight:900,flexShrink:0},children:"!"}),a
+                        ]}))
+                      }),
+                    ]}),
+                    n.jsx("div",{style:{background:"linear-gradient(135deg,#F5F3FF,#FDF2F8)",border:"1px solid #E9D5FF",borderRadius:10,padding:"10px 12px",fontSize:11,color:"#6B7280",lineHeight:1.5},children:"Notre accompagnement inclut la collecte automatisée d'avis Google et la rédaction de réponses personnalisées — c'est l'un des leviers les plus rapides pour faire bouger ce pilier."}),
+                  ]}),
+
+                ]}),
+              ]});
+            })(),
 
             // KPIs
             n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:18},children:[
@@ -27530,7 +29618,7 @@ function TemplatesTab({
 }) {
   var S, w, W;
   const [b, x] = D.useState(e.weeklyNotes || ""),
-    [j, I] = D.useState(localStorage.getItem("ag_name") || "BeTheOne — Vannes"),
+    [j, I] = D.useState(localStorage.getItem("ag_name") || "Agence Be the one — Vannes"),
     [z, g] = D.useState(localStorage.getItem("ag_email") || ""),
     [h, f] = D.useState(localStorage.getItem("ag_phone") || "06 51 17 69 10"),
     [c, u] = D.useState(!1),
@@ -28122,6 +30210,10 @@ function TemplatesTab({
                 const strengths =(_.strengths||[]).filter(s=>!s.includes("[")).slice(0,3);
                 const weaknesses=(_.weaknesses||[]).filter(s=>!s.includes("[")).slice(0,4);
                 const qw        =(_.quickWins||[]).filter(s=>!s.includes("[")).slice(0,3);
+                const _ext      = P.extracted || {};
+                const _secCatSugg = (_ext.secondaryCategories?.suggested||[]).filter(s=>s&&!s.includes("[")).slice(0,3);
+                const _servicesSugg = (_ext.services?.suggested||[]).filter(s=>s&&!(typeof s==="string"?s:s.name||"").includes("[")).slice(0,3);
+                const _productsSugg = (_ext.products?.suggested||[]).filter(s=>s&&!(typeof s==="string"?s:s.name||"").includes("[")).slice(0,3);
                 const rm1=U.month1||{}; const rm2=U.month2||{}; const rm3=U.month3||{};
                 const urg = t<50?78:t<70?52:28;
                 const clientName = T.name||e.name||"";
@@ -28224,7 +30316,7 @@ function TemplatesTab({
                 {
                   const lossPoints = [];
                   if (weaknesses.length) lossPoints.push(`Vos points de vigilance actuels (${weaknesses.slice(0,2).join(", ").replace(/\.$/,"").toLowerCase()}) restent autant d'opportunités laissées à la concurrence tant qu'ils ne sont pas traités.`);
-                  if (pos !== "—" && parseInt(pos) > 3) lossPoints.push(`En position #${pos} sur Google Maps, une partie des recherches locales se conclut directement chez les établissements mieux classés — souvent avant même que votre fiche soit consultée.`);
+                  if (mapRangMoyen != null && parseFloat(mapRangMoyen) > 3) lossPoints.push(`Votre rang moyen sur Google Maps est actuellement de ${mapRangMoyen} — cela signifie qu'une part significative des recherches locales se conclut chez des concurrents mieux positionnés, souvent avant même que votre fiche soit consultée.`);
                   if (t2 < 70) lossPoints.push(`Avec un score de ${t2}/100, votre fiche reste sous le seuil de compétitivité (70/100) : chaque mois sans action laisse l'écart se creuser plutôt que se combler.`);
                   lossPoints.push(`Une fiche qui n'évolue pas (peu de posts récents, photos non renouvelées, avis sans réponse) envoie à Google — et à vos clients — un signal d'inactivité qui pèse directement sur la visibilité locale.`);
                   lossHtml = `<div style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:13px;padding:18px 20px;margin-bottom:24px">
@@ -28309,12 +30401,13 @@ function TemplatesTab({
 
                     <!-- Piliers réels + position actuelle (carte de positionnement) -->
                     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-width:560px;width:100%">
-                      ${[["🎯","Pertinence","pert"],["📍","Proximité","prox"],["⭐","Notoriété","notor"]].map(([icon,label,key])=>{const s=pls(key==="pert"?"pertinence":key==="prox"?"proximite":"notoriete");const c=plc(s);return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${c}"><div style="font-size:20px;margin-bottom:6px">${icon}</div><div style="font-size:22px;font-weight:900;color:${c};line-height:1">${s!==null?s:"—"}</div><div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${s||0}%;height:100%;background:${c};border-radius:2px"></div></div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">${label}</div></div>`;}).join("")}
+                      ${[["🎯","Pertinence","pert","Catégorie, description, mots-clés"],["📍","Proximité","prox","Adresse, zone, horaires, NAP"],["⭐","Notoriété","notor","Avis, photos, publications"]].map(([icon,label,key,desc])=>{const s=pls(key==="pert"?"pertinence":key==="prox"?"proximite":"notoriete");const c=plc(s);return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${c}"><div style="font-size:20px;margin-bottom:4px">${icon}</div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-bottom:6px">${label}</div><div style="font-size:22px;font-weight:900;color:${c};line-height:1">${s!==null?s+"%":"—"}</div><div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${s||0}%;height:100%;background:${c};border-radius:2px"></div></div><div style="font-size:9px;color:#9CA3AF;margin-top:4px;line-height:1.3">${desc}</div></div>`;}).join("")}
                       ${(() => { const rv = mapRangMoyen!=null ? parseFloat(mapRangMoyen) : null; const pc = rv!=null ? (rv<=3?"#059669":"#d97706") : "#9CA3AF"; return `<div style="background:white;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 10px;text-align:center;border-top:3px solid ${pc}">
-                        <div style="font-size:20px;margin-bottom:6px">📍</div>
-                        <div style="font-size:22px;font-weight:900;color:${pc};line-height:1">${mapRangMoyen!=null?mapRangMoyen:(pos!=="—"?"#"+pos:"—")}</div>
+                        <div style="font-size:20px;margin-bottom:4px">📍</div>
+                        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-bottom:6px">Position actuelle</div>
+                        <div style="font-size:22px;font-weight:900;color:${pc};line-height:1">${mapRangMoyen!=null?"#"+mapRangMoyen:"—"}</div>
                         <div style="height:3px;background:#F4F5FA;border-radius:2px;margin:5px auto;width:70%"><div style="width:${rv!=null?Math.max(0,100-Math.min(100,rv*5)):0}%;height:100%;background:${pc};border-radius:2px"></div></div>
-                        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#6B7280;margin-top:4px">Position actuelle<br>Google Maps</div>
+                        <div style="font-size:9px;color:#9CA3AF;margin-top:4px;line-height:1.3">Rang moyen issu du scan carte</div>
                       </div>`; })()}
                     </div>
                   </div>
@@ -28380,6 +30473,23 @@ function TemplatesTab({
                     <div style="font-size:11px;color:#9CA3AF;margin:-10px 0 18px;line-height:1.5">Mots-clés stratégiques identifiés pour votre activité — leur position réelle est mesurée et suivie via le scan carte ci-dessous (données toujours à jour, sans estimation).</div>`:`<div style="background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;font-size:13px;color:#9CA3AF;margin-bottom:24px">Lancez un audit pour obtenir les mots-clés</div>`}
                     ${noteKeywords}
                     ${carteHtml}`}
+
+                    ${(_secCatSugg.length || _servicesSugg.length || _productsSugg.length) ? `
+                    <div class="rp-section">🏷️ Optimisations de fiche suggérées</div>
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+                      ${_secCatSugg.length ? `<div style="background:#F5F3FF;border:1.5px solid #E9D5FF;border-radius:12px;padding:14px 16px">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#6B40D8;margin-bottom:10px">🗂️ Catégories secondaires</div>
+                        ${_secCatSugg.map(c=>`<div style="display:flex;gap:6px;margin-bottom:7px;font-size:12px;color:#374151;line-height:1.4"><span style="color:#6B40D8;font-weight:900;flex-shrink:0">+</span>${typeof c==="string"?c:c.name||c}</div>`).join("")}
+                      </div>` : ""}
+                      ${_servicesSugg.length ? `<div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:12px;padding:14px 16px">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#3B5BDB;margin-bottom:10px">🛠️ Services à ajouter</div>
+                        ${_servicesSugg.map(s=>`<div style="display:flex;gap:6px;margin-bottom:7px;font-size:12px;color:#374151;line-height:1.4"><span style="color:#3B5BDB;font-weight:900;flex-shrink:0">+</span>${typeof s==="string"?s:s.name||s}</div>`).join("")}
+                      </div>` : ""}
+                      ${_productsSugg.length ? `<div style="background:#FDF2F8;border:1.5px solid #FBCFE8;border-radius:12px;padding:14px 16px">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#C03080;margin-bottom:10px">📦 Produits à ajouter</div>
+                        ${_productsSugg.map(p=>`<div style="display:flex;gap:6px;margin-bottom:7px;font-size:12px;color:#374151;line-height:1.4"><span style="color:#C03080;font-weight:900;flex-shrink:0">+</span>${typeof p==="string"?p:p.name||p}</div>`).join("")}
+                      </div>` : ""}
+                    </div>` : ""}
                   </div>
                 </div>`;
 
@@ -28450,7 +30560,7 @@ function TemplatesTab({
 
                     <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
                       <div style="font-size:15px;font-weight:800;color:#1E1B30;margin-bottom:5px;text-align:center">Parlons-en, consultation offerte 30 min</div>
-                      ${(() => { const _nm = j || "Agence Be The One"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full}</div>`; })()}
+                      ${(() => { const _nm = j || "Agence Agence Be the one"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full}</div>`; })()}
                       <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
                         ${(() => { const _em = z || "contact@agence-betheone.fr"; return `<div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📧</span><strong style="color:#6B40D8">${_em}</strong></div>`; })()}
                         ${h?`<div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📞</span><strong style="color:#6B40D8">${h}</strong></div>`:""}
@@ -28475,7 +30585,7 @@ function TemplatesTab({
                       <div style="background:linear-gradient(135deg,#6B40D8 0%,#C03080 60%,#E85A30 100%);padding:28px 32px;color:white;text-align:center">
                         <div style="display:inline-block;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);border-radius:20px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;padding:4px 14px;margin-bottom:12px">🎁 Programme de parrainage</div>
                         <div style="font-size:20px;font-weight:900;margin-bottom:8px">Parrainez, cumulez les avantages</div>
-                        <div style="font-size:12.5px;opacity:.88;font-weight:500;max-width:480px;margin:0 auto;line-height:1.55">Recommandez Be The One à vos contacts. Chaque filleul qui signe un contrat vous rapporte un avantage — sans limite et cumulable.</div>
+                        <div style="font-size:12.5px;opacity:.88;font-weight:500;max-width:480px;margin:0 auto;line-height:1.55">Recommandez Agence Be the one à vos contacts. Chaque filleul qui signe un contrat vous rapporte un avantage — sans limite et cumulable.</div>
                       </div>
                       <!-- Body -->
                       <div style="background:white;padding:26px 28px 30px">
@@ -28505,7 +30615,7 @@ function TemplatesTab({
                         <div style="background:#F8F6FF;border-radius:12px;padding:16px 18px;margin-bottom:18px">
                           <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#6B40D8;margin-bottom:12px">Comment ça marche ?</div>
                           <div style="display:flex;gap:8px;align-items:flex-start">
-                            ${[["1","Recommandez Be The One à un contact"],["2","Votre filleul signe son contrat"],["3","Votre avantage est appliqué dès le mois suivant"]].map(([n,t2],i,a)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px"><div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#6B40D8,#C03080);color:white;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</div><div style="font-size:10.5px;color:#4B5563;font-weight:600;line-height:1.4">${t2}</div></div>${i<a.length-1?'<div style="font-size:13px;color:#C4B5FD;margin-top:3px;flex-shrink:0">→</div>':''}`).join("")}
+                            ${[["1","Recommandez Agence Be the one à un contact"],["2","Votre filleul signe son contrat"],["3","Votre avantage est appliqué dès le mois suivant"]].map(([n,t2],i,a)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px"><div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#6B40D8,#C03080);color:white;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${n}</div><div style="font-size:10.5px;color:#4B5563;font-weight:600;line-height:1.4">${t2}</div></div>${i<a.length-1?'<div style="font-size:13px;color:#C4B5FD;margin-top:3px;flex-shrink:0">→</div>':''}`).join("")}
                           </div>
                         </div>
                         <!-- CTA -->
@@ -28525,7 +30635,7 @@ function TemplatesTab({
                   </div>
                 </div>`;
 
-                return css + cover + page2 + page3 + pageParrainage + (sec.cta ? page4 : "");
+                return css + cover + page2 + page3 + (sec.cta ? page4 : "");
               })()
             }
           })
