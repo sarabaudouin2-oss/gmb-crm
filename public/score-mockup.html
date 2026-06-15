@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score GMB Détaillé — Mockup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F5F3FF; min-height: 100vh; padding: 24px; }
+
+  .page { max-width: 860px; margin: 0 auto; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .header h1 { font-size: 20px; font-weight: 800; color: #1E1B30; }
+  .header .sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
+  .badge-google { background: #E8F0FE; color: #4285F4; border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 5px; }
+
+  /* Score global card */
+  .score-hero { background: white; border-radius: 20px; padding: 28px 32px; margin-bottom: 20px; display: flex; align-items: center; gap: 32px; box-shadow: 0 2px 12px rgba(107,64,216,.08); }
+
+  .gauge-wrap { position: relative; width: 130px; height: 130px; flex-shrink: 0; }
+  .gauge-wrap svg { transform: rotate(-90deg); }
+  .gauge-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .gauge-num { font-size: 34px; font-weight: 900; color: #6B40D8; line-height: 1; }
+  .gauge-unit { font-size: 13px; color: #9CA3AF; font-weight: 600; margin-top: 2px; }
+
+  .score-details { flex: 1; }
+  .score-lvl { font-size: 22px; font-weight: 800; color: #1E1B30; margin-bottom: 4px; }
+  .score-desc { font-size: 13px; color: #6B7280; line-height: 1.5; margin-bottom: 16px; }
+  .score-stats { display: flex; gap: 20px; flex-wrap: wrap; }
+  .stat-pill { background: #F9FAFB; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 8px 14px; text-align: center; }
+  .stat-val { font-size: 18px; font-weight: 800; color: #1E1B30; }
+  .stat-lbl { font-size: 11px; color: #6B7280; margin-top: 1px; }
+
+  .gain-banner { background: linear-gradient(135deg, #FEF3C7, #FDE68A); border: 1.5px solid #F59E0B; border-radius: 12px; padding: 10px 16px; display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 13px; font-weight: 700; color: #92400E; }
+
+  /* Category bars */
+  .cats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .cat-card { background: white; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 6px rgba(0,0,0,.05); }
+  .cat-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .cat-icon { font-size: 18px; }
+  .cat-name { font-size: 13px; font-weight: 700; color: #374151; flex: 1; }
+  .cat-score { font-size: 13px; font-weight: 800; }
+  .bar-bg { height: 8px; background: #F3F4F6; border-radius: 99px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 99px; transition: width .4s; }
+  .cat-sub { font-size: 11px; color: #9CA3AF; margin-top: 6px; }
+
+  /* Actions list */
+  .section-title { font-size: 15px; font-weight: 800; color: #1E1B30; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .section-title .dot { width: 4px; height: 20px; border-radius: 2px; background: linear-gradient(135deg,#6B40D8,#C03080); }
+
+  .actions-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .action-item { background: white; border-radius: 12px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.05); border-left: 4px solid transparent; }
+  .action-item.high { border-left-color: #EF4444; }
+  .action-item.mid  { border-left-color: #F59E0B; }
+  .action-item.low  { border-left-color: #6B40D8; }
+
+  .action-icon { font-size: 20px; flex-shrink: 0; }
+  .action-body { flex: 1; }
+  .action-label { font-size: 13px; font-weight: 700; color: #1E1B30; margin-bottom: 2px; }
+  .action-desc { font-size: 12px; color: #6B7280; line-height: 1.4; }
+  .action-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .pts-badge { background: #F5F3FF; color: #6B40D8; border-radius: 8px; padding: 3px 9px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+  .prio-badge { border-radius: 6px; padding: 2px 8px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .prio-high { background: #FEE2E2; color: #EF4444; }
+  .prio-mid  { background: #FEF3C7; color: #D97706; }
+  .prio-low  { background: #F5F3FF; color: #6B40D8; }
+
+  .btn-fix { background: linear-gradient(135deg,#6B40D8,#C03080); color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
+
+  /* Good stuff */
+  .ok-section { background: white; border-radius: 14px; padding: 16px 18px; margin-bottom: 20px; }
+  .ok-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ok-pill { background: #ECFDF5; color: #059669; border-radius: 99px; padding: 5px 12px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>Score GMB — Plomberie Dupont</h1>
+      <div class="sub">Paris 15e · Plombier · Dernière analyse : aujourd'hui</div>
+    </div>
+    <div class="badge-google">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="#4285F4"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Connecté GMB
+    </div>
+  </div>
+
+  <!-- Score hero -->
+  <div class="score-hero">
+    <!-- Jauge -->
+    <div class="gauge-wrap">
+      <svg width="130" height="130" viewBox="0 0 130 130">
+        <circle cx="65" cy="65" r="55" fill="none" stroke="#F3F4F6" stroke-width="12"/>
+        <circle cx="65" cy="65" r="55" fill="none" stroke="url(#grad)" stroke-width="12"
+          stroke-dasharray="345.6" stroke-dashoffset="103.7" stroke-linecap="round"/>
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#6B40D8"/>
+            <stop offset="100%" stop-color="#C03080"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="gauge-label">
+        <div class="gauge-num">70</div>
+        <div class="gauge-unit">/100</div>
+      </div>
+    </div>
+
+    <!-- Détails -->
+    <div class="score-details">
+      <div class="score-lvl">🥈 Bon niveau</div>
+      <div class="score-desc">La fiche est bien remplie mais manque de photos récentes et de publications régulières. Quelques optimisations permettraient de passer en "Excellent".</div>
+      <div class="score-stats">
+        <div class="stat-pill">
+          <div class="stat-val" style="color:#059669">8</div>
+          <div class="stat-lbl">Critères OK ✅</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-val" style="color:#EF4444">5</div>
+          <div class="stat-lbl">À corriger ⚠️</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-val" style="color:#F59E0B">+22 pts</div>
+          <div class="stat-lbl">Potentiel gain</div>
+        </div>
+        <div class="stat-pill">
+          <div class="stat-val" style="color:#4B5563">4.3 ⭐</div>
+          <div class="stat-lbl">Note Google</div>
+        </div>
+      </div>
+      <div class="gain-banner">
+        🚀 En corrigeant les 5 points ci-dessous, vous passeriez à <span style="font-size:16px;margin:0 4px">92/100</span> — niveau "Excellence"
+      </div>
+    </div>
+  </div>
+
+  <!-- Catégories -->
+  <div class="cats-grid">
+    <div class="cat-card">
+      <div class="cat-header">
+        <span class="cat-icon">📞</span>
+        <span class="cat-name">Coordonnées & Horaires</span>
+        <span class="cat-score" style="color:#059669">17/17</span>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" style="width:100%;background:#059669"></div></div>
+      <div class="cat-sub">✅ Complet — téléphone, site, adresse, horaires</div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-header">
+        <span class="cat-icon">✍️</span>
+        <span class="cat-name">Description & Présence</span>
+        <span class="cat-score" style="color:#D97706">14/21</span>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" style="width:67%;background:#F59E0B"></div></div>
+      <div class="cat-sub">⚠️ Services et attributs manquants</div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-header">
+        <span class="cat-icon">📸</span>
+        <span class="cat-name">Photos</span>
+        <span class="cat-score" style="color:#EF4444">7/11</span>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" style="width:63%;background:#EF4444"></div></div>
+      <div class="cat-sub">⚠️ Photos récentes et d'équipe manquantes</div>
+    </div>
+    <div class="cat-card">
+      <div class="cat-header">
+        <span class="cat-icon">⭐</span>
+        <span class="cat-name">Avis & Réputation</span>
+        <span class="cat-score" style="color:#D97706">13/20</span>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" style="width:65%;background:#F59E0B"></div></div>
+      <div class="cat-sub">⚠️ Taux de réponse à améliorer (58%)</div>
+    </div>
+    <div class="cat-card" style="grid-column: 1 / -1;">
+      <div class="cat-header">
+        <span class="cat-icon">📢</span>
+        <span class="cat-name">Publications GMB</span>
+        <span class="cat-score" style="color:#EF4444">4/8</span>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" style="width:50%;background:#EF4444"></div></div>
+      <div class="cat-sub">⚠️ Fréquence insuffisante — 0.4 post/semaine (objectif : 1+)</div>
+    </div>
+  </div>
+
+  <!-- Points à améliorer -->
+  <div class="section-title"><div class="dot"></div> Points à améliorer — par priorité</div>
+  <div class="actions-list">
+
+    <div class="action-item high">
+      <div class="action-icon">📢</div>
+      <div class="action-body">
+        <div class="action-label">Publications insuffisantes</div>
+        <div class="action-desc">Seulement 0.4 post/semaine. Objectif : 1 minimum pour être mis en avant par Google. Les fiches actives obtiennent 5× plus de vues.</div>
+      </div>
+      <div class="action-right">
+        <span class="pts-badge">+4 pts</span>
+        <span class="prio-badge prio-high">Critique</span>
+        <button class="btn-fix">✨ Créer un post</button>
+      </div>
+    </div>
+
+    <div class="action-item high">
+      <div class="action-icon">⭐</div>
+      <div class="action-body">
+        <div class="action-label">Taux de réponse aux avis trop bas</div>
+        <div class="action-desc">58% de réponses (objectif ≥ 80%). 12 avis sans réponse. 65% des clients choisissent le commerce qui répond à ses avis.</div>
+      </div>
+      <div class="action-right">
+        <span class="pts-badge">+4 pts</span>
+        <span class="prio-badge prio-high">Critique</span>
+        <button class="btn-fix">💬 Répondre</button>
+      </div>
+    </div>
+
+    <div class="action-item mid">
+      <div class="action-icon">📸</div>
+      <div class="action-body">
+        <div class="action-label">Aucune photo publiée ce mois-ci</div>
+        <div class="action-desc">Les photos ont plus de 3 mois. Google valorise les fiches avec des photos récentes et régulières.</div>
+      </div>
+      <div class="action-right">
+        <span class="pts-badge">+2 pts</span>
+        <span class="prio-badge prio-mid">Important</span>
+        <button class="btn-fix">📸 Ajouter</button>
+      </div>
+    </div>
+
+    <div class="action-item mid">
+      <div class="action-icon">🛠️</div>
+      <div class="action-body">
+        <div class="action-label">Services non renseignés dans la fiche</div>
+        <div class="action-desc">La section "Services" de votre fiche Google est vide. Listez tous vos services avec nom et description pour apparaître dans plus de recherches.</div>
+      </div>
+      <div class="action-right">
+        <span class="pts-badge">+3 pts</span>
+        <span class="prio-badge prio-mid">Important</span>
+        <button class="btn-fix">✏️ Compléter</button>
+      </div>
+    </div>
+
+    <div class="action-item low">
+      <div class="action-icon">🏷️</div>
+      <div class="action-body">
+        <div class="action-label">Pas d'offre ni d'événement publié</div>
+        <div class="action-desc">62% des clients sont motivés par les offres limitées dans le temps. Créez une offre ou un événement pour booster l'engagement.</div>
+      </div>
+      <div class="action-right">
+        <span class="pts-badge">+2 pts</span>
+        <span class="prio-badge prio-low">Bonus</span>
+        <button class="btn-fix">🎉 Créer</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Ce qui va bien -->
+  <div class="ok-section">
+    <div class="section-title" style="margin-bottom:0"><div class="dot" style="background:#059669"></div> Ce qui va bien ✅</div>
+    <div class="ok-grid">
+      <div class="ok-pill">✅ Téléphone renseigné</div>
+      <div class="ok-pill">✅ Site web présent</div>
+      <div class="ok-pill">✅ Adresse complète</div>
+      <div class="ok-pill">✅ Horaires 7j/7</div>
+      <div class="ok-pill">✅ Description 700+ car.</div>
+      <div class="ok-pill">✅ Note ≥ 4.0 (4.3 ⭐)</div>
+      <div class="ok-pill">✅ 20+ photos publiées</div>
+      <div class="ok-pill">✅ Photo de couverture</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

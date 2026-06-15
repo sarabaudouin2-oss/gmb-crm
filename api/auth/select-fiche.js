@@ -3,7 +3,7 @@
 
 export default async function handler(req, res) {
   const { access_token, refresh_token, expires_in, clientId, retry } = req.query;
-  const base = "https://gmb-crm-seven.vercel.app";
+  const base = "https://app.agence-betheone.fr";
 
   if (!access_token || !clientId) return res.redirect(base);
 

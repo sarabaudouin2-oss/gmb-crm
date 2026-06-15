@@ -2,7 +2,7 @@
 // Démarre le flux OAuth Google — redirige vers la page de consentement Google
 export default function handler(req, res) {
   const { clientId } = req.query;
-  const base = "https://gmb-crm-seven.vercel.app";
+  const base = "https://app.agence-betheone.fr";
 
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,

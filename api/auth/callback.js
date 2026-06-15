@@ -2,7 +2,7 @@
 // Reçoit le code OAuth de Google, échange contre des tokens, redirige vers l'app
 export default async function handler(req, res) {
   const { code, state, error } = req.query;
-  const base = "https://gmb-crm-seven.vercel.app";
+  const base = "https://app.agence-betheone.fr";
 
   if (error) {
     return res.redirect(`${base}/#gmb-auth-error?msg=${encodeURIComponent(error)}`);

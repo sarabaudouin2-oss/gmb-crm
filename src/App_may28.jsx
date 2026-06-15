@@ -3557,7 +3557,7 @@ Ne pas inventer de données. Se baser uniquement sur des informations plausibles
                     const gKey = localStorage.getItem("bto_google_key") || "";
                     if (!gKey) { setPlacesError("Clé API Google manquante — ajoutez-la dans Paramètres."); setPlacesLoading(false); return; }
                     const q = encodeURIComponent(`${placesQuery} ${placesCity}`);
-                    const r2 = await fetch(`/api/places?query=${q}`);
+                    const r2 = await fetch(`/api/data/sync?action=places&query=${q}`);
                     const d2 = await r2.json();
                     if (d2.error) setPlacesError(d2.error);
                     else setPlacesResults(d2.results || []);
@@ -3585,7 +3585,7 @@ Ne pas inventer de données. Se baser uniquement sur des informations plausibles
                   const gKey = localStorage.getItem("bto_google_key") || "";
                   if (!gKey) { setPlacesError("Clé API Google manquante — ajoutez-la dans Paramètres."); setPlacesLoading(false); return; }
                   const q = encodeURIComponent(`${placesQuery} ${placesCity}`);
-                  const r2 = await fetch(`/api/places?query=${q}`);
+                  const r2 = await fetch(`/api/data/sync?action=places&query=${q}`);
                   const d2 = await r2.json();
                   if (d2.error) setPlacesError(d2.error);
                   else setPlacesResults(d2.results || []);
