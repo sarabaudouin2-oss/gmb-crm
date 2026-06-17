@@ -1351,13 +1351,12 @@ async function callAI(e, t, i = 0) {
         "x-api-key": r,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 16e3,
+        model: "claude-sonnet-4-6",
+        max_tokens: 12000,
         system:
           "Tu es un expert SEO local Google Business Profile. Retourne UNIQUEMENT du JSON valide, sans aucun texte avant ni après, sans backticks, sans markdown. Commence directement par { et termine par }. AUCUN emoji dans les posts, Q&R, services ni produits.",
         messages: [
           { role: "user", content: e },
-          { role: "assistant", content: "{" },
         ],
       }),
     });
@@ -1382,13 +1381,10 @@ async function callAI(e, t, i = 0) {
           )
         : new Error(x);
   }
-  const d = (
-    "{" +
-    ((await o.json()).content || [])
+  const d = ((await o.json()).content || [])
       .map((b) => b.text || "")
       .join("")
       .trim()
-  )
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/, "")
     .replace(/```\s*$/, "")
@@ -1592,8 +1588,8 @@ Contraintes techniques :
 - Pas de liens, pas de numéro de téléphone, pas de prix dans le texte.
 - AUCUN emoji dans le corps du texte.
 
-Génère EXACTEMENT 12 posts (semaines 1 à 12).
-Varie les types sur 12 semaines : 3 Realisation, 2 Conseil, 2 Offre, 2 Temoignage, 2 Actualite, 1 Question.
+Génère EXACTEMENT 4 posts (semaines 1 à 4).
+Varie les types : 1 Realisation, 1 Conseil, 1 Offre, 1 Temoignage.
 Chaque post doit mentionner la ville réelle, le secteur d'activité réel, et des termes métier concrets et authentiques.
 
 JSON complet :
@@ -1605,7 +1601,7 @@ Paragraphe 2 : résultat concret, ancré dans la réalité de la ville et du sec
 
 Fermeture naturelle qui donne envie d'agir sans appel à l'action explicite.
 
-#VilleRéelle #MétierRéel #Secteur #[MotCléLocal]","keywords":["mot-clé 1","mot-clé 2","mot-clé 3"],"cta":"","bestDay":"Lundi","bestTime":"10h"},{"week":2,"type":"Conseil","title":"Titre conseil","content":"Contenu complet 180-220 mots avec CTA...","keywords":["kw1","kw2"],"cta":"CTA adapté","bestDay":"Jeudi","bestTime":"14h"},{"week":3,"type":"Offre","title":"Titre offre","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA offre","bestDay":"Lundi","bestTime":"9h"},{"week":4,"type":"Temoignage","title":"Titre témoignage","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA témoignage","bestDay":"Mercredi","bestTime":"10h"},{"week":5,"type":"Actualite","title":"Titre actualité","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA actualité","bestDay":"Vendredi","bestTime":"11h"},{"week":6,"type":"Realisation","title":"Titre réalisation 2","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA réalisation","bestDay":"Lundi","bestTime":"10h"},{"week":7,"type":"Conseil","title":"Titre conseil 2","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA conseil","bestDay":"Jeudi","bestTime":"14h"},{"week":8,"type":"Offre","title":"Titre offre 2","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA offre","bestDay":"Lundi","bestTime":"9h"},{"week":9,"type":"Temoignage","title":"Titre témoignage 2","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA témoignage","bestDay":"Mercredi","bestTime":"10h"},{"week":10,"type":"Actualite","title":"Titre actualité 2","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA actualité","bestDay":"Vendredi","bestTime":"11h"},{"week":11,"type":"Realisation","title":"Titre réalisation 3","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA réalisation","bestDay":"Mardi","bestTime":"10h"},{"week":12,"type":"Question","title":"Titre question","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA question","bestDay":"Mercredi","bestTime":"12h"}],"roadmap":{"month1":{"title":"Fondations","objective":"Fiche à 80%","actions":["action 1","action 2","action 3","action 4","action 5"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month2":{"title":"Notoriété","objective":"TOP 5","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month3":{"title":"TOP 3","objective":"TOP 3","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"beyond":{"title":"Consolidation","actions":["stratégie 1","stratégie 2","stratégie 3"],"expectedResults":{"visibilité":"+300%","appels":"+200%","position":"TOP 1-3"}}}}`,
+#VilleRéelle #MétierRéel #Secteur #[MotCléLocal]","keywords":["mot-clé 1","mot-clé 2","mot-clé 3"],"cta":"","bestDay":"Lundi","bestTime":"10h"},{"week":2,"type":"Conseil","title":"Titre conseil","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA adapté","bestDay":"Jeudi","bestTime":"14h"},{"week":3,"type":"Offre","title":"Titre offre","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA offre","bestDay":"Lundi","bestTime":"9h"},{"week":4,"type":"Temoignage","title":"Titre témoignage","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA témoignage","bestDay":"Mercredi","bestTime":"10h"}],"roadmap":{"month1":{"title":"Fondations","objective":"Fiche à 80%","actions":["action 1","action 2","action 3","action 4","action 5"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month2":{"title":"Notoriété","objective":"TOP 5","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month3":{"title":"TOP 3","objective":"TOP 3","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"beyond":{"title":"Consolidation","actions":["stratégie 1","stratégie 2","stratégie 3"],"expectedResults":{"visibilité":"+300%","appels":"+200%","position":"TOP 1-3"}}}}`,
     i,
   );
 }
@@ -3355,7 +3351,7 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
               n.jsx("button", {
                 disabled: iaLoading || !iaSecteur.trim(),
                 onClick: async () => {
-                  const claudeKey = (() => { try { return JSON.parse(localStorage.getItem("bto_settings")||"{}").claudeApiKey||""; } catch { return ""; } })();
+                  const claudeKey = (() => { try { return localStorage.getItem("bto_apikey")||""; } catch { return ""; } })();
                   if (!claudeKey) { setIaError("Clé API Claude manquante (onglet Paramètres)."); return; }
                   setIaLoading(true); setIaError(""); setIaResult(null); setIaLeads([]); setIaSelected(new Set()); setIaAdded(0);
                   const prompt = `Tu es un expert en growth hacking local et en prospection B2B spécialisée dans le référencement local (Google Business Profile / Google Maps).
@@ -3415,7 +3411,7 @@ Ne pas inventer de données. Se baser uniquement sur des informations plausibles
                     const res = await fetch("https://api.anthropic.com/v1/messages", {
                       method:"POST",
                       headers:{ "x-api-key":claudeKey, "anthropic-version":"2023-06-01", "content-type":"application/json" },
-                      body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:8000, messages:[{ role:"user", content:prompt }] }),
+                      body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:8000, messages:[{ role:"user", content:prompt }] }),
                     });
                     const data = await res.json();
                     const raw = data?.content?.[0]?.text || "";
@@ -3844,7 +3840,6 @@ function ProspectCard({
       const C = a;
       try {
         const N =
-            "{" +
             (
               (
                 await (
@@ -3857,8 +3852,8 @@ function ProspectCard({
                       "x-api-key": C,
                     },
                     body: JSON.stringify({
-                      model: "claude-sonnet-4-20250514",
-                      max_tokens: 1e3,
+                      model: "claude-sonnet-4-6",
+                      max_tokens: 2e3,
                       system:
                         "Sara Baudouin, Agence Be the one Vannes. Expert SEO local. Email de relance court et percutant. JSON uniquement.",
                       messages: [
@@ -3869,7 +3864,6 @@ Points faibles : ${(e.weakPoints || []).slice(0, 2).join(", ") || "fiche incompl
 Statut actuel : ${f.label}. ${(e.emails || []).length > 0 ? "Ceci est une relance — angle différent du premier contact." : "Premier contact."}
 JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                         },
-                        { role: "assistant", content: "{" },
                       ],
                     }),
                   })
@@ -3890,7 +3884,7 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
           sent: !1,
         }),
           b("envoi"));
-      } catch {}
+      } catch(err) { console.error("Email relance:", err); }
       z(!1);
     },
     u =
@@ -7248,11 +7242,68 @@ const CAT_OPTIONS = [
   { value: "guide",      label: "Guide",      color: "#059669" },
   { value: "ia",         label: "IA",         color: "#0EA5E9" },
 ];
-const emptyForm = () => ({ titre:"", slug:"", metaTitle:"", metaDesc:"", motCle:"", categorie:"strategie", extrait:"", contenu:"", duree:"5 min", date: new Date().toISOString().slice(0,10), imageUrl:"", status:"published", scheduledAt:"" });
+const emptyForm = () => ({ titre:"", slug:"", metaTitle:"", metaDesc:"", motCle:"", categorie:"strategie", extrait:"", contenu:"", duree:"5 min", date: new Date().toISOString().slice(0,10), imageUrl:"", status:"published", scheduledAt:"", faq:[] });
+
+// ── Markdown → HTML renderer (pour ContentMaitreTab) ──────────────────────────
+function mdEsc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function mdInline(s){
+  return mdEsc(s)
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g,"<em>$1</em>")
+    .replace(/`(.+?)`/g,'<code style="background:#F3F4F6;padding:1px 5px;border-radius:3px;font-size:11px;font-family:monospace">$1</code>');
+}
+function renderMD(text){
+  if(!text) return "";
+  const lines = text.split("\n");
+  let html="", inTable=false, inList=false, inOl=false, tableHeader=false;
+  const closeList=()=>{ if(inList){html+="</ul>";inList=false;} if(inOl){html+="</ol>";inOl=false;} };
+  const closeTable=()=>{ if(inTable){html+="</tbody></table>";inTable=false;tableHeader=false;} };
+  for(let i=0;i<lines.length;i++){
+    const raw=lines[i]; const t=raw.trim();
+    // Table
+    if(t.startsWith("|")){
+      closeList();
+      if(!inTable){ html+='<div style="overflow-x:auto;margin:12px 0"><table style="width:100%;border-collapse:collapse;font-size:12px">'; inTable=true; tableHeader=false; }
+      if(/^\|[\s|:-]+\|$/.test(t)){ tableHeader=true; continue; }
+      const cells=t.split("|").slice(1,-1);
+      if(!tableHeader){
+        html+=`<thead><tr>${cells.map(c=>`<th style="background:#6B40D8;color:white;padding:8px 12px;text-align:left;font-size:11px;white-space:nowrap">${mdInline(c.trim())}</th>`).join("")}</tr></thead><tbody>`;
+        tableHeader=true;
+      } else {
+        const bg=i%2===0?"#FAFAFA":"white";
+        html+=`<tr style="background:${bg}">${cells.map(c=>`<td style="padding:7px 12px;border-bottom:1px solid #F3F4F6;vertical-align:top;line-height:1.4">${mdInline(c.trim())}</td>`).join("")}</tr>`;
+      }
+      continue;
+    } else { closeTable(); }
+    if(!t){ closeList(); html+="<div style='height:8px'></div>"; continue; }
+    if(t.startsWith("#### ")){ closeList(); html+=`<h5 style="font-size:12px;font-weight:700;color:#6B7280;margin:12px 0 3px;text-transform:uppercase;letter-spacing:.4px">${mdInline(t.slice(5))}</h5>`; continue; }
+    if(t.startsWith("### ")){ closeList(); html+=`<h4 style="font-size:13px;font-weight:700;color:#6B40D8;margin:14px 0 4px">${mdInline(t.slice(4))}</h4>`; continue; }
+    if(t.startsWith("## ")){ closeList(); html+=`<h3 style="font-size:15px;font-weight:800;color:#1E1B30;margin:20px 0 6px;padding-bottom:5px;border-bottom:2px solid #E5E7EB">${mdInline(t.slice(3))}</h3>`; continue; }
+    if(t.startsWith("# ")){ closeList(); html+=`<h2 style="font-size:17px;font-weight:800;color:#1E1B30;margin:24px 0 8px">${mdInline(t.slice(2))}</h2>`; continue; }
+    if(/^ÉTAPE\s+\d/.test(t)||/^---+$/.test(t)){
+      closeList();
+      if(/^---+$/.test(t)){ html+='<hr style="border:none;border-top:1px solid #E5E7EB;margin:16px 0">'; continue; }
+      html+=`<div style="font-size:12px;font-weight:800;color:#C03080;margin:18px 0 4px;text-transform:uppercase;letter-spacing:.6px">${mdEsc(t)}</div>`;
+      continue;
+    }
+    if(t.startsWith("- ")||t.startsWith("* ")){
+      if(inOl){html+="</ol>";inOl=false;}
+      if(!inList){html+='<ul style="margin:6px 0;padding-left:18px">'; inList=true;}
+      html+=`<li style="margin:3px 0;line-height:1.55">${mdInline(t.slice(2))}</li>`; continue;
+    }
+    if(/^\d+\.\s/.test(t)){
+      if(inList){html+="</ul>";inList=false;}
+      if(!inOl){html+='<ol style="margin:6px 0;padding-left:20px">'; inOl=true;}
+      html+=`<li style="margin:3px 0;line-height:1.55">${mdInline(t.replace(/^\d+\.\s/,""))}</li>`; continue;
+    }
+    closeList();
+    html+=`<p style="margin:4px 0;line-height:1.65">${mdInline(t)}</p>`;
+  }
+  closeList(); closeTable();
+  return html;
+}
 
 const CONTENU_SECTIONS = [
-  { id:"analyse",    icon:"🔍", label:"Analyse SEO + Structure" },
-  { id:"blog",       icon:"📝", label:"Article SEO complet" },
   { id:"micro",      icon:"📊", label:"Tableau micro-contenus" },
   { id:"linkedin",   icon:"💼", label:"LinkedIn (4 posts)" },
   { id:"facebook",   icon:"👥", label:"Facebook (2 publications)" },
@@ -7272,7 +7323,7 @@ const PLATFORMS = [
   { id:"story", label:"Story", color:"#C03080", bg:"#FDE8F2" },
 ];
 
-// Planning éditorial 48 semaines — Be the One 2026
+// Planning éditorial 48 semaines — Agence Be the one 2026
 // Semaine 1 = lundi 5 jan. Lun=Blog, Mer=IG/FB, Jeu=LinkedIn, Ven=GBP, Sam=Story
 const PLANNING_48_SEMAINES = [
   // Q1 — Fondamentaux & Acquisition
@@ -7326,11 +7377,11 @@ const PLANNING_48_SEMAINES = [
   { blog:"Préparer sa fiche GBP pour les fêtes de fin d'année", ig:"Noël approche : votre fiche Google est-elle prête ?", linkedin:"Saisonnalité Q4 : adapter sa stratégie GBP pour décembre", gbp:"Horaires des fêtes : nous les mettrons à jour dès novembre", story:"Compte à rebours : il reste X semaines avant Noël !" },
   { blog:"GBP et e-commerce local : vendre en ligne tout en dominant localement", ig:"Click & Collect + GBP : le duo gagnant pour les commerçants", linkedin:"Commerce local et digital : comment GBP soutient vos ventes en ligne", gbp:"Commandez en ligne, récupérez en boutique — lien dans la fiche", story:"Notre boutique en ligne : visite guidée en story" },
   { blog:"Optimiser ses Google Posts pour les événements locaux", ig:"Event local ? Créez un Google Post dédié !", linkedin:"Events locaux et GBP : stratégie de communication intégrée", gbp:"Événement à venir : retrouvez-nous le [date] à [lieu]", story:"Save the date : notre prochain événement !" },
-  { blog:"GBP pour les franchises et réseaux de points de vente", ig:"Franchise et GBP : garder la cohérence partout", linkedin:"Piloter un réseau de fiches GBP : outils et bonnes pratiques", gbp:"Be the One accompagne les réseaux et franchises", story:"Zoom réseau : on gère X fiches en simultané" },
+  { blog:"GBP pour les franchises et réseaux de points de vente", ig:"Franchise et GBP : garder la cohérence partout", linkedin:"Piloter un réseau de fiches GBP : outils et bonnes pratiques", gbp:"Agence Be the one accompagne les réseaux et franchises", story:"Zoom réseau : on gère X fiches en simultané" },
   // Q4 — Novembre
   { blog:"Les tendances du SEO local en 2027 : anticiper pour prendre de l'avance", ig:"2027 approche : les changements SEO local à anticiper", linkedin:"Prévisions SEO local 2027 : ce que les experts anticipent", gbp:"Nous préparons dès maintenant votre stratégie 2027", story:"Que prépare-t-on pour 2027 ? Sneak peek en story !" },
   { blog:"Comment mesurer le ROI de sa stratégie Google Business Profile", ig:"ROI de votre GBP : comment le calculer simplement", linkedin:"Mesurer l'impact business de votre fiche GBP : métriques clés", gbp:"Chaque optimisation, un impact mesurable sur votre chiffre d'affaires", story:"Dashboard du mois : nos KPIs en story" },
-  { blog:"Témoignage : Be the One accompagne les PME bretonnes vers le top local", ig:"3 ans d'agence : ce qu'on a appris sur le SEO local breton", linkedin:"Rétrospective agence : les projets marquants de l'année", gbp:"Merci à tous nos clients pour cette belle année 2026 !", story:"Team Be the One : les coulisses de notre année" },
+  { blog:"Témoignage : Agence Be the one accompagne les PME bretonnes vers le top local", ig:"3 ans d'agence : ce qu'on a appris sur le SEO local breton", linkedin:"Rétrospective agence : les projets marquants de l'année", gbp:"Merci à tous nos clients pour cette belle année 2026 !", story:"Team Be the one : les coulisses de notre année" },
   { blog:"Bilan annuel 2026 : le SEO local en Bretagne — chiffres et perspectives", ig:"2026 en chiffres : nos clients ont atteint leurs objectifs", linkedin:"Bilan 2026 et objectifs 2027 : notre vision du SEO local", gbp:"Bilan 2026 : une belle progression pour nos clients !", story:"Notre année en images — best-of 2026" },
   { blog:"Guide de démarrage 2027 : construire sa présence locale sur Google", ig:"Démarrez 2027 avec une fiche GBP au top !", linkedin:"Résolutions SEO local 2027 : nos recommandations pour les pros", gbp:"2027 commence bientôt — réservez votre audit dès maintenant", story:"Vœux et objectifs 2027 — story de fin d'année" },
 ];
@@ -7504,146 +7555,128 @@ function ContentMaitreTab() {
   const [zoneGeo, setZoneGeo] = D.useState("Morbihan / Bretagne");
   const [loading, setLoading] = D.useState(false);
   const [result, setResult] = D.useState(null);
-  const [activeSection, setActiveSection] = D.useState("analyse");
+  const [activeSection, setActiveSection] = D.useState("micro");
   const [copied, setCopied] = D.useState("");
   const [error, setError] = D.useState("");
-  const [fullscreen, setFullscreen] = D.useState(null); // { id, label, content }
+  const [fullscreen, setFullscreen] = D.useState(null);
   const [startDate, setStartDate] = D.useState(() => {
     const d = new Date(); d.setDate(d.getDate() + (1 - d.getDay() + 7) % 7 || 7); return d.toISOString().slice(0,10);
   });
   const [calAdded, setCalAdded] = D.useState(false);
+  const [selectedArticle, setSelectedArticle] = D.useState(null); // article choisi
+  const [blogArticles, setBlogArticles] = D.useState([]);
 
-  const apiKey = (() => { try { return JSON.parse(localStorage.getItem("bto_settings")||"{}").claudeApiKey || ""; } catch { return ""; } })();
+  D.useEffect(() => {
+    fetch("https://agence-betheone.fr/api/articles/list")
+      .then(r => r.json()).then(list => setBlogArticles(Array.isArray(list) ? list : []))
+      .catch(() => {});
+  }, []);
+
+  const apiKey = localStorage.getItem("bto_apikey") || "";
 
   const generer = async () => {
     if (!sujet.trim()) return;
     if (!apiKey) { setError("Clé API Claude manquante (onglet Paramètres)."); return; }
     setLoading(true); setError(""); setResult(null);
 
-    const prompt = `Tu es consultant SEO senior, expert Google Business Profile, référencement local, content marketing et stratégie éditoriale.
-Tu travailles pour l'Agence Be The One, spécialisée dans le référencement local, Google Business Profile et la visibilité sur Google Maps pour les entreprises du Morbihan et de Bretagne.
+    // Extrait le texte brut du HTML de l'article sélectionné
+    const articleTexte = selectedArticle?.contenu
+      ? (() => { const tmp = document.createElement("div"); tmp.innerHTML = selectedArticle.contenu; return tmp.innerText || tmp.textContent || ""; })()
+      : "";
 
-À partir du sujet fourni, crée un écosystème complet de contenu permettant d'améliorer le référencement naturel, d'obtenir du trafic qualifié, de générer des prospects, d'alimenter LinkedIn, Facebook, Instagram et Google Business Profile, et de réutiliser un même contenu sur plusieurs semaines.
+    const CONTEXTE = `Tu es consultant SEO senior, expert content marketing et stratégie éditoriale pour l'Agence Be the one (Vannes, Morbihan).
+Sujet : ${sujet} | Public cible : ${publicCible} | Zone : ${zoneGeo}
+${articleTexte ? `\nVoici le contenu complet de l'article de blog rédigé sur ce sujet (utilise-le comme base pour tous les contenus sociaux) :\n---\n${articleTexte.slice(0, 4000)}\n---` : ""}
+Commence chaque section par ###ID### et termine par ###END###.`;
 
-CONTEXTE
-Sujet : ${sujet}
-Public cible : ${publicCible}
-Zone géographique : ${zoneGeo}
-
-Génère exactement les 12 sections ci-dessous. Commence chaque section par son identifiant entre balises ###SECTION_ID### et termine par ###END###.
-
-###ANALYSE###
-ÉTAPE 1 — ANALYSE SEO
-Intention de recherche : [Informationnelle / Commerciale / Transactionnelle] — explique pourquoi.
-Niveau de concurrence SEO : [Faible / Moyen / Élevé] — justifie.
-Opportunité locale : explique pourquoi ce sujet est pertinent pour une entreprise locale du Morbihan/Bretagne.
-Mots-clés :
-- 1 mot-clé principal
-- 15 mots-clés secondaires
-- 20 requêtes longue traîne
-- 20 questions que se posent les internautes
-- Variantes locales intégrant Vannes, Lorient, Auray, Morbihan et Bretagne
-
-ÉTAPE 2 — STRUCTURE DE L'ARTICLE
-Plan SEO complet avec H1, H2, H3, FAQ SEO et Conclusion.
-Objectif : dépasser les contenus concurrents.
-###END###
-
-###BLOG###
-ÉTAPE 3 — ARTICLE SEO COMPLET (1500 à 2500 mots)
-Consignes : ton expert, pédagogique, concret, sans jargon inutile, optimisé SEO, exemples locaux bretons, facile à lire.
-
-## STRUCTURE OBLIGATOIRE
-1. Introduction SEO (150 à 200 mots) — OBLIGATOIRE, avant tout autre contenu :
-   - Contextualiser le sujet pour un chef d'entreprise local
-   - Poser le problème ou l'enjeu clairement
-   - Annoncer ce que l'article va apporter
-   - Intégrer naturellement le mot-clé principal et 2-3 mots-clés secondaires
-   - Ne jamais entrer directement dans le vif du sujet sans cette introduction
-2. Corps de l'article : H2 + H3, paragraphes courts, exemples locaux
-3. FAQ de 4 à 6 questions-réponses — OBLIGATOIRE :
-   - Vraies questions de dirigeants/artisans bretons
-   - Réponses courtes et précises (50-100 mots)
-   - Optimisé pour "People Also Ask" Google
-4. Checklist récapitulative (5 à 8 points actionnables)
-5. Maximum deux appels à l'action (pas de discours commercial agressif)
-
-À la fin : META TITLE (60 car. max) / META DESCRIPTION (155 car. max) / SLUG / EXTRAIT BLOG (2 phrases)
-###END###
+    const prompt1 = `${CONTEXTE}
 
 ###MICRO###
-ÉTAPE 4 — TABLEAU DES MICRO-CONTENUS
-Analyse l'article et identifie, sous forme de tableau avec colonnes Titre | Angle | Objectif | Format :
-- 10 idées LinkedIn
-- 10 idées Facebook
-- 10 idées Google Business Profile
-- 10 idées de Reels
-- 10 idées de Stories
-- 10 idées de Carrousels Instagram
+ÉTAPE 1 — TABLEAU DES MICRO-CONTENUS
+À partir de l'article, identifie les angles les plus forts. Tableau : Titre | Angle | Objectif | Format
+- 5 idées LinkedIn, 5 Facebook, 5 GBP, 5 Reels, 5 Stories, 5 Carrousels
 ###END###
 
 ###LINKEDIN###
+ÉTAPE 2a — 4 POSTS LINKEDIN
+Basés sur les points clés de l'article. Hook fort / Développement / Exemple local / Question engageante. 150-250 mots par post.
+###END###
+
+###FACEBOOK###
+ÉTAPE 2b — 2 PUBLICATIONS FACEBOOK
+Ton accessible, local, communautaire. Basées sur l'article. 100-150 mots.
+###END###
+
+###GBP###
+ÉTAPE 2c — 3 PUBLICATIONS GOOGLE BUSINESS PROFILE
+Tirées de l'article. 800-1200 caractères. Sans emoji ni hashtags. Informatif, local.
+###END###`;
+
+    const prompt2 = `${CONTEXTE}
+L'article porte sur : "${sujet}"
+
+###LINKEDIN###
 ÉTAPE 5a — 4 POSTS LINKEDIN
-Chaque post : Hook fort (1-2 lignes) / Développement (conseil ou insight) / Exemple concret local / Question finale engageante.
-Longueur : 150 à 300 mots par post.
+Hook fort / Développement / Exemple local breton / Question engageante. 150-250 mots par post.
 ###END###
 
 ###FACEBOOK###
 ÉTAPE 5b — 2 PUBLICATIONS FACEBOOK
-Ton accessible, local, communautaire. Avec question pour engager la communauté.
-Longueur : 100 à 200 mots par publication.
+Ton accessible, local, communautaire. Question pour engager. 100-150 mots.
 ###END###
 
 ###GBP###
 ÉTAPE 5c — 3 PUBLICATIONS GOOGLE BUSINESS PROFILE
-1000 à 1500 caractères chacune. Sans emoji. Sans hashtags. Informatif, local, clair.
+800-1200 caractères chacune. Sans emoji ni hashtags. Informatif, local, clair.
 ###END###
 
 ###CARROUSEL###
 ÉTAPE 5d — 2 CARROUSELS INSTAGRAM (8 slides chacun)
-Slide 1 : Titre accrocheur
-Slides 2 à 7 : Une idée par slide, texte ultra-court, visuel suggéré
-Slide 8 : Résumé + Question engageante + CTA
+Slide 1 : titre accrocheur / Slides 2-7 : une idée + visuel suggéré / Slide 8 : CTA.
 ###END###
 
 ###REEL###
-ÉTAPE 5e — 2 SCRIPTS REELS (60 secondes max)
-Structure : Accroche 5 sec / Problème 10 sec / 3 conseils 30 sec / Conclusion + CTA 15 sec
-Indiquer les transitions et suggestions visuelles.
+ÉTAPE 5e — 2 SCRIPTS REELS (60 sec max)
+Accroche 5s / Problème 10s / 3 conseils 30s / CTA 15s. Indiquer transitions.
 ###END###
 
 ###STORIES###
 ÉTAPE 5f — 5 STORIES INSTAGRAM
-Une story de chaque type : Quiz / Vrai-Faux / Astuce du jour / Statistique choc / Question ouverte
-Pour chaque story : Texte à afficher + Type d'interaction (sondage, quiz, question)
+Types : Quiz / Vrai-Faux / Astuce / Statistique choc / Question ouverte.
+Texte à afficher + type d'interaction.
 ###END###
 
-
 ###MAILLAGE###
-ÉTAPE 7 — MAILLAGE SEO & COCON SÉMANTIQUE
-- 5 articles à créer dans le futur (articles liés)
-- 5 articles parents (niveau supérieur dans le cocon)
-- 5 articles enfants (niveau inférieur, longue traîne)
-Pour chaque article : Titre suggéré + Angle + Mot-clé cible
-Décris la stratégie de cocon sémantique pour ce sujet.
+ÉTAPE 7 — MAILLAGE SEO
+5 articles liés / 5 articles parents / 5 articles enfants (longue traîne).
+Pour chaque : Titre + Angle + Mot-clé cible. Stratégie de cocon sémantique.
 ###END###
 
 ###CAL30###
-ÉTAPE 8 — CALENDRIER ÉDITORIAL 30 JOURS
-À partir de ce seul article, planifie 30 jours de contenu multicanal.
-Objectif : minimum 20 contenus exploitables.
-Format tableau : Semaine | Jour | Canal | Type de contenu | Titre / Angle
-Canaux : LinkedIn / Facebook / Instagram / Google Business Profile
+ÉTAPE 8 — CALENDRIER 30 JOURS
+Tableau : Semaine | Jour | Canal | Type | Titre/Angle. Min 20 contenus.
+Canaux : LinkedIn / Facebook / Instagram / GBP
 ###END###`;
 
+    const callClaude = async (p) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 180000);
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
+          body: JSON.stringify({ model: "claude-opus-4-8", max_tokens: 8000, messages: [{ role: "user", content: p }] }),
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
+        return d?.content?.[0]?.text || "";
+      } finally { clearTimeout(timer); }
+    };
+
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 16000, messages: [{ role: "user", content: prompt }] }),
-      });
-      const data = await res.json();
-      const raw = data?.content?.[0]?.text || "";
+      const [raw1, raw2] = await Promise.all([callClaude(prompt1), callClaude(prompt2)]);
+      const raw = raw1 + "\n" + raw2;
       const sections = {};
       CONTENU_SECTIONS.forEach(s => {
         const re = new RegExp(`###${s.id.toUpperCase()}###([\\s\\S]*?)###END###`, "i");
@@ -7721,48 +7754,76 @@ Canaux : LinkedIn / Facebook / Instagram / Google Business Profile
     subTab === "calendrier" && n.jsx(CalendrierContenu, {}),
     subTab === "generateur" && n.jsxs("div", { children:[
 
+    /* ── ÉTAPE 1 : Sélectionner un article de blog ── */
     n.jsxs("div", { style:{ ...cardStyle, borderLeft:"3px solid #6B40D8" }, children:[
-      n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:4 }, children:"🚀 Prompt Maître — 1 sujet = 1 mois de contenu multicanal" }),
-      n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", marginBottom:14 }, children:"8 étapes : analyse SEO · article · micro-contenus · LinkedIn · Facebook · GBP · Reels · Stories · Maillage · Plan 30 jours" }),
+      n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }, children:[
+        n.jsx("div", { style:{ background:"#6B40D8", color:"white", borderRadius:"50%", width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }, children:"1" }),
+        n.jsxs("div", { children:[
+          n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:"📝 Choisir l'article de blog source" }),
+          n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:"L'article rédigé dans 🌐 Site Web sert de base pour générer tous les contenus sociaux" }),
+        ]}),
+      ]}),
+
+      blogArticles.length === 0
+        ? n.jsx("div", { style:{ fontSize:12, color:"#9CA3AF", fontStyle:"italic", padding:"10px 0" }, children:"Aucun article trouvé — rédige d'abord un article dans l'onglet 🌐 Site Web" })
+        : n.jsxs("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:[
+            n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:8 }, children:
+              blogArticles.filter(a => a.status === "published" || a.status === "scheduled").map(a =>
+                n.jsxs("div", {
+                  key: a.id,
+                  onClick: () => { setSelectedArticle(a.id === selectedArticle?.id ? null : a); setSujet(a.titre); setResult(null); },
+                  style:{ padding:"10px 14px", borderRadius:10, border: selectedArticle?.id === a.id ? "2px solid #6B40D8" : "1px solid #E5E7EB", background: selectedArticle?.id === a.id ? "#F5F3FF" : "white", cursor:"pointer", transition:"all .15s" },
+                  children:[
+                    n.jsx("div", { style:{ fontSize:12, fontWeight:700, color: selectedArticle?.id === a.id ? "#6B40D8" : "#1E1B30", marginBottom:3, lineHeight:1.4 }, children: a.titre }),
+                    n.jsxs("div", { style:{ fontSize:10, color:"#9CA3AF" }, children:[ a.date, " · ", a.duree||"" ] }),
+                  ]
+                })
+              )
+            }),
+            selectedArticle && n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:6, marginTop:6, padding:"8px 12px", background:"#F0FDF4", borderRadius:8, fontSize:12, color:"#059669", fontWeight:600 }, children:[
+              "✓ Article sélectionné : ", n.jsx("span", { style:{ fontWeight:400, color:"#065F46" }, children: selectedArticle.titre }),
+              n.jsx("button", { onClick:()=>{ setSelectedArticle(null); setSujet(""); }, style:{ marginLeft:"auto", background:"none", border:"none", cursor:"pointer", color:"#9CA3AF", fontSize:14 }, children:"✕" }),
+            ]}),
+          ]}),
+    ]}),
+
+    /* ── ÉTAPE 2 : Paramètres + Génération ── */
+    n.jsxs("div", { style:{ ...cardStyle, borderLeft:"3px solid #C03080" }, children:[
+      n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }, children:[
+        n.jsx("div", { style:{ background:"#C03080", color:"white", borderRadius:"50%", width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, flexShrink:0 }, children:"2" }),
+        n.jsxs("div", { children:[
+          n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:"🚀 Générer les contenus multicanal" }),
+          n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF" }, children:"LinkedIn · Facebook · GBP · Reels · Stories · Carrousels · Maillage · Plan 30 jours" }),
+        ]}),
+      ]}),
 
       n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }, children:[
         n.jsxs("div", { children:[
           n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Public cible" }),
-          n.jsx("select", {
-            value: publicCible,
-            onChange: e => setPublicCible(e.target.value),
-            style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
-            children: ["Artisan","Commerçant","Profession libérale","PME","Agent immobilier","Restaurateur","TPE / Startup"].map(v => n.jsx("option", { value:v, children:v }, v))
-          }),
+          n.jsx("select", { value:publicCible, onChange:e=>setPublicCible(e.target.value), style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
+            children:["Artisan","Commerçant","Profession libérale","PME","Agent immobilier","Restaurateur","TPE / Startup"].map(v=>n.jsx("option",{value:v,children:v},v)) }),
         ]}),
         n.jsxs("div", { children:[
           n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Zone géographique" }),
-          n.jsx("select", {
-            value: zoneGeo,
-            onChange: e => setZoneGeo(e.target.value),
-            style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
-            children: ["Morbihan / Bretagne","Vannes","Lorient","Auray","Quimper","Rennes","Brest","Pontivy","Ploërmel"].map(v => n.jsx("option", { value:v, children:v }, v))
-          }),
+          n.jsx("select", { value:zoneGeo, onChange:e=>setZoneGeo(e.target.value), style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"8px 12px", fontSize:12, fontFamily:"inherit", outline:"none", color:"#1E1B30", background:"white" },
+            children:["Morbihan / Bretagne","Vannes","Lorient","Auray","Quimper","Rennes","Brest","Pontivy","Ploërmel"].map(v=>n.jsx("option",{value:v,children:v},v)) }),
         ]}),
       ]}),
 
-      n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Sujet / Titre de l'article" }),
-      n.jsx("textarea", {
-        value: sujet,
-        onChange: e => setSujet(e.target.value),
-        placeholder: "Ex : Photos Google Business Profile : le secret des artisans bretons qui attirent 3x plus de contacts\nEx : Comment apparaître dans Google Maps à Vannes ?\nEx : Référencement local vs Google Ads : que choisir pour une entreprise du Morbihan ?",
-        rows: 3,
-        style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"10px 14px", fontSize:13, fontFamily:"inherit", resize:"vertical", outline:"none", color:"#1E1B30" },
-      }),
+      !selectedArticle && n.jsxs("div", { children:[
+        n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Sujet / Titre (si pas d'article sélectionné)" }),
+        n.jsx("textarea", { value:sujet, onChange:e=>setSujet(e.target.value), rows:2, placeholder:"Ex : Comment apparaître dans Google Maps à Vannes ?", style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"10px 14px", fontSize:13, fontFamily:"inherit", resize:"vertical", outline:"none", color:"#1E1B30" } }),
+      ]}),
+
       error && n.jsx("div", { style:{ color:"#dc2626", fontSize:12, marginTop:8 }, children: error }),
       n.jsxs("div", { style:{ marginTop:12, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }, children:[
         n.jsx("button", {
           onClick: generer,
           disabled: loading || !sujet.trim(),
           style:{ background: loading||!sujet.trim() ? "#E5E7EB" : "linear-gradient(135deg,#6B40D8,#C03080)", color: loading||!sujet.trim() ? "#9CA3AF" : "white", border:"none", borderRadius:9, padding:"11px 26px", fontSize:13, fontWeight:700, cursor: loading||!sujet.trim() ? "default" : "pointer", fontFamily:"inherit" },
-          children: loading ? "⏳ Génération en cours (60-90 sec)..." : "🚀 Générer les 8 étapes",
+          children: loading ? "⏳ Génération en cours..." : "🚀 Générer les contenus",
         }),
-        result && n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:600 }, children:"✓ 12 sections générées — cliquez sur un onglet pour voir" }),
+        result && n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:600 }, children:"✓ Contenus générés — cliquez sur un onglet ci-dessous" }),
       ]}),
     ]}),
 
@@ -7833,8 +7894,8 @@ Canaux : LinkedIn / Facebook / Instagram / Google Business Profile
           ]}),
         ]}),
         n.jsx("div", {
-          style:{ background:"#F9FAFB", borderRadius:10, padding:"16px", fontSize:13, lineHeight:1.7, color:"#374151", maxHeight:520, overflowY:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word", border:"1px solid #F3F4F6" },
-          children: result[s.id] || "—",
+          style:{ background:"#F9FAFB", borderRadius:10, padding:"16px", fontSize:13, lineHeight:1.7, color:"#374151", maxHeight:520, overflowY:"auto", border:"1px solid #F3F4F6" },
+          dangerouslySetInnerHTML:{ __html: renderMD(result[s.id] || "") },
         }),
       ]})),
     ]}),
@@ -7860,8 +7921,8 @@ Canaux : LinkedIn / Facebook / Instagram / Google Business Profile
           ]}),
         ]}),
         n.jsx("div", {
-          style:{ flex:1, overflowY:"auto", padding:"24px 28px", fontSize:13.5, lineHeight:1.85, color:"#1E1B30", whiteSpace:"pre-wrap", wordBreak:"break-word" },
-          children: fullscreen.content,
+          style:{ flex:1, overflowY:"auto", padding:"24px 28px", fontSize:13.5, lineHeight:1.85, color:"#1E1B30" },
+          dangerouslySetInnerHTML:{ __html: renderMD(fullscreen.content) },
         }),
       ]}),
     }),
@@ -7883,6 +7944,10 @@ function SiteWebTab() {
   const [imgUploading, setImgUploading] = D.useState(false);
   const [imgDragging, setImgDragging] = D.useState(false);
   const [imgError, setImgError] = D.useState("");
+  const [faqLoading, setFaqLoading] = D.useState(false);
+  const [dragIdx, setDragIdx] = D.useState(null);
+  const [dragOverIdx, setDragOverIdx] = D.useState(null);
+  const [artTab, setArtTab] = D.useState("all");
   const contenuRef = D.useRef(null);
   const handleArticlePhoto = (file) => {
     if (!file || !file.type.startsWith("image/")) { setImgError("Format non supporté — choisissez une image."); return; }
@@ -7911,6 +7976,33 @@ function SiteWebTab() {
   const removeIdee = (i) => saveIdees(idees.filter((_,j)=>j!==i));
   const useIdee = (titre) => { setForm(f=>({...f, titre})); removeIdee(idees.indexOf(titre)); window.scrollTo({top:0,behavior:"smooth"}); };
 
+  const genererFAQ = async () => {
+    const apiKey = localStorage.getItem("bto_apikey") || "";
+    if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante." }); return; }
+    if (!form.titre.trim()) { setMsg({ ok:false, text:"Remplis d'abord le titre de l'article." }); return; }
+    setFaqLoading(true);
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{ "x-api-key":apiKey, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
+        body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:1200,
+          messages:[{ role:"user", content:`Tu es expert SEO local. Génère exactement 5 questions/réponses FAQ pour un article de blog intitulé "${form.titre}".
+Ces FAQ doivent couvrir les vraies questions que se posent les dirigeants, artisans et TPE du Morbihan/Bretagne.
+Format de réponse — UNIQUEMENT ce JSON, sans markdown, sans explication :
+[{"q":"Question 1 ?","a":"Réponse 1."},{"q":"Question 2 ?","a":"Réponse 2."},{"q":"Question 3 ?","a":"Réponse 3."},{"q":"Question 4 ?","a":"Réponse 4."},{"q":"Question 5 ?","a":"Réponse 5."}]` }] }),
+      });
+      const data = await r.json();
+      const text = data.content?.[0]?.text || "";
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        const items = JSON.parse(match[0]);
+        setForm(f => ({ ...f, faq: items }));
+        setMsg({ ok:true, text:"✅ FAQ générée par Claude !" });
+      } else { setMsg({ ok:false, text:"❌ Impossible de parser la FAQ." }); }
+    } catch(e) { setMsg({ ok:false, text:"❌ Erreur : " + e.message }); }
+    setFaqLoading(false);
+  };
+
   const genererIdees = async () => {
     const apiKey = localStorage.getItem("bto_apikey") || "";
     if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante (onglet Paramètres)." }); return; }
@@ -7919,7 +8011,7 @@ function SiteWebTab() {
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
         headers:{ "x-api-key":apiKey, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
-        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:600,
+        body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:1500,
           messages:[{ role:"user", content:`Génère 6 idées de titres d'articles de blog SEO pour une agence de référencement local (Google Maps, Google Business Profile) basée à Vannes, Morbihan. Les clients sont des PME, artisans, commerçants locaux en Bretagne.
 
 Contraintes :
@@ -7943,7 +8035,23 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
     try {
       const r = await fetch(`${SITE_API}/list?admin=1`, { headers:{ "x-admin-password": SITE_PWD } });
       const data = await r.json();
-      setArticles(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      const now = new Date();
+      const updated = list.map(a => {
+        if (a.status === "scheduled" && a.scheduledAt && new Date(a.scheduledAt) <= now) {
+          return { ...a, status: "published" };
+        }
+        return a;
+      });
+      const hasChanges = updated.some((a, i) => a.status !== list[i].status);
+      if (hasChanges) {
+        await fetch(`${SITE_API}/save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-admin-password": SITE_PWD },
+          body: JSON.stringify(updated),
+        });
+      }
+      setArticles(updated);
     } catch { setArticles([]); }
     setLoading(false);
   };
@@ -8015,7 +8123,13 @@ ${form.motCle ? `\nMot-clé principal : "${form.motCle}" — à intégrer dans l
 ## OBJECTIFS
 
 Objectif principal : être le meilleur résultat sur Google pour cette requête — apporter la réponse la plus complète et utile possible.
-Objectif secondaire : générer des demandes d'audit pour Be The One, de manière naturelle et non commerciale.
+Objectif secondaire : générer des demandes d'audit pour Agence Be the one, de manière naturelle et non commerciale.
+
+## NOM DE L'AGENCE — RÈGLE ABSOLUE
+
+Le nom exact est toujours : **Agence Be the one** (avec minuscules sur "the one").
+Ne jamais écrire : BeTheOne, BTO, Be The One (majuscules), betheone, Be the One, ou toute autre variante.
+Chaque fois que tu mentionnes l'agence dans l'article, utilise uniquement "Agence Be the one".
 
 ## CONSIGNES DE RÉDACTION
 
@@ -8039,14 +8153,42 @@ Objectif secondaire : générer des demandes d'audit pour Be The One, de manièr
    - Aider Google à comprendre immédiatement le sujet de la page
    - Ne jamais entrer directement dans le vif du sujet : toujours commencer par cette introduction
 2. Corps de l'article : H2 + H3, paragraphes courts
-3. FAQ de 4 à 6 questions-réponses fréquentes — OBLIGATOIRE, avec ces règles :
-   - Choisir les vraies questions que se posent les dirigeants sur ce sujet
-   - Réponses courtes et directes (3 à 6 lignes max par réponse)
-   - Utiliser le balisage HTML : <h3> pour la question, <p> pour la réponse
-   - Intégrer naturellement le mot-clé et des variantes sémantiques
-   - Optimisé pour apparaître en "People Also Ask" sur Google
-4. Checklist récapitulative (liste à puces)
-5. Maximum deux appels à l'action (discrets, contextuels, non commerciaux)
+3. Checklist récapitulative (liste à puces)
+4. Maximum deux appels à l'action (discrets, contextuels, non commerciaux)
+NE PAS inclure de section FAQ dans l'article — elle est générée séparément.
+
+## ANALYSE SÉMANTIQUE À FAIRE EN AMONT
+
+Avant de rédiger, identifie mentalement :
+1. L'intention de recherche principale (informationnelle / transactionnelle / navigationnelle)
+2. Les questions connexes que pose Google dans "People Also Ask"
+3. Les synonymes et variantes sémantiques du mot-clé (champ lexical complet)
+4. Les entités locales à mentionner (villes du Morbihan, contexte breton, exemples d'artisans locaux)
+5. Les données chiffrées pertinentes à intégrer (statistiques Google, taux de conversion, etc.)
+
+## OPTIMISATION SEO AVANCÉE
+
+- Intégrer le mot-clé dans les 100 premiers mots
+- Utiliser des variantes sémantiques dans les H2/H3 (pas répéter le même mot-clé)
+- Ajouter des données chiffrées sourcées quand c'est possible
+- Optimiser la densité sémantique : répéter le champ lexical, pas le mot-clé exact
+
+## MAILLAGE INTERNE OBLIGATOIRE
+
+Dans le corps de l'article, intègre naturellement entre 3 et 5 liens internes vers des pages du site agence-betheone.fr.
+Utilise ces URL réelles — insère-les uniquement quand le contexte s'y prête, jamais de manière forcée :
+
+- <a href="https://agence-betheone.fr/blog">Blog SEO local</a> — pour renvoyer vers d'autres articles
+- <a href="https://agence-betheone.fr/#services">Nos services de référencement local</a> — quand tu mentionnes les prestations
+- <a href="https://agence-betheone.fr/#contact">Demander un audit offert</a> — pour les CTAs discrets
+- <a href="https://agence-betheone.fr/#temoignages">Avis clients</a> — quand tu parles de résultats concrets
+- <a href="https://agence-betheone.fr/#faq">Questions fréquentes</a> — pour compléter une notion
+
+Règles pour les liens :
+- Le texte du lien (ancre) doit être descriptif et naturel, pas "cliquez ici"
+- Répartis les liens dans le corps, pas tous au même endroit
+- Pas de lien dans l'introduction ni dans le titre
+- Utilise l'attribut style="color:#6B40D8;text-decoration:underline" sur chaque lien
 
 ## NOTIONS À INTÉGRER NATURELLEMENT (si pertinent)
 
@@ -8070,12 +8212,19 @@ Intégrer comme conseils pratiques, pas comme argumentaire :
 - Pas de <h1> (géré par le site)
 - Pas de balises html/head/body
 
+## BLOC FINAL OBLIGATOIRE
+
+Après la checklist et les CTAs, ajoute IMPÉRATIVEMENT ce bloc HTML exactement tel quel, sans le modifier :
+
+<p>Ce rituel, répété sur une année, construit une galerie qui travaille pour vous 24h/24. Pendant que vous êtes sur un nouveau chantier, vos photos convainquent le prochain client.</p>
+<p>Vous manquez de temps pour optimiser votre présence en ligne ? <strong>Agence Be the one</strong> accompagne les artisans et TPE bretons dans leur référencement local. De l'optimisation de votre fiche Google Business Profile à la stratégie photo, nous transformons votre visibilité en contacts concrets.</p>
+
 Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
 
       const r = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:16000, messages:[{ role:"user", content: prompt }] }),
+        body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:16000, messages:[{ role:"user", content: prompt }] }),
       });
       const data = await r.json();
       const html = data.content?.[0]?.text || "";
@@ -8090,7 +8239,7 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
   };
 
   const handleEdit = (a) => {
-    setForm({ titre:a.titre, slug:a.slug||"", metaTitle:a.metaTitle||"", metaDesc:a.metaDesc||"", motCle:a.motCle||"", categorie:a.categorie, extrait:a.extrait, contenu:a.contenu, duree:a.duree, date:a.date, imageUrl:a.imageUrl||"", status:a.status||"published", scheduledAt:a.scheduledAt||"" });
+    setForm({ titre:a.titre, slug:a.slug||"", metaTitle:a.metaTitle||"", metaDesc:a.metaDesc||"", motCle:a.motCle||"", categorie:a.categorie, extrait:a.extrait, contenu:a.contenu, duree:a.duree, date:a.date, imageUrl:a.imageUrl||"", status:a.status||"published", scheduledAt:a.scheduledAt||"", faq:a.faq||[] });
     setEditId(a.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -8117,7 +8266,7 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
     n.jsx("span", { style:{fontSize:13}, children: ok ? "✅" : "⬜" }), txt
   ]});
 
-  return n.jsxs("div", { style:{ maxWidth:980 }, children:[
+  return n.jsxs("div", { style:{ width:"100%" }, children:[
     /* HEADER */
     n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }, children:[
       n.jsxs("div", { children:[
@@ -8139,8 +8288,8 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
       });
       const articlesByDate = {};
       articles.forEach(a => {
-        if (a.date) {
-          const k = a.date.slice(0,10);
+        if (a.scheduledAt || a.date) {
+          const k = (a.scheduledAt || a.date).slice(0,10);
           if (!articlesByDate[k]) articlesByDate[k] = [];
           articlesByDate[k].push(a);
         }
@@ -8204,7 +8353,7 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
         articles.filter(a=>a.status==="scheduled").length > 0 && n.jsxs("div", { style:{ marginTop:14, paddingTop:12, borderTop:"1px solid #F3F4F6" }, children:[
           n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#0EA5E9", marginBottom:6 }, children:"🗓 Prochains articles programmés" }),
           n.jsx("div", { style:{ display:"flex", flexWrap:"wrap", gap:6 }, children:
-            articles.filter(a=>a.status==="scheduled" && a.date).sort((a,b)=>a.date>b.date?1:-1).slice(0,5).map(a =>
+            articles.filter(a=>a.status==="scheduled").sort((a,b)=>(a.scheduledAt||a.date)>(b.scheduledAt||b.date)?1:-1).slice(0,5).map(a =>
               n.jsxs("div", {
                 key:a.id,
                 onClick:()=>{ setEditId(a.id); setForm({...a}); },
@@ -8218,7 +8367,7 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
     })(),
 
     /* FORMULAIRE — 2 colonnes : gauche=contenu / droite=SEO */
-    n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 340px", gap:14, marginBottom:20, alignItems:"start" }, children:[
+    n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 300px", gap:14, marginBottom:20, alignItems:"start", maxWidth:"100%" }, children:[
 
       /* ── COLONNE GAUCHE ── */
       n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:20 }, children:[
@@ -8295,6 +8444,55 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
           ]}),
           n.jsx("textarea", { ref:contenuRef, style:{...inp, height:280, resize:"vertical", fontFamily:"monospace", fontSize:12}, value:form.contenu, onChange:e=>setForm(f=>({...f,contenu:e.target.value})), placeholder:"<h2>Titre de section</h2>\n<p>Paragraphe...</p>\n\nOu clique ✨ Générer Claude" }),
           n.jsx("div", { style:{ fontSize:10, color:"#9CA3AF", marginTop:3 }, children:"H1 = titre (auto) · Utilise H2 pour les sections · H3 pour les sous-sections" }),
+        ]}),
+
+        /* ── Bloc FAQ ── */
+        n.jsxs("div", { style:{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:12, padding:"16px 18px", marginBottom:14 }, children:[
+          n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }, children:[
+            n.jsxs("div", { children:[
+              n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#92400E" }, children:"❓ FAQ — Questions fréquentes" }),
+              n.jsx("div", { style:{ fontSize:11, color:"#B45309", marginTop:2 }, children:"Affichée en accordéon en fin d'article · Optimisée People Also Ask" }),
+            ]}),
+            n.jsxs("div", { style:{ display:"flex", gap:6 }, children:[
+              n.jsx("button", { onClick:genererFAQ, disabled:faqLoading,
+                style:{ background: faqLoading?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color:"white", border:"none", borderRadius:7, padding:"5px 12px", fontSize:11, fontWeight:700, cursor:"pointer" },
+                children: faqLoading ? "⏳ Génère…" : "✨ Générer avec IA" }),
+              (form.faq||[]).length > 0 && n.jsx("button", {
+                onClick: () => {
+                  const faqHtml = `\n<section style="margin:2.5rem 0">\n<h2 style="font-size:1.25rem;font-weight:800;color:#1E1B30;margin-bottom:1rem">Questions fréquentes</h2>\n<div style="display:flex;flex-direction:column;gap:8px">\n${(form.faq||[]).map(item=>`<details style="border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">\n<summary style="padding:14px 18px;font-weight:700;font-size:.95rem;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;background:#F9FAFB">&#128269; ${item.q}</summary>\n<div style="padding:14px 18px;font-size:.9rem;line-height:1.6;color:#374151;border-top:1px solid #F3F4F6"><p>${item.a}</p></div>\n</details>`).join("\n")}\n</div>\n</section>`;
+                  setForm(f => ({ ...f, contenu: (f.contenu||"") + faqHtml }));
+                  setMsg({ ok:true, text:"✅ FAQ insérée dans l'article !" });
+                },
+                style:{ background:"#059669", color:"white", border:"none", borderRadius:7, padding:"5px 12px", fontSize:11, fontWeight:700, cursor:"pointer" },
+                children:"📥 Insérer dans l'article" }),
+              n.jsx("button", {
+                onClick: () => setForm(f => ({ ...f, faq: [...(f.faq||[]), {q:"", a:""}] })),
+                style:{ background:"white", border:"1px solid #FDE68A", color:"#92400E", borderRadius:7, padding:"5px 12px", fontSize:11, fontWeight:700, cursor:"pointer" },
+                children:"+ Ajouter" }),
+            ]}),
+          ]}),
+          (form.faq||[]).length === 0 && n.jsx("div", { style:{ fontSize:12, color:"#B45309", textAlign:"center", padding:"12px 0", fontStyle:"italic" }, children:"Aucune question — clique sur \"+ Ajouter\" ou \"✨ Générer avec IA\"" }),
+          (form.faq||[]).map((item, i) => n.jsxs("div", { key:i, style:{ background:"white", border:"1px solid #FDE68A", borderRadius:9, padding:"12px 14px", marginBottom:8 }, children:[
+            n.jsxs("div", { style:{ display:"flex", gap:8, marginBottom:6, alignItems:"flex-start" }, children:[
+              n.jsx("div", { style:{ fontSize:11, fontWeight:800, color:"#6B40D8", minWidth:18, paddingTop:2 }, children:`Q${i+1}` }),
+              n.jsx("input", {
+                value: item.q, placeholder:"Question fréquente ?",
+                onChange: e => setForm(f => { const faq=[...(f.faq||[])]; faq[i]={...faq[i],q:e.target.value}; return {...f,faq}; }),
+                style:{ flex:1, border:"1px solid #E5E7EB", borderRadius:6, padding:"6px 10px", fontSize:12, fontFamily:"inherit", outline:"none" },
+              }),
+              n.jsx("button", { onClick:()=>setForm(f=>{ const faq=(f.faq||[]).filter((_,j)=>j!==i); return {...f,faq}; }),
+                style:{ background:"#FEE2E2", color:"#DC2626", border:"none", borderRadius:6, padding:"5px 9px", fontSize:12, cursor:"pointer", fontWeight:700 }, children:"✕" }),
+            ]}),
+            n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"flex-start" }, children:[
+              n.jsx("div", { style:{ fontSize:11, fontWeight:800, color:"#059669", minWidth:18, paddingTop:2 }, children:`R${i+1}` }),
+              n.jsx("textarea", {
+                value: item.a, placeholder:"Réponse courte et précise (2-4 phrases)…",
+                onChange: e => setForm(f => { const faq=[...(f.faq||[])]; faq[i]={...faq[i],a:e.target.value}; return {...f,faq}; }),
+                rows: 2,
+                style:{ flex:1, border:"1px solid #E5E7EB", borderRadius:6, padding:"6px 10px", fontSize:12, fontFamily:"inherit", resize:"vertical", outline:"none" },
+              }),
+            ]}),
+          ]})),
         ]}),
 
         /* Bloc publication */
@@ -8435,26 +8633,57 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
 
     /* LISTE DES ARTICLES */
     n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:20 }, children:[
-      n.jsxs("div", { style:{ fontWeight:700, fontSize:14, color:"#1E1B30", marginBottom:14, display:"flex", alignItems:"center", gap:10 }, children:[
-        "📄 Articles (",articles.length,")",
-        n.jsxs("span", { style:{ fontSize:11, fontWeight:600, color:"#6B7280" }, children:[
-          n.jsx("span", { style:{ color:"#059669" }, children: articles.filter(a=>a.status==="published").length + " publiés" }),
-          " · ",
-          n.jsx("span", { style:{ color:"#0EA5E9" }, children: articles.filter(a=>a.status==="scheduled").length + " programmés" }),
-          " · ",
-          n.jsx("span", { style:{ color:"#9CA3AF" }, children: articles.filter(a=>a.status==="draft"||!a.status).length + " brouillons" }),
-        ]}),
-      ]}),
+      /* Onglets */
+      n.jsx("div", { style:{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" }, children:
+        [
+          { key:"all",       label:"📄 Articles",    color:"#6B40D8", count: articles.length,                                        sub: `${articles.filter(a=>a.status==="published").length} publiés · ${articles.filter(a=>a.status==="scheduled").length} programmés · ${articles.filter(a=>a.status==="draft"||!a.status).length} brouillons` },
+          { key:"published", label:"✅ Publiés",      color:"#059669", count: articles.filter(a=>a.status==="published").length,       sub: null },
+          { key:"scheduled", label:"📅 Programmés",   color:"#0EA5E9", count: articles.filter(a=>a.status==="scheduled").length,      sub: null },
+          { key:"draft",     label:"📝 Brouillons",   color:"#9CA3AF", count: articles.filter(a=>a.status==="draft"||!a.status).length, sub: null },
+        ].map(tab =>
+          n.jsxs("button", {
+            key: tab.key,
+            onClick: () => setArtTab(tab.key),
+            style:{
+              display:"flex", flexDirection:"column", alignItems:"flex-start",
+              padding:"10px 16px", borderRadius:10, border: artTab===tab.key ? `2px solid ${tab.color}` : "2px solid #F3F4F6",
+              background: artTab===tab.key ? tab.color+"12" : "#FAFAFA",
+              cursor:"pointer", transition:"all .15s", minWidth:120,
+            },
+            children:[
+              n.jsxs("span", { style:{ fontWeight:700, fontSize:13, color: artTab===tab.key ? tab.color : "#6B7280" }, children:[
+                tab.label, " (", tab.count, ")"
+              ]}),
+              tab.sub && n.jsx("span", { style:{ fontSize:10, color:"#9CA3AF", marginTop:2 }, children: tab.sub }),
+            ]
+          }, tab.key)
+        )
+      }),
       loading
         ? n.jsx("div", { style:{ textAlign:"center", color:"#9CA3AF", padding:30 }, children:"Chargement..." })
         : articles.length === 0
           ? n.jsx("div", { style:{ textAlign:"center", color:"#9CA3AF", padding:30, fontSize:13 }, children:"Aucun article pour l'instant. Crée ton premier article ci-dessus !" })
           : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:10 }, children:
-            articles.map(a => {
+            articles.filter(a => artTab==="all" ? true : artTab==="draft" ? (a.status==="draft"||!a.status) : a.status===artTab).map((a, idx) => {
               const cat = catInfo(a.categorie);
+              const isDragging = dragIdx === idx;
+              const isOver = dragOverIdx === idx;
               return n.jsxs("div", {
-                style:{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, border:"1px solid #F3F4F6", background:"#FAFAFA" },
+                draggable: true,
+                onDragStart: () => setDragIdx(idx),
+                onDragOver: e => { e.preventDefault(); setDragOverIdx(idx); },
+                onDragEnd: () => {
+                  if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+                    const next = [...articles];
+                    const [moved] = next.splice(dragIdx, 1);
+                    next.splice(dragOverIdx, 0, moved);
+                    save(next);
+                  }
+                  setDragIdx(null); setDragOverIdx(null);
+                },
+                style:{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", borderRadius:10, border: isOver ? "2px solid #6B40D8" : "1px solid #F3F4F6", background: isDragging ? "#F5F3FF" : "#FAFAFA", opacity: isDragging ? 0.5 : 1, cursor:"grab", transition:"border .15s,background .15s" },
                 children:[
+                  n.jsx("span", { title:"Déplacer", style:{ color:"#D1D5DB", fontSize:16, cursor:"grab", userSelect:"none", flexShrink:0 }, children:"⠿" }),
                   n.jsx("span", { style:{ background: cat.color + "18", color: cat.color, fontSize:10, fontWeight:800, padding:"3px 8px", borderRadius:20, whiteSpace:"nowrap" }, children: cat.label }),
                   n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
                     n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:6 }, children:[
@@ -9033,7 +9262,7 @@ function FactureTab({ clients: e, getContract: t }) {
     ${s.parrain ? `<div class="card" style="border-left:3px solid #6B40D8;background:linear-gradient(135deg,#F8F6FF,#FDF8FF)"><h2>🎁 Parrainage</h2>
     <p style="font-size:13px;color:#374151;margin:0 0 8px">Vous avez été recommandé par :</p>
     <p style="font-size:15px;font-weight:700;color:#6B40D8;margin:0 0 12px">${s.parrain}</p>
-    <p style="font-size:12px;color:#6B7280;margin:0">Merci de faire confiance à l'Agence Agence Be the one suite à cette recommandation !</p></div>` : ""}
+    <p style="font-size:12px;color:#6B7280;margin:0">Merci de faire confiance à Agence Be the one suite à cette recommandation !</p></div>` : ""}
     <button class="btn" onclick="this.textContent='✓ Envoyé !';this.style.opacity='.7';alert('Merci ! Renvoyez ce formulaire rempli par email à ${agEmail2}\\n\\nN\\'oubliez pas d\\'envoyer vos photos en pièce jointe.')">✓ Terminer le formulaire</button>
     <div class="footer">${d} · Ce formulaire est confidentiel · ${agEmail2}</div>
     </div></body></html>`,
@@ -10417,8 +10646,8 @@ Réponds en français, de façon concise et actionnable. Si Sara parle d'un clie
                     "x-api-key": u,
                   },
                   body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514",
-                    max_tokens: 600,
+                    model: "claude-sonnet-4-6",
+                    max_tokens: 1200,
                     system: f(),
                     messages: [...C, { role: "user", content: b }],
                   }),
@@ -15992,7 +16221,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
   const l = (e == null ? void 0 : e.geoGrid) || {},
     [a, d] = D.useState(defaultKw),
     [p, b] = D.useState(savedCfg.gridSize || 7),
-    [rayon, setRayon] = D.useState(savedCfg.rayon || 20),  /* rayon en km — zone fixe */
+    [rayon, setRayon] = D.useState(savedCfg.rayon || 10),  /* rayon en km — zone fixe */
     x = rayon * 1000 * 2 / Math.max(p - 1, 1), /* espacement calculé automatiquement */
     [I, z] = D.useState(!1),
     [g, h] = D.useState(0),
@@ -16128,7 +16357,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     return nameScore * (cityOk || postalOk ? 2 : 0.5);
   };
 
-  /* ── Google Places search avec retry ── */
+  /* ── Google Places API scan ── */
   const O = async (lat, lng, query, myName, attempt = 0) => {
     if (!o) return null;
     try {
@@ -16142,18 +16371,14 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         body: JSON.stringify({
           textQuery: query,
           locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: x * 2 } },
-          maxResultCount: 20, // 20 au lieu de 10 pour ne pas rater
+          maxResultCount: 20,
           rankPreference: "RELEVANCE",
           languageCode: "fr",
         }),
       });
 
-      // Quota dépassé → retry avec backoff
       if (resp.status === 429) {
-        if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
-          return O(lat, lng, query, myName, attempt + 1);
-        }
+        if (attempt < 3) { await new Promise(r => setTimeout(r, 1500 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1); }
         return { rank: null, top10: [], error: "quota" };
       }
 
@@ -16161,8 +16386,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       if (json.error) {
         const msg = json.error.message || json.error.status || "";
         if (msg.includes("RESOURCE_EXHAUSTED") && attempt < 3) {
-          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
-          return O(lat, lng, query, myName, attempt + 1);
+          await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1);
         }
         throw new Error(`API Google : ${msg}`);
       }
@@ -16174,16 +16398,14 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       const postalCode = postalMatch ? postalMatch[1] : "";
       const nameTokens = buildNameTokens(myName, cityLow);
 
-      // Score chaque résultat et prendre le meilleur
       let bestIdx = -1, bestScore = 0;
       places.forEach((pl, idx) => {
         const score = scoreMatch(pl.displayName?.text || "", pl.formattedAddress || "", nameTokens, cityLow, postalCode);
         if (score > bestScore && score > 0.3) { bestScore = score; bestIdx = idx; }
       });
 
-      // Si rien trouvé dans les 20 premiers → non classé = rang 20+
-      const rank = bestIdx >= 0 ? bestIdx + 1 : 20 + 1;
-      const top10 = places.slice(0, 10).map((pl, idx) => ({ // TOP 10 uniquement
+      const rank = bestIdx >= 0 ? bestIdx + 1 : 21;
+      const top10 = places.slice(0, 10).map((pl, idx) => ({
         name: pl.displayName?.text || "?",
         address: pl.formattedAddress || "",
         rating: pl.rating || null,
@@ -16195,11 +16417,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       return { rank, top10 };
 
     } catch (err) {
-      // Retry réseau (max 2 tentatives)
-      if (attempt < 2 && (err.message?.includes("fetch") || err.name === "TypeError")) {
-        await new Promise(r => setTimeout(r, 1000));
-        return O(lat, lng, query, myName, attempt + 1);
-      }
+      if (attempt < 2) { await new Promise(r => setTimeout(r, 1000)); return O(lat, lng, query, myName, attempt + 1); }
       console.warn("Places API error:", err);
       return { rank: null, top10: [], error: err.message };
     }
@@ -16213,7 +16431,6 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     if (!a) { alert("Sélectionne un mot-clé d'abord."); return; }
     z(!0); h(0); setScanError(null);
     try {
-    // Pré-validation de la clé API avec un seul appel test
     let w = (v = e == null ? void 0 : e.geoGrid) == null ? void 0 : v.center;
     if (!w) {
       const K = (e == null ? void 0 : e.address) || ((q = (A = e == null ? void 0 : e.data) == null ? void 0 : A.extracted) == null ? void 0 : q.address) || (e == null ? void 0 : e.city) || "";
@@ -16221,25 +16438,33 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       if ((w = await y(K)), !w) { alert(`Impossible de géocoder l'adresse.\n\nEssayé :\n• ${K}\n\nSolution : modifie l'adresse du client (enlève le nom de zone commerciale) ou entre une adresse plus simple comme "56000 Vannes".`); z(!1); return; }
     }
     const { lat: W, lng: L } = w, $ = Math.floor(p / 2), X = 111320,
-      cells = [], cellData = [], myName = (e == null ? void 0 : e.name) || "";
-    let quotaErrors = 0;
+      cells = new Array(p * p).fill(null),
+      cellData = new Array(p * p).fill(null),
+      myName = (e == null ? void 0 : e.name) || "";
+
+    // Construire la liste de tous les points (centre inclus — pas de hardcode rank 1)
+    const points = [];
     for (let K = 0; K < p; K++)
       for (let ie = 0; ie < p; ie++) {
-        const isCenter = K === $ && ie === $;
-        if (isCenter) {
-          cells.push(1); cellData.push({ rank: 1, top10: [{ name: myName, isMe: true, rank: 1 }] });
-          h(Math.round(((K * p + ie + 1) / M) * 100)); continue;
-        }
+        const idx = K * p + ie;
         const oe = (($ - K) * x) / X, he = ((ie - $) * x) / (X * Math.cos((W * Math.PI) / 180));
-        const result = await O(W + oe, L + he, a, myName);
-        if (result?.error === "quota") quotaErrors++;
-        cells.push(result ? result.rank : null);
-        cellData.push(result || { rank: null, top10: [] });
-        h(Math.round(((K * p + ie + 1) / M) * 100));
-        // Délai adaptatif : plus long si erreurs quota détectées
-        const delay = quotaErrors > 2 ? 800 : quotaErrors > 0 ? 500 : 300;
-        await new Promise(res => setTimeout(res, delay));
+        points.push({ idx, lat: W + oe, lng: L + he });
       }
+
+    // Traitement par lots de 5 en parallèle
+    const BATCH = 5;
+    let done = 0;
+    for (let i = 0; i < points.length; i += BATCH) {
+      const batch = points.slice(i, i + BATCH);
+      await Promise.all(batch.map(async ({ idx, lat, lng }) => {
+        const result = await O(lat, lng, a, myName);
+        cells[idx] = result ? result.rank : null;
+        cellData[idx] = result || { rank: null, top10: [] };
+        done++;
+        h(Math.round((done / M) * 100));
+      }));
+      if (i + BATCH < points.length) await new Promise(res => setTimeout(res, 100));
+    }
     const scanRecord = { date: new Date().toISOString().slice(0, 10), cells, cellData, gridSize: p, rayon },
       // Garder TOUS les anciens scans (sans config) + 5 derniers par config active
       prevScans = [
@@ -16263,7 +16488,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     const scanConfig = `${p}x${p}_${rayon}km`;
     const curData = (e.data || {});
 
-    /* Single B call — avoid stale-closure double-write bug */
+    /* Sauvegarde sur le client verrouillé au démarrage du scan */
     B({
       geoGrid: updGrid,
       data: { ...curData, mapCompetitors: topComps, mapScanKeyword: a, mapScanDate: new Date().toISOString().slice(0,10) }
@@ -16374,21 +16599,43 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
             const prevAvg = prevCells.length ? Math.round(prevCells.reduce((a,b)=>a+b,0)/prevCells.length*10)/10 : null;
             if (scAvg != null && prevAvg != null) delta = Math.round((prevAvg - scAvg)*10)/10; // positif = amélioration
           }
-          return n.jsxs("button",{
+          return n.jsxs("div",{
             key:idx,
-            onClick:()=>setSelScanIdx(isLatest&&selScanIdx==null?null:idx),
-            style:{
-              padding:"6px 12px",borderRadius:9,border:`2px solid ${isSel?"#6B40D8":"#E5E7EB"}`,
-              background:isSel?"#6B40D8":"white",color:isSel?"white":"#374151",
-              fontFamily:"inherit",fontWeight:isSel?700:500,fontSize:12,cursor:"pointer",
-              display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:70,
-              transition:"all .15s",
-            },
+            style:{position:"relative",display:"inline-flex"},
             children:[
-              n.jsx("span",{style:{fontSize:10,opacity:.85},children:new Date(sc.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"2-digit"})}),
-              n.jsxs("span",{style:{fontSize:15,fontWeight:900,lineHeight:1},children:["#",scAvg||"—"]}),
-              delta != null && n.jsxs("span",{style:{fontSize:10,color:isSel?(delta>=0?"#86efac":"#fca5a5"):(delta>=0?"#059669":"#dc2626"),fontWeight:700},children:[delta>=0?"▲+":"▼",Math.abs(delta)]}),
-              isLatest && n.jsx("span",{style:{fontSize:9,opacity:.7},children:"actuel"}),
+              n.jsxs("button",{
+                onClick:()=>setSelScanIdx(isLatest&&selScanIdx==null?null:idx),
+                style:{
+                  padding:"6px 12px",borderRadius:9,border:`2px solid ${isSel?"#6B40D8":"#E5E7EB"}`,
+                  background:isSel?"#6B40D8":"white",color:isSel?"white":"#374151",
+                  fontFamily:"inherit",fontWeight:isSel?700:500,fontSize:12,cursor:"pointer",
+                  display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:70,
+                  transition:"all .15s",
+                },
+                children:[
+                  n.jsx("span",{style:{fontSize:10,opacity:.85},children:new Date(sc.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"2-digit"})}),
+                  n.jsxs("span",{style:{fontSize:15,fontWeight:900,lineHeight:1},children:["#",scAvg||"—"]}),
+                  delta != null && n.jsxs("span",{style:{fontSize:10,color:isSel?(delta>=0?"#86efac":"#fca5a5"):(delta>=0?"#059669":"#dc2626"),fontWeight:700},children:[delta>=0?"▲+":"▼",Math.abs(delta)]}),
+                  isLatest && n.jsx("span",{style:{fontSize:9,opacity:.7},children:"actuel"}),
+                ],
+              }),
+              n.jsx("button",{
+                onClick:(ev)=>{
+                  ev.stopPropagation();
+                  const updScans = (k.scans||[]).filter(s => s !== sc);
+                  const updGrid = { ...l, [a]: { ...k, scans: updScans } };
+                  B({ geoGrid: updGrid });
+                  setSelScanIdx(null);
+                },
+                title:"Supprimer ce scan",
+                style:{
+                  position:"absolute",top:-6,right:-6,width:16,height:16,borderRadius:"50%",
+                  border:"none",background:"#EF4444",color:"white",fontSize:10,
+                  cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+                  fontWeight:900,lineHeight:1,padding:0,
+                },
+                children:"×",
+              }),
             ],
           },idx);
         })
@@ -17861,14 +18108,16 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                                         }),
                                       ],
                                     })
-                                  : n.jsx("span", {
-                                      style: {
-                                        fontSize: 12.5,
-                                        color: "var(--ink2)",
-                                        lineHeight: 1.5,
-                                      },
-                                      children: V,
-                                    }),
+                                  : (() => {
+                                      const colonIdx = V.indexOf(":");
+                                      if (colonIdx > 0 && colonIdx < 80) {
+                                        return n.jsxs("span", { style:{ fontSize:12.5, color:"var(--ink2)", lineHeight:1.5 }, children:[
+                                          n.jsx("strong", { children: V.slice(0, colonIdx) }),
+                                          V.slice(colonIdx),
+                                        ]});
+                                      }
+                                      return n.jsx("span", { style:{ fontSize:12.5, color:"var(--ink2)", lineHeight:1.5 }, children: V });
+                                    })(),
                               ],
                             },
                             G,
@@ -19837,8 +20086,8 @@ Réponds UNIQUEMENT avec le texte de la réponse, sans commentaire ni explicatio
                       "x-api-key": q,
                     },
                     body: JSON.stringify({
-                      model: "claude-sonnet-4-20250514",
-                      max_tokens: 500,
+                      model: "claude-sonnet-4-6",
+                      max_tokens: 700,
                       system: G(v.note),
                       messages: [
                         {
@@ -19891,8 +20140,8 @@ Rédige la réponse.`,
                       "x-api-key": v,
                     },
                     body: JSON.stringify({
-                      model: "claude-sonnet-4-20250514",
-                      max_tokens: 500,
+                      model: "claude-sonnet-4-6",
+                      max_tokens: 700,
                       system:
                         G(z.note) +
                         (A.length > 0
@@ -20006,7 +20255,7 @@ Rédige la réponse.`,
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","x-api-key":apiKeyLocal },
-        body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:500, system:sys, messages:[{role:"user",content:`Avis de ${rv.author||"un client"} :\n"${rv.text||"(aucun commentaire)"}"\nRédige la réponse.`}] }),
+        body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:700, system:sys, messages:[{role:"user",content:`Avis de ${rv.author||"un client"} :\n"${rv.text||"(aucun commentaire)"}"\nRédige la réponse.`}] }),
       });
       const data = await res.json();
       const text = (data.content||[]).map(c=>c.text||"").join("").trim();
@@ -20248,7 +20497,7 @@ Mon établissement :
             const userMsg = `Avis ${replyNote} étoiles${replyAuthor ? ` de ${replyAuthor}` : ""} :\n"${replyAvisText||"(aucun commentaire)"}"\n\nRédige la réponse à cet avis.`;
             const res = await fetch("https://api.anthropic.com/v1/messages", {
               method:"POST", headers:{"content-type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","x-api-key":apiKeyLocal},
-              body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:500,system:sys,messages:[{role:"user",content:userMsg}]}),
+              body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:700,system:sys,messages:[{role:"user",content:userMsg}]}),
             });
             const data = await res.json();
             setReplyResult(data?.content?.[0]?.text || "");
@@ -21574,8 +21823,8 @@ function HistoriqueTab({ data: e, client: t, clients: i, upd: r }) {
           "x-api-key": apiKey,
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 300,
+          model: "claude-sonnet-4-6",
+          max_tokens: 600,
           messages: [{
             role: "user",
             content: `Tu es un expert en SEO local France.
@@ -21617,7 +21866,7 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
       const res = await (await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true", "x-api-key": apiKey },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
       })).json();
       const text = ((res.content || []).map(c => c.text || "").join("")).trim();
       const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}");
@@ -24680,7 +24929,6 @@ function CalendrierGrid({
       (j(!0), h(""), z([]));
       try {
         const S =
-            "{" +
             (
               (
                 await (
@@ -24693,7 +24941,7 @@ function CalendrierGrid({
                       "x-api-key": l,
                     },
                     body: JSON.stringify({
-                      model: "claude-sonnet-4-20250514",
+                      model: "claude-sonnet-4-6",
                       max_tokens: 2500,
                       system:
                         "Tu es Sara Baudouin, experte SEO local a Vannes, fondatrice de Agence Be the one. Tu rediges des emails de prospection percutants bases sur un vrai audit GMB avec une promesse chiffree de progression. Reponds UNIQUEMENT en JSON valide.",
@@ -24736,7 +24984,6 @@ REGLES ABSOLUES :
 
 JSON : {"emails":[{"label":"Impact","subject":"...","body":"..."},{"label":"Curiosite","subject":"...","body":"..."}],"whatsapp":"..."}`,
                         },
-                        { role: "assistant", content: "{" },
                       ],
                     }),
                   })
@@ -26042,7 +26289,7 @@ Rédige la publication GMB.`;
           "x-api-key": apiKey,
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 1000,
           system: systemPrompt,
           messages: [{ role: "user", content: userMsg }],
@@ -27427,7 +27674,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
       });
       const data = await res.json();
       setReplyText(data.content?.[0]?.text || "");
@@ -28278,7 +28525,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
 
         <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
           <div style="font-size:15px;font-weight:800;color:#1E1B30;margin-bottom:5px;text-align:center">Une question sur ce rapport ?</div>
-          ${(() => { const _nm = agencyName || "Agence Agence Be the one"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full} · à votre disposition</div>`; })()}
+          ${(() => { const _nm = agencyName || "Agence Be the one"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full} · à votre disposition</div>`; })()}
           <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
             <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📧</span><strong style="color:#6B40D8">${agencyEmail || "contact@agence-betheone.fr"}</strong></div>
             <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📞</span><strong style="color:#6B40D8">${agencyPhone || "06 51 17 69 10"}</strong></div>
@@ -29618,7 +29865,7 @@ function TemplatesTab({
 }) {
   var S, w, W;
   const [b, x] = D.useState(e.weeklyNotes || ""),
-    [j, I] = D.useState(localStorage.getItem("ag_name") || "Agence Be the one — Vannes"),
+    [j, I] = D.useState(localStorage.getItem("ag_name") || "Agence Be the one"),
     [z, g] = D.useState(localStorage.getItem("ag_email") || ""),
     [h, f] = D.useState(localStorage.getItem("ag_phone") || "06 51 17 69 10"),
     [c, u] = D.useState(!1),
@@ -30529,7 +30776,7 @@ function TemplatesTab({
                           <div style="background:rgba(107,64,216,.08);border:1px solid rgba(107,64,216,.2);color:#6B40D8;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px">${rm.objective||"—"}</div>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
-                          ${(rm.actions||[]).filter(a=>a&&!a.includes("action")).slice(0,4).map((a,i)=>`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div>${a}</div>`).join("")}
+                          ${(rm.actions||[]).filter(a=>a&&!a.includes("action")).slice(0,4).map((a,i)=>{const ci=a.indexOf(":");const txt=ci>0&&ci<80?`<strong>${a.slice(0,ci)}</strong>${a.slice(ci)}`:a;return`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div>${txt}</div>`;}).join("")}
                         </div>
                       </div>`).join("")}`}
 
@@ -30560,7 +30807,7 @@ function TemplatesTab({
 
                     <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
                       <div style="font-size:15px;font-weight:800;color:#1E1B30;margin-bottom:5px;text-align:center">Parlons-en, consultation offerte 30 min</div>
-                      ${(() => { const _nm = j || "Agence Agence Be the one"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full}</div>`; })()}
+                      ${(() => { const _nm = j || "Agence Be the one"; const _full = /sara/i.test(_nm) ? _nm : `${_nm} · Sara Baudouin`; return `<div style="font-size:12px;font-weight:700;color:#6B40D8;text-align:center;margin-bottom:18px">${_full}</div>`; })()}
                       <div style="display:flex;flex-direction:column;align-items:center;gap:9px">
                         ${(() => { const _em = z || "contact@agence-betheone.fr"; return `<div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📧</span><strong style="color:#6B40D8">${_em}</strong></div>`; })()}
                         ${h?`<div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#374151"><span style="font-size:14px">📞</span><strong style="color:#6B40D8">${h}</strong></div>`:""}

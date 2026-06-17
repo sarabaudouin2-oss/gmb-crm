@@ -22,7 +22,66 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  // ── GOOGLE PLACES SEARCH (proxy) ──
+  // ── SCAN POSITIONNEMENT via SerpAPI (vrais résultats Google Maps) ──
+  if (req.method === "GET" && req.query.action === "serp-scan") {
+    const { query, lat, lng, zoom = "14" } = req.query;
+    const serpKey = process.env.SERPAPI_KEY;
+    if (!serpKey) return res.status(500).json({ error: "SERPAPI_KEY non configurée." });
+    if (!query || !lat || !lng) return res.status(400).json({ error: "Paramètres manquants." });
+    try {
+      const ll = `@${lat},${lng},${zoom}z`;
+      const url = `https://serpapi.com/search?engine=google_maps&q=${encodeURIComponent(query)}&ll=${encodeURIComponent(ll)}&hl=fr&gl=fr&api_key=${serpKey}`;
+      const r = await fetch(url);
+      const data = await r.json();
+      if (data.error) return res.status(200).json({ error: data.error, places: [] });
+      const places = (data.local_results || []).slice(0, 20).map((p, i) => ({
+        rank: i + 1,
+        name: p.title || "?",
+        address: p.address || "",
+        rating: p.rating || null,
+        reviews: p.reviews || 0,
+        placeId: p.place_id || "",
+      }));
+      return res.status(200).json({ places });
+    } catch (e) {
+      return res.status(500).json({ error: e.message, places: [] });
+    }
+  }
+
+  // ── SCAN POSITIONNEMENT (ancienne API Places — géolocalisation précise) ──
+  if (req.method === "GET" && req.query.action === "scan") {
+    const { query, lat, lng } = req.query;
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "GOOGLE_API_KEY non configurée." });
+    if (!query || !lat || !lng) return res.status(400).json({ error: "Paramètres manquants." });
+    try {
+      const params = new URLSearchParams({
+        key: apiKey,
+        query,
+        location: `${lat},${lng}`,
+        radius: "500",
+        language: "fr",
+        region: "fr",
+      });
+      const r = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`);
+      const data = await r.json();
+      if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+        return res.status(200).json({ error: data.error_message || data.status, places: [] });
+      }
+      const places = (data.results || []).slice(0, 20).map((p, i) => ({
+        rank: i + 1,
+        name: p.name,
+        address: p.formatted_address || "",
+        rating: p.rating || null,
+        reviews: p.user_ratings_total || 0,
+        placeId: p.place_id,
+      }));
+      return res.status(200).json({ places });
+    } catch (e) {
+      return res.status(500).json({ error: e.message, places: [] });
+    }
+  }
+
   if (req.method === "GET" && req.query.action === "places") {
     const { query } = req.query;
     const apiKey = process.env.GOOGLE_API_KEY;
