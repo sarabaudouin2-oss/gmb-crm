@@ -3,6 +3,8 @@
 import { put, list, del, head } from "@vercel/blob";
 
 const DATA_PATH = "gmb-crm/data.json";
+const ARTICLES_PATH = "gmb-crm/articles.json";
+const ARTICLES_PWD = process.env.ARTICLES_PASSWORD || "bto2026";
 // VERCEL_URL = URL de déploiement temporaire, pas le domaine custom.
 // On utilise le domaine de production fixe.
 const BASE_URL = "https://app.agence-betheone.fr";
@@ -21,6 +23,48 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
+
+  // ── ARTICLES BLOG (lecture publique / écriture protégée) ──
+  if (req.query.action === "list-articles") {
+    try {
+      const existing = await list({ prefix: ARTICLES_PATH, mode: "folded" });
+      let articles = [];
+      if (existing.blobs && existing.blobs.length > 0) {
+        const blobMeta = existing.blobs[0];
+        const r = await fetch(blobMeta.downloadUrl || blobMeta.url, {
+          headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+        });
+        if (r.ok) articles = await r.json();
+      }
+      if (!Array.isArray(articles)) articles = [];
+      const isAdmin = req.query.admin === "1" && req.headers["x-admin-password"] === ARTICLES_PWD;
+      if (!isAdmin) {
+        const now = new Date();
+        articles = articles.filter(a => {
+          if (a.status === "draft") return false;
+          if (a.status === "scheduled" && a.scheduledAt) return new Date(a.scheduledAt) <= now;
+          return true;
+        });
+      }
+      return res.json(articles);
+    } catch (e) { return res.status(500).json({ error: e.message, stack: e.stack?.slice(0,200) }); }
+  }
+
+  if (req.method === "POST" && req.query.action === "save-articles") {
+    const auth = req.headers["x-admin-password"];
+    if (auth !== ARTICLES_PWD) return res.status(401).json({ error: "Non autorisé" });
+    try {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const articles = JSON.parse(Buffer.concat(chunks).toString());
+      try {
+        const existing = await list({ prefix: ARTICLES_PATH });
+        if (existing.blobs.length > 0) await del(existing.blobs.map(b => b.url));
+      } catch (_) {}
+      await put(ARTICLES_PATH, JSON.stringify(articles), { access: "private", contentType: "application/json", addRandomSuffix: false });
+      return res.json({ success: true });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
 
   // ── SCAN POSITIONNEMENT via SerpAPI (vrais résultats Google Maps) ──
   if (req.method === "GET" && req.query.action === "serp-scan") {
