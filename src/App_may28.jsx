@@ -11610,20 +11610,6 @@ function Sidebar({
                         },
                         children: S,
                       }),
-                    p &&
-                      w > 0 &&
-                      n.jsx("span", {
-                        style: {
-                          background: "#dc2626",
-                          color: "#fff",
-                          borderRadius: 12,
-                          padding: "1px 7px",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          animation: "pulse-ring 2s infinite",
-                        },
-                        children: w,
-                      }),
                     !p &&
                       w > 0 &&
                       n.jsx("span", {
