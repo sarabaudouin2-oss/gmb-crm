@@ -3962,7 +3962,7 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                   },
                   children: ["Potentiel ", e.potential],
                 }),
-              e.score > 0 &&
+              realScore > 0 &&
                 n.jsxs("span", {
                   style: {
                     fontSize: 11,
@@ -3972,7 +3972,7 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                     color: "var(--ink3)",
                     fontWeight: 600,
                   },
-                  children: ["Score ", e.score, "/100"],
+                  children: ["Score ", realScore, "/100"],
                 }),
             ],
           }),
