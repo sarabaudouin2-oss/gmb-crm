@@ -18534,7 +18534,7 @@ function ClientDetail({
   const w = P.roadmap || {},
     W = e.history || [],
     L = W.length > 0 ? s(W[W.length - 1].scores || {}) : null,
-    $ = L !== null ? _ - L : null;
+    $ = L !== null ? s(N) - L : null;
   D.useEffect(() => {
     let Q = 0;
     const Z = setInterval(() => {
