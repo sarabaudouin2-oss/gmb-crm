@@ -15822,11 +15822,11 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                         ...(E.manualOverrides || {}),
                       }),
                       T = r(P),
-                      _ = Object.values(E.tasksDone || {}).filter(
-                        Boolean,
-                      ).length,
                       U = ALL_CRITERIA.filter(
                         (S) => (E.scores || {})[S.id] === !1,
+                      ).length,
+                      _ = ALL_CRITERIA.filter(
+                        (S) => (E.scores || {})[S.id] === !1 && (E.tasksDone || {})[S.id],
                       ).length,
                       V = U > 0 ? Math.round((_ / U) * 100) : 100,
                       G = E.history || [],
