@@ -9781,6 +9781,7 @@ function NotificationsPage({
   // ── 1. Alertes publications ──
   const postAlerts = [];
   e.forEach(cl => {
+    if (cl.statutAudit !== "client") return;
     // Posts planifiés en retard (scheduledPosts)
     (cl.scheduledPosts || []).forEach(p => {
       if (p.date && p.date <= today && p.status !== "published") {
@@ -9802,6 +9803,7 @@ function NotificationsPage({
   // ── 2. Alertes clients (score, audit, etc.) ──
   const clientAlerts = [];
   e.forEach(cl => {
+    if (cl.statutAudit !== "client") return;
     try {
       const score = s({ ...(cl.scores||{}), ...(cl.manualOverrides||{}) });
       const lastDate = cl.history?.length > 0 ? cl.history[cl.history.length-1].date : cl.date;
