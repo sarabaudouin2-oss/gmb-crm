@@ -15489,8 +15489,8 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
       confirm("Supprimer ce client ?") && t(e.filter((M) => M.id !== E));
     },
     c = (E) => {
-      const M = Object.values(E.tasksDone || {}).filter(Boolean).length,
-        P = ALL_CRITERIA.filter((T) => (E.scores || {})[T.id] === !1).length;
+      const P = ALL_CRITERIA.filter((T) => (E.scores || {})[T.id] === !1).length;
+      const M = ALL_CRITERIA.filter((T) => (E.scores || {})[T.id] === !1 && (E.tasksDone || {})[T.id]).length;
       return P > 0 ? M / P : 1;
     };
   let u = e.filter(
@@ -15557,8 +15557,8 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
         M = u.map((V) => {
           const G = o({ ...(V.scores || {}), ...(V.manualOverrides || {}) }),
             y = r(G),
-            O = Object.values(V.tasksDone || {}).filter(Boolean).length,
             F = ALL_CRITERIA.filter((S) => (V.scores || {})[S.id] === !1).length,
+            O = ALL_CRITERIA.filter((S) => (V.scores || {})[S.id] === !1 && (V.tasksDone || {})[S.id]).length,
             H = F > 0 ? Math.round((O / F) * 100) : 100;
           return [
             V.name,
