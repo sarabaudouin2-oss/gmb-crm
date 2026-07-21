@@ -25,21 +25,7 @@ const CATS = [
           action: "Choisir la catégorie principale la plus précise",
           static: !0,
         },
-        {
-          id: "category_secondary",
-          label: "Catégories secondaires (max 9)",
-          points: 4,
-          action: "Ajouter jusqu'à 9 catégories secondaires pertinentes",
-          static: !0,
-        },
-        {
-          id: "service_area",
-          label: "Zone de service définie",
-          points: 3,
-          action: "Configurer la zone de chalandise (jusqu'à 20 zones)",
-          static: !0,
-        },
-        {
+{
           id: "social_links",
           label: "Réseaux sociaux liés (FB, Insta...)",
           points: 4,
@@ -2124,12 +2110,12 @@ Votre projet ? Contactez [NOM] pour en discuter.`,
       icon: "🔄",
     },
     {
-      id: "signe",
-      label: "Signé",
-      color: "#059669",
-      bg: "#ffffff",
-      b: "#e8e0ff",
-      icon: "✅",
+      id: "en_attente",
+      label: "En attente",
+      color: "#C2410C",
+      bg: "#FFF7ED",
+      b: "#FDBA74",
+      icon: "⏳",
     },
     {
       id: "perdu",
@@ -2138,6 +2124,14 @@ Votre projet ? Contactez [NOM] pour en discuter.`,
       bg: "#fef2f2",
       b: "#fecaca",
       icon: "❌",
+    },
+    {
+      id: "signe",
+      label: "Signé",
+      color: "#059669",
+      bg: "#ffffff",
+      b: "#e8e0ff",
+      icon: "✅",
     },
   ];
 function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o }) {
@@ -2228,6 +2222,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
     W = (v, A) => {
       const q = s.map((K) => (K.id === v ? { ...K, notes: A } : K));
       H(q);
+      if ((p == null ? void 0 : p.id) === v) b({ ...p, notes: A });
     },
     L = (v, A) => {
       const q = s.map((K) =>
@@ -2428,7 +2423,6 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
                     children: [
                       { id: "pipeline", l: "Pipeline" },
                       { id: "list", l: "Liste" },
-                      { id: "search", l: "🔍 Chercher" },
                     ].map((v) =>
                       n.jsx(
                         "button",
@@ -2471,25 +2465,6 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
                       gap: 6,
                     },
                     children: "📥 Importer",
-                  }),
-                  n.jsx("button", {
-                    onClick: () => z(!I),
-                    style: {
-                      padding: "8px 16px",
-                      borderRadius: 9,
-                      border: "none",
-                      background:
-                        "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)",
-                      color: "white",
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                    },
-                    children: "+ Ajouter",
                   }),
                 ],
               }),
@@ -2910,16 +2885,18 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
               a === "pipeline" &&
                 n.jsx("div", {
                   style: {
-                    display: "grid",
-                    gridTemplateColumns: "repeat(5,1fr)",
+                    display: "flex",
                     gap: 12,
                     alignItems: "start",
+                    overflowX: "auto",
+                    minWidth: 0,
                   },
                   children: rn.map((v) => {
                     const A = Y.filter((q) => q.status === v.id);
                     return n.jsxs(
                       "div",
                       {
+                        style: { flexShrink: 0, width: 220 },
                         children: [
                           n.jsxs("div", {
                             style: {
@@ -3698,6 +3675,7 @@ Ne pas inventer de données. Se baser uniquement sur des informations plausibles
 
       p &&
         n.jsx(ProspectCard, {
+          key: p.id,
           prospect: p,
           onClose: () => b(null),
           onStatusChange: w,
@@ -3785,28 +3763,6 @@ function ProspectModal({
             }),
         ],
       }),
-      (e.weakPoints || [])
-        .slice(0, 2)
-        .map((l, a) =>
-          n.jsxs(
-            "div",
-            {
-              style: {
-                fontSize: 10.5,
-                color: "#dc2626",
-                display: "flex",
-                gap: 4,
-                alignItems: "flex-start",
-                marginBottom: 2,
-              },
-              children: [
-                n.jsx("span", { style: { flexShrink: 0 }, children: "⚠" }),
-                n.jsx("span", { style: { lineHeight: 1.3 }, children: l }),
-              ],
-            },
-            a,
-          ),
-        ),
       e.dateLastContact &&
         n.jsxs("div", {
           style: { fontSize: 10, color: "var(--ink4)", marginTop: 6 },
@@ -3834,6 +3790,9 @@ function ProspectCard({
     [I, z] = D.useState(!1),
     [g, h] = D.useState(null),
     f = rn.find((C) => C.id === e.status) || rn[0],
+    realScore = (e.scores && Object.keys(e.scores).length > 0)
+      ? calcScore({ ...(e.scores || {}), ...(e.manualOverrides || {}) })
+      : (e.score || 0),
     c = async () => {
       var B;
       z(!0);
@@ -4402,7 +4361,7 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                     }),
                   ],
                 }),
-                e.score > 0 &&
+                realScore > 0 &&
                   n.jsxs("div", {
                     style: {
                       display: "flex",
@@ -4421,26 +4380,26 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                           height: 48,
                           borderRadius: 12,
                           background:
-                            e.score >= 70
+                            realScore >= 70
                               ? "#F0FDF4"
-                              : e.score >= 50
+                              : realScore >= 50
                                 ? "#FFF7ED"
                                 : "#FEF2F2",
-                          border: `2px solid ${e.score >= 70 ? "#BBF7D0" : e.score >= 50 ? "#FED7AA" : "#FECACA"}`,
+                          border: `2px solid ${realScore >= 70 ? "#BBF7D0" : realScore >= 50 ? "#FED7AA" : "#FECACA"}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           fontSize: 18,
                           fontWeight: 900,
                           color:
-                            e.score >= 70
+                            realScore >= 70
                               ? "#059669"
-                              : e.score >= 50
+                              : realScore >= 50
                                 ? "#E85A30"
                                 : "#DC2626",
                           flexShrink: 0,
                         },
-                        children: e.score,
+                        children: realScore,
                       }),
                       n.jsxs("div", {
                         children: [
@@ -4459,7 +4418,7 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                               marginTop: 2,
                             },
                             children:
-                              e.score >= 70
+                              realScore >= 70
                                 ? "Bonne fiche"
                                 : "Potentiel d'amélioration important",
                           }),
@@ -7233,7 +7192,7 @@ function OnboardingPanel({ clientId, onSigLoaded, getContract, upd }) {
 }
 
 // ─── ONGLET SITE WEB ────────────────────────────────────────────────────────
-const SITE_API = "https://agence-betheone.fr/api/articles";
+const SITE_API = "https://app.agence-betheone.fr/api/data/sync";
 const SITE_PWD = "bto2026";
 const CAT_OPTIONS = [
   { value: "strategie", label: "Stratégie", color: "#6B40D8" },
@@ -7739,12 +7698,9 @@ Canaux : LinkedIn / Facebook / Instagram / GBP
 
   const cardStyle = { background:"white", borderRadius:14, padding:"20px 22px", border:"1px solid #E5E7EB", marginBottom:14 };
 
-  return n.jsxs("div", { style:{ padding:"28px 32px", background:"#F4F5FA", minHeight:"100%", overflowY:"auto" }, className:"fade", children:[
-    n.jsxs("div", { style:{ marginBottom:16, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }, children:[
-      n.jsxs("div", { children:[
-        n.jsx("div", { style:{ fontSize:12, color:"#9CA3AF", marginBottom:4 }, children:"Contenu marketing" }),
-        n.jsx("div", { style:{ fontSize:24, fontWeight:900, color:"#1E1B30", letterSpacing:"-.02em" }, children:"✍️ Contenu maître" }),
-      ]}),
+  return n.jsxs("div", { children:[
+    n.jsxs("div", { style:{ marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }, children:[
+      n.jsx("div", { style:{ fontSize:14, fontWeight:700, color:"#1E1B30" }, children:"✍️ Contenu marketing" }),
     ]}),
     n.jsx("div", { style:{ background:"white", borderRadius:10, padding:4, display:"inline-flex", gap:4, marginBottom:20, border:"1px solid #E5E7EB" }, children:
       [{ id:"generateur", label:"🚀 Générateur" }, { id:"calendrier", label:"📅 Calendrier" }].map(t =>
@@ -8033,7 +7989,7 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${SITE_API}/list?admin=1`, { headers:{ "x-admin-password": SITE_PWD } });
+      const r = await fetch(`${SITE_API}?action=list-articles&admin=1`, { headers:{ "x-admin-password": SITE_PWD } });
       const data = await r.json();
       const list = Array.isArray(data) ? data : [];
       const now = new Date();
@@ -8045,7 +8001,7 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
       });
       const hasChanges = updated.some((a, i) => a.status !== list[i].status);
       if (hasChanges) {
-        await fetch(`${SITE_API}/save`, {
+        await fetch(`${SITE_API}?action=save-articles`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-admin-password": SITE_PWD },
           body: JSON.stringify(updated),
@@ -8060,7 +8016,7 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
   const save = async (list) => {
     setSaving(true);
     try {
-      await fetch(`${SITE_API}/save`, {
+      await fetch(`${SITE_API}?action=save-articles`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-admin-password": SITE_PWD },
         body: JSON.stringify(list),
@@ -8266,14 +8222,10 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
     n.jsx("span", { style:{fontSize:13}, children: ok ? "✅" : "⬜" }), txt
   ]});
 
-  return n.jsxs("div", { style:{ width:"100%" }, children:[
-    /* HEADER */
-    n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }, children:[
-      n.jsxs("div", { children:[
-        n.jsx("div", { style:{ fontSize:20, fontWeight:800, color:"#1E1B30" }, children:"🌐 Site Web — Articles de blog" }),
-        n.jsx("div", { style:{ fontSize:12, color:"#6B7280", marginTop:2 }, children:"Les articles publiés ici apparaissent automatiquement sur agence-betheone.fr/blog" }),
-      ]}),
-      n.jsx("button", { onClick: load, style:{ fontSize:12, padding:"6px 14px", borderRadius:8, border:"1px solid #E5E7EB", background:"white", cursor:"pointer", color:"#6B7280" }, children:"🔄 Actualiser" }),
+  return n.jsxs("div", { children:[
+    n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }, children:[
+      n.jsx("div", { style:{ fontSize:14, fontWeight:700, color:"#1E1B30" }, children:"🌐 Articles de blog" }),
+      n.jsx("button", { onClick: load, className:"btn-ghost", style:{ fontSize:12 }, children:"🔄 Actualiser" }),
     ]}),
 
     msg && n.jsx("div", { style:{ background: msg.ok ? "#F0FDF4" : "#FEF2F2", border:`1px solid ${msg.ok ? "#BBF7D0" : "#FECACA"}`, borderRadius:8, padding:"10px 14px", fontSize:13, color: msg.ok ? "#166534" : "#991B1B", marginBottom:16 }, children: msg.text }),
@@ -8733,6 +8685,7 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
   const [suppLabel, setSuppLabel] = D.useState("");
   const [suppAmount, setSuppAmount] = D.useState("");
   const [parrainageRemise, setParrainageRemise] = D.useState("none");
+  const [filterStatut, setFilterStatut] = D.useState("tous");
   const [i, r] = D.useState(() => {
       try {
         return JSON.parse(localStorage.getItem("bto_paiements") || "{}");
@@ -8851,17 +8804,17 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
       setSuppAmount("");
       setSuppModal({ x, j, I });
     },
-    // Filtrer les clients actifs pour le mois sélectionné (selon date de signature)
-    // Setup = paiement unique → apparaît seulement le mois de signature
+    // Filtrer les clients actifs pour le mois sélectionné
+    // Contrat signé obligatoire. Facturation démarre à dateDebut (sinon dateSignature)
     q = e.filter((x) => {
       const ct = t(x.id);
-      const sigMonth = ct.dateSignature ? ct.dateSignature.slice(0, 7) : null;
+      if (!ct.dateSignature) return false; // pas de signature = pas de facturation
+      const startRef = ct.dateDebut || ct.dateSignature;
+      const startMonth = startRef.slice(0, 7);
       if (ct.typeContrat === "setup") {
-        // Setup : uniquement visible le mois où le contrat a été signé
-        return sigMonth ? sigMonth === l : true;
+        return startMonth === l;
       }
-      if (!sigMonth) return true;
-      return l >= sigMonth;
+      return l >= startMonth;
     }),
     p = q
       .filter((x) => i[`${x.id}_${l}`] === "paye")
@@ -8892,6 +8845,32 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
             },
             children: s.map((x) =>
               n.jsx("option", { value: x.value, children: x.label }, x.value),
+            ),
+          }),
+          n.jsxs("div", {
+            style: { display: "flex", gap: 6, flexWrap: "wrap" },
+            children: [
+              { id: "tous", l: "Tous", c: "#6B40D8" },
+              { id: "actif", l: "Actif", c: "#059669" },
+              { id: "pause", l: "En pause", c: "#E85A30" },
+              { id: "resilie", l: "Résilié", c: "#dc2626" },
+              { id: "prospect", l: "Prospect", c: "#6B7280" },
+            ].map(({ id, l: label, c: col }) =>
+              n.jsx("button", {
+                onClick: () => setFilterStatut(id),
+                style: {
+                  padding: "7px 13px",
+                  borderRadius: 8,
+                  border: `1.5px solid ${filterStatut === id ? col : "#E5E7EB"}`,
+                  background: filterStatut === id ? col + "18" : "white",
+                  color: filterStatut === id ? col : "#6B7280",
+                  fontFamily: "inherit",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                },
+                children: label,
+              }, id)
             ),
           }),
           [
@@ -8954,7 +8933,11 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
             ].map((x) => n.jsx("div", { children: x }, x)),
           }),
           q.length === 0 ? n.jsx("div", { style:{padding:"32px",textAlign:"center",color:"#9CA3AF",fontSize:13}, children:"Aucun client actif pour ce mois" }) :
-          q.map((x, j) => {
+          q.filter((x) => {
+            if (filterStatut === "tous") return true;
+            const ct = t(x.id);
+            return (ct.statut || "actif") === filterStatut;
+          }).map((x, j) => {
             const I = t(x.id),
               z = `${x.id}_${l}`,
               g = i[z] || "attente",
@@ -10336,6 +10319,7 @@ function App() {
   };
   if (!e) return n.jsx(LoginPage, { code: i, setCode: r, err: o, login: R });
   const N = b
+      .filter((T) => T.statutAudit === "client")
       .flatMap((T) => {
         const _ = T.tasksDone || {};
         return ALL_CRITERIA.filter((U) => (T.scores || {})[U.id] === !1 && !_[U.id])
@@ -11301,7 +11285,6 @@ function Sidebar({
       { id: "marche", label: "Marché local", icon: "◬" },
       { id: "prospection", label: "Prospection", icon: "◉" },
       { id: "calendrier", label: "Calendrier", icon: "◷" },
-      { id: "ereputation", label: "E-réputation", icon: "✪" },
       { id: "notifications", label: "Rappels", icon: "◆" },
     ],
     [j, I] = D.useState(() => {
@@ -11882,6 +11865,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
     [I, z] = D.useState(!1),
     [g, h] = D.useState(() => localStorage.getItem("bto_sara_notes") || ""),
     [f, c] = D.useState("tableau_bord"),
+    [mainTab, setMainTab] = D.useState("tableau_bord"),
     [u, m] = D.useState(() => {
       try {
         return JSON.parse(localStorage.getItem("bto_contracts") || "{}");
@@ -11918,6 +11902,12 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
       },
     M = (y, O) => {
       N({ ...u, [y]: { ...E(y), ...O } });
+      if (O.dateSignature) {
+        const cl = e.find(c => c.id === y);
+        if (cl && cl.statutAudit !== "client") {
+          ed(e.map(c => c.id === y ? { ...c, statutAudit: "client" } : c));
+        }
+      }
     },
     P = s.getHours(),
     T = P < 12 ? "Bonjour" : P < 18 ? "Bon après-midi" : "Bonsoir",
@@ -12169,14 +12159,91 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
           width: "fit-content",
         },
         children: [
-          n.jsx(G, { id: "tableau_bord", label: "📊 Tableau de bord" }),
-          n.jsx(G, { id: "contrats", label: "📋 Contrats" }),
-          n.jsx(G, { id: "facturation", label: "💶 Facturation" }),
-          n.jsx(G, { id: "site_web", label: "🌐 Site Web" }),
-          n.jsx(G, { id: "contenu_maitre", label: "✍️ Contenu" }),
-          n.jsx(G, { id: "parametres", label: "⚙️ Paramètres" }),
+          /* Niveau 1 — onglets principaux */
+          [
+            { id: "tableau_bord", label: "📊 Tableau de bord" },
+            { id: "admin", label: "📋 Admin" },
+            { id: "contenu", label: "✍️ Contenu" },
+            { id: "parametres", label: "⚙️ Paramètres" },
+          ].map(({ id, label }) =>
+            n.jsx("button", {
+              onClick: () => {
+                setMainTab(id);
+                if (id === "tableau_bord") c("tableau_bord");
+                if (id === "admin") c("contrats");
+                if (id === "contenu") c("site_web");
+                if (id === "parametres") c("parametres");
+              },
+              style: {
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "none",
+                fontFamily: "inherit",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                background: mainTab === id ? "white" : "transparent",
+                color: mainTab === id ? "#1E1B30" : "#6B7280",
+                boxShadow: mainTab === id ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+              },
+              children: label,
+            }, id)
+          ),
         ],
       }),
+
+      /* Sous-onglets Admin */
+      mainTab === "admin" && n.jsxs("div", {
+        style: { display: "flex", gap: 4, background: "#F3F4F6", borderRadius: 9, padding: 3, width: "fit-content", marginBottom: 20 },
+        children: [
+          { id: "contrats", label: "📋 Contrats" },
+          { id: "facturation", label: "💶 Facturation" },
+        ].map(({ id, label }) =>
+          n.jsx("button", {
+            onClick: () => c(id),
+            style: {
+              padding: "7px 16px",
+              borderRadius: 7,
+              border: "none",
+              fontFamily: "inherit",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: f === id ? "white" : "transparent",
+              color: f === id ? "#6B40D8" : "#6B7280",
+              boxShadow: f === id ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+            },
+            children: label,
+          }, id)
+        ),
+      }),
+
+      /* Sous-onglets Contenu */
+      mainTab === "contenu" && n.jsxs("div", {
+        style: { display: "flex", gap: 4, background: "#F3F4F6", borderRadius: 9, padding: 3, width: "fit-content", marginBottom: 20 },
+        children: [
+          { id: "site_web", label: "🌐 Site Web" },
+          { id: "contenu_maitre", label: "✍️ Contenu" },
+        ].map(({ id, label }) =>
+          n.jsx("button", {
+            onClick: () => c(id),
+            style: {
+              padding: "7px 16px",
+              borderRadius: 7,
+              border: "none",
+              fontFamily: "inherit",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: f === id ? "white" : "transparent",
+              color: f === id ? "#C03080" : "#6B7280",
+              boxShadow: f === id ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+            },
+            children: label,
+          }, id)
+        ),
+      }),
+
       f === "tableau_bord" &&
         n.jsxs("div", {
           children: [
@@ -13601,6 +13668,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
   const f = new Date().getHours(),
     c = f < 12 ? "Bonjour" : f < 18 ? "Bon après-midi" : "Bonsoir",
     u = e.filter((B) => {
+      if (B.statutAudit !== "client") return false;
       var k;
       try {
         return (((k = B.avisData) == null ? void 0 : k.recentAvis) || []).some(
@@ -13611,6 +13679,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
       }
     }),
     m = e.filter((B) => {
+      if (B.statutAudit !== "client") return false;
       try {
         // calPosts est un objet {dateKey:[posts]}, pas un tableau
         const calObj = B.calPosts || {};
@@ -13627,7 +13696,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
         return !1;
       }
     }),
-    C = e.filter((B, k) => (s[k] || 0) < 55);
+    C = e.filter((B, k) => B.statutAudit === "client" && (s[k] || 0) < 55);
   return n.jsxs("div", {
     style: {
       padding: "28px 32px",
@@ -13679,8 +13748,11 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
           const contracts = JSON.parse(localStorage.getItem("bto_contracts") || "{}");
           const nowKey = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
           const abonnes = e.filter(B => {
-            const tc = (contracts[B.id] || {}).typeContrat;
-            return tc === "leader" || tc === "leader_annuel";
+            const c = contracts[B.id] || {};
+            if (!c.dateSignature) return false;
+            if (c.typeContrat !== "leader" && c.typeContrat !== "leader_annuel") return false;
+            const startRef = c.dateDebut || c.dateSignature;
+            return nowKey >= startRef.slice(0, 7);
           });
           const retard = abonnes.filter(B => paiements[`${B.id}_${nowKey}`] !== "paye");
           if (retard.length === 0) return null;
@@ -13703,6 +13775,51 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
           });
         } catch { return null; }
       })(),
+      /* === PROCHAINS RDV DU MOIS === */
+      (() => {
+        try {
+          const now = new Date();
+          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+          const monthEnd = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+          const todayStr = now.toISOString().slice(0,10);
+          const rdvs = [];
+          e.forEach(cl => {
+            try {
+              const list = JSON.parse(localStorage.getItem(`rdv_${cl.id}`) || "[]");
+              list.forEach(r => {
+                if (r.date >= todayStr && r.date <= monthEnd) {
+                  rdvs.push({ ...r, clientName: cl.name, clientId: cl.id });
+                }
+              });
+            } catch {}
+          });
+          rdvs.sort((a,b) => a.date.localeCompare(b.date));
+          if (rdvs.length === 0) return null;
+          return n.jsxs("div", {
+            style:{ background:"white", border:"1px solid #E5E7EB", borderTop:"3px solid #6B40D8", borderRadius:14, padding:"16px 20px", marginBottom:14 },
+            children:[
+              n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }, children:[
+                n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8 }, children:[
+                  n.jsx("span", { style:{ fontSize:18 }, children:"📅" }),
+                  n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:`${rdvs.length} RDV à venir ce mois` }),
+                ]}),
+              ]}),
+              n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:
+                rdvs.map((r,idx) => n.jsxs("div", {
+                  key:idx,
+                  style:{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:"#F5F3FF", borderRadius:9, borderLeft:"3px solid #6B40D8" },
+                  children:[
+                    n.jsx("div", { style:{ fontSize:12, fontWeight:700, color:"#6B40D8", flexShrink:0, minWidth:90 }, children: new Date(r.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}) }),
+                    r.type && n.jsx("span", { style:{ background:"#6B40D8", color:"white", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700, flexShrink:0 }, children:r.type }),
+                    n.jsx("div", { style:{ fontSize:13, color:"#1E1B30", fontWeight:600, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children:r.clientName }),
+                    r.notes && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:200 }, children:r.notes }),
+                  ],
+                }))
+              }),
+            ],
+          });
+        } catch { return null; }
+      })(),
       n.jsxs("div", {
         style: { marginBottom: 14 },
         children: [
@@ -13713,6 +13830,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
             const R = 864e5,
               N = e
                 .filter((P) => {
+                  if (P.statutAudit !== "client") return false;
                   var _, U, V;
                   JSON.parse(localStorage.getItem("bto_contracts") || "{}")[
                     P.id
@@ -13729,6 +13847,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
                 })
                 .slice(0, 5),
               E = e.filter((P) => {
+                if (P.statutAudit !== "client") return false;
                 var U, V;
                 if (!((U = P.history) != null && U.length)) return !1;
                 const T = o(
@@ -13740,6 +13859,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
                 );
               }),
               M = e.filter((P) => {
+                if (P.statutAudit !== "client") return false;
                 const T = o({
                     ...(P.scores || {}),
                     ...(P.manualOverrides || {}),
@@ -14169,6 +14289,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
             const tomorrowKey = tomorrow.toISOString().slice(0,10);
             const tmPosts = [];
             e.forEach(cl => {
+              if (cl.statutAudit !== "client") return;
               // calPosts
               const calObj = cl.calPosts || {};
               (calObj[tomorrowKey] || []).forEach(p => { if (!p.done) tmPosts.push({ client: cl, title: p.title || "Post éditorial", type: p.type, src: "cal" }); });
@@ -14213,6 +14334,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
               padding: "20px 22px",
               border: "1px solid #E5E7EB",
               borderTop: "3px solid #6B40D8",
+              marginTop: 24,
             },
             children: [
               n.jsxs("div", { style:{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }, children:[
@@ -14386,6 +14508,34 @@ const ng = [
     "🌿",
     "🍽️",
     "💼",
+    "🦷",
+    "👁️",
+    "🐾",
+    "💈",
+    "🍞",
+    "☕",
+    "🍷",
+    "🌺",
+    "🧘",
+    "🎨",
+    "📚",
+    "💊",
+    "🧁",
+    "🐶",
+    "⚡",
+    "🪟",
+    "🏗️",
+    "🔑",
+    "🧹",
+    "📱",
+    "✈️",
+    "🎵",
+    "🎭",
+    "🚿",
+    "🏊",
+    "🎮",
+    "🚌",
+    "🏖️",
   ],
   ig = [
     "#6B40D8",
@@ -14719,82 +14869,46 @@ function AuditForm({
               }),
             ],
           }),
-          n.jsxs("div", {
-            style: { display: "flex", gap: 8, alignItems: "center" },
+          n.jsx("div", {
+            style: {
+              display: "flex",
+              background: "#F4F5FA",
+              borderRadius: 10,
+              padding: 3,
+              border: "1px solid #E5E7EB",
+            },
             children: [
-              (a || g) &&
-                n.jsxs("div", {
+              { id: "client", label: "👤 Client" },
+              { id: "prospect", label: "🎯 Prospect" },
+            ].map((w) =>
+              n.jsx(
+                "button",
+                {
+                  onClick: () => P(w.id),
                   style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "10px 16px",
-                    borderRadius: 12,
-                    background: (f || "#6B40D8") + "12",
-                    border: `1.5px solid ${f || "#6B40D8"}22`,
+                    padding: "7px 16px",
+                    borderRadius: 8,
+                    border: "none",
+                    fontFamily: "inherit",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all .15s",
+                    background: M === w.id ? "white" : "transparent",
+                    color:
+                      M === w.id
+                        ? M === "prospect"
+                          ? "#E85A30"
+                          : "#6B40D8"
+                        : "#9CA3AF",
+                    boxShadow:
+                      M === w.id ? "0 1px 4px rgba(0,0,0,.08)" : "none",
                   },
-                  children: [
-                    n.jsx("span", { style: { fontSize: 20 }, children: g }),
-                    n.jsxs("div", {
-                      children: [
-                        n.jsx("div", {
-                          style: {
-                            fontWeight: 700,
-                            fontSize: 13,
-                            color: f || "#6B40D8",
-                          },
-                          children: a || "Client",
-                        }),
-                        n.jsxs("div", {
-                          style: { fontSize: 11, color: "#9CA3AF" },
-                          children: [x || "", " ", p || ""],
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-              n.jsx("div", {
-                style: {
-                  display: "flex",
-                  background: "#F4F5FA",
-                  borderRadius: 10,
-                  padding: 3,
-                  border: "1px solid #E5E7EB",
+                  children: w.label,
                 },
-                children: [
-                  { id: "client", label: "👤 Client" },
-                  { id: "prospect", label: "🎯 Prospect" },
-                ].map((w) =>
-                  n.jsx(
-                    "button",
-                    {
-                      onClick: () => P(w.id),
-                      style: {
-                        padding: "7px 16px",
-                        borderRadius: 8,
-                        border: "none",
-                        fontFamily: "inherit",
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        transition: "all .15s",
-                        background: M === w.id ? "white" : "transparent",
-                        color:
-                          M === w.id
-                            ? M === "prospect"
-                              ? "#E85A30"
-                              : "#6B40D8"
-                            : "#9CA3AF",
-                        boxShadow:
-                          M === w.id ? "0 1px 4px rgba(0,0,0,.08)" : "none",
-                      },
-                      children: w.label,
-                    },
-                    w.id,
-                  ),
-                ),
-              }),
-            ],
+                w.id,
+              ),
+            ),
           }),
         ],
       }),
@@ -14886,10 +15000,6 @@ function AuditForm({
                             onChange: (w) => d(w.target.value),
                             placeholder: "Ex : Aasgard Vannes (nom tel qu'il apparaît sur Google Maps)",
                             style: { margin: 0 },
-                          }),
-                          n.jsx("div", {
-                            style: { fontSize: 10.5, color: "#d97706", marginTop: 4, lineHeight: 1.4 },
-                            children: "⚠️ Copier le nom EXACT de Google Maps — avec la ville si elle y figure (ex: \"Aasgard Vannes\" pas \"Aasgard\")",
                           }),
                         ],
                       }),
@@ -15045,7 +15155,7 @@ function AuditForm({
                               display: "flex",
                               flexWrap: "wrap",
                               gap: 4,
-                              maxWidth: 220,
+                              flex: 1,
                             },
                             children: ng.map((w) =>
                               n.jsx(
@@ -18451,7 +18561,7 @@ function ClientDetail({
       { id: "avis", label: "Avis" },
       { id: "visibilite", label: "Visibilité" },
       { id: "roadmap", label: "Roadmap" },
-      { id: "temps", label: "Temps" },
+      { id: "commercial", label: "Commercial" },
       { id: "suivi", label: "Suivi mensuel" },
     ];
   return n.jsxs("div", {
@@ -19437,17 +19547,6 @@ function ClientDetail({
                   }),
               ],
             }),
-          p === "suivi" &&
-            n.jsx("div", { style:{ margin:"-24px -30px", height:"calc(100% + 48px)" }, children:
-            n.jsx(ErrorBoundary, {
-              children: n.jsx(MonthlyTab, {
-                client: e,
-                clients: t,
-                upd: i,
-                calcScore: s,
-              }),
-            }),
-            }),
           p === "tasks" &&
             n.jsxs("div", {
               children: [
@@ -19905,7 +20004,8 @@ function ClientDetail({
               apiKey: a,
               score: _,
             }),
-          p === "temps" && n.jsx(ProspectDetailModal, { client: e, clients: t, upd: i }),
+          p === "commercial" && n.jsx(CommercialTab, { key: e.id, client: e, clients: t, upd: i, calcScore: s }),
+          p === "suivi" && n.jsx("div", { style:{ margin:"-24px -30px", height:"calc(100% + 48px)" }, children: n.jsx(ErrorBoundary, { children: n.jsx(MonthlyTab, { client: e, clients: t, upd: i, calcScore: s }) }) }),
           p === "roadmap" &&
             n.jsx(RoadmapTab, { roadmap: w, client: e, clients: t, upd: i }),
         ],
@@ -20295,33 +20395,11 @@ Rédige la réponse.`,
           marginBottom: 20,
         },
         children: [
-          n.jsx("div", {
-            style: {
-              width: 4,
-              height: 28,
-              borderRadius: 2,
-              background: "linear-gradient(135deg,#E85A30,#E85A30)",
-              marginRight: 14,
-              flexShrink: 0,
-            },
-          }),
-          n.jsxs("div", {
-            children: [
-              n.jsx("div", {
-                style: {
-                  fontSize: 17,
-                  fontWeight: 800,
-                  color: "#1E1B30",
-                  letterSpacing: "-.01em",
-                },
-                children: "⭐ Avis & Réputation",
-              }),
-              n.jsx("div", {
-                style: { fontSize: 12, color: "#6B7280", marginTop: 2 },
-                children: "Gestion et réponses aux avis Google",
-              }),
-            ],
-          }),
+          n.jsx("div", { style: { width:4, height:28, borderRadius:2, background:"linear-gradient(135deg,#6B40D8,#C03080)", marginRight:14, flexShrink:0 } }),
+          n.jsxs("div", { children: [
+            n.jsx("div", { style: { fontSize:16, fontWeight:800, color:"#1E1B30" }, children: "Avis & Réputation" }),
+            n.jsx("div", { style: { fontSize:12, color:"#6B7280", marginTop:2 }, children: "Gestion et réponses aux avis Google" }),
+          ]}),
         ],
       }),
       n.jsx("div", {
@@ -20917,6 +20995,351 @@ Mon établissement :
     ],
   });
 }
+function CommercialTab({ client: e, clients: t, upd: i }) {
+  /* ── Notes state ── */
+  const [draft, setDraft] = D.useState("");
+  const noteLines = (e.notes || "").split(/\n\n+/).filter(Boolean).reverse();
+  const historyNotes = (e.history || []).filter(h => h.note && h.type === "manual").slice().reverse();
+  const addNote = () => {
+    if (!draft.trim()) return;
+    const dateStr = new Date().toLocaleDateString("fr-FR");
+    const newNotes = (e.notes ? e.notes + "\n\n" : "") + `[${dateStr}] ${draft.trim()}`;
+    i(t.map(c => c.id === e.id ? { ...c, notes: newNotes } : c));
+    setDraft("");
+  };
+  const deleteNote = (idxReversed) => {
+    const all = (e.notes || "").split(/\n\n+/).filter(Boolean);
+    all.splice(all.length - 1 - idxReversed, 1);
+    i(t.map(c => c.id === e.id ? { ...c, notes: all.join("\n\n") } : c));
+  };
+  const deleteHistoryNote = (idxReversed) => {
+    const hist = (e.history || []).filter(h => h.note && h.type === "manual").slice().reverse();
+    const toDelete = hist[idxReversed];
+    if (!toDelete) return;
+    const newHistory = (e.history || []).filter(h => h !== toDelete);
+    i(t.map(c => c.id === e.id ? { ...c, history: newHistory } : c));
+  };
+
+  /* ── RDV state ── */
+  const rdvKey = `rdv_${e.id}`;
+  const [rdvList, setRdvList] = D.useState(() => { try { return JSON.parse(localStorage.getItem(rdvKey) || "[]"); } catch { return []; } });
+  const [rdvForm, setRdvForm] = D.useState({ date: "", type: "", notes: "" });
+  const [showRdvForm, setShowRdvForm] = D.useState(false);
+  const saveRdv = (list) => { setRdvList(list); localStorage.setItem(rdvKey, JSON.stringify(list)); };
+  const addRdv = () => { if (!rdvForm.date) return; saveRdv([...rdvList, { ...rdvForm, id: Date.now() }]); setRdvForm({ date:"", type:"", notes:"" }); setShowRdvForm(false); };
+  const delRdv = (id) => saveRdv(rdvList.filter(r => r.id !== id));
+  const today = new Date().toISOString().slice(0,10);
+  const upcomingRdv = rdvList.filter(r => r.date >= today).sort((a,b) => a.date.localeCompare(b.date));
+  const pastRdv = rdvList.filter(r => r.date < today).sort((a,b) => b.date.localeCompare(a.date));
+  const rdvTypes = ["R0","R1","R2/R3","En attente"];
+
+  /* ── Temps state ── */
+  const tempsKey = `bto_temps_${e.id}`;
+  const [sessions, setSessions] = D.useState(() => { try { return JSON.parse(localStorage.getItem(tempsKey) || "[]"); } catch { return []; } });
+  const [tempsDesc, setTempsDesc] = D.useState("");
+  const [tempsMins, setTempsMins] = D.useState("");
+  const [timerInt, setTimerInt] = D.useState(null);
+  const [timerSecs, setTimerSecs] = D.useState(0);
+  const saveSessions = (list) => { setSessions(list); localStorage.setItem(tempsKey, JSON.stringify(list)); };
+  const addSession = () => { if (!tempsMins || !tempsDesc.trim()) return; saveSessions([...sessions, { id:Date.now(), date:new Date().toISOString(), desc:tempsDesc.trim(), mins:parseInt(tempsMins) }]); setTempsDesc(""); setTempsMins(""); };
+  const startTimer = () => { const t0 = Date.now(); setTimerSecs(0); const iv = setInterval(() => setTimerSecs(Math.floor((Date.now()-t0)/1e3)), 1e3); setTimerInt(iv); };
+  const stopTimer = () => { clearInterval(timerInt); setTimerInt(null); const m = Math.ceil(timerSecs/60); if (m>0 && tempsDesc.trim()) { saveSessions([...sessions, { id:Date.now(), date:new Date().toISOString(), desc:tempsDesc.trim(), mins:m, fromTimer:true }]); setTempsDesc(""); setTimerSecs(0); } };
+  const now = new Date(); const thisMonth = sessions.filter(s => { const d=new Date(s.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }).reduce((a,s)=>a+s.mins,0);
+  const totalMins = sessions.reduce((a,s)=>a+s.mins,0);
+  const ct = JSON.parse(localStorage.getItem("bto_contracts")||"{}")[e.id]||{};
+  const taux = thisMonth>0 ? Math.round(parseFloat(ct.montant||(ct.typeContrat==="leader_annuel"?119:139))/(thisMonth/60)) : 0;
+  const fmt = m => m>=60?`${Math.floor(m/60)}h${m%60?""+m%60:""}`:m>0?`${m}min`:"—";
+
+  /* ── Statut audit ── */
+  const statut = e.statutAudit || "prospect";
+  const setStatut = (s) => i(t.map(c => c.id === e.id ? { ...c, statutAudit: s } : c));
+  const statutConfig = {
+    prospect: { label:"Prospect", color:"#E85A30", bg:"#FFF7ED", border:"#FED7AA" },
+    client:   { label:"Client",   color:"#059669", bg:"#ECFDF5", border:"#A7F3D0" },
+  };
+  const sc = statutConfig[statut] || statutConfig.prospect;
+
+  const inp = { padding:"9px 12px", borderRadius:8, border:"1px solid #E5E7EB", fontSize:13, fontFamily:"inherit", width:"100%", boxSizing:"border-box", outline:"none" };
+  const cardTitle = (label) => n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"#1E1B30", marginBottom:14 }, children: label });
+  const lbl = { display:"block", fontSize:11, fontWeight:700, color:"#6B7280", marginBottom:4, textTransform:"uppercase", letterSpacing:".5px" };
+
+  return n.jsxs("div", { className:"fade", children:[
+    /* Statut card */
+    n.jsxs("div", { className:"card", style:{ borderTop:`3px solid ${sc.color}`, marginBottom:12, display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }, children:[
+      n.jsxs("div", { children:[
+        n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:".5px", marginBottom:6 }, children:"Statut de l'audit" }),
+        n.jsx("span", { style:{ display:"inline-block", background:sc.bg, border:`1px solid ${sc.border}`, color:sc.color, borderRadius:20, padding:"4px 14px", fontSize:13, fontWeight:700 }, children: sc.label }),
+      ]}),
+      n.jsxs("div", { style:{ display:"flex", gap:8 }, children:[
+        ["prospect","client"].map(s => n.jsx("button", {
+          key:s,
+          onClick:()=>setStatut(s),
+          style:{ padding:"7px 18px", borderRadius:8, border:`1.5px solid ${statut===s ? statutConfig[s].color : "#E5E7EB"}`, background: statut===s ? statutConfig[s].bg : "white", color: statut===s ? statutConfig[s].color : "#6B7280", fontWeight: statut===s ? 700 : 500, fontSize:13, cursor:"pointer", fontFamily:"inherit", transition:"all .15s" },
+          children: statutConfig[s].label,
+        })),
+      ]}),
+    ]}),
+
+    /* Row 1 : Notes + RDV */
+    n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }, children:[
+
+      /* NOTES */
+      n.jsxs("div", { className:"card", style:{ borderTop:"3px solid #6B40D8" }, children:[
+        cardTitle("📝 Notes de suivi"),
+        n.jsx("textarea", { value:draft, onChange:ev=>setDraft(ev.target.value), placeholder:"Compte-rendu d'appel, prochaine action…", className:"ta", rows:4, style:{ marginBottom:8 } }),
+        n.jsx("button", { onClick:addNote, disabled:!draft.trim(), className:"btn", style:{ width:"100%", justifyContent:"center", opacity:draft.trim()?1:.45 }, children:"Enregistrer la note" }),
+        noteLines.length > 0 && n.jsxs("div", { style:{ marginTop:16 }, children:[
+          n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10 }, children:"Historique" }),
+          noteLines.map((note,idx) => {
+            const m = note.match(/^\[([^\]]+)\]\s*([\s\S]*)/);
+            return n.jsxs("div", { style:{ background:"#F8F8FB", borderRadius:10, border:"1px solid #E5E7EB", borderLeft:"3px solid #6B40D8", padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:6 }, children:[
+              n.jsxs("div", { style:{flex:1}, children:[
+                m && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", fontWeight:600, marginBottom:4 }, children:m[1] }),
+                n.jsx("div", { style:{ fontSize:13, color:"#1E1B30", lineHeight:1.55, whiteSpace:"pre-wrap" }, children: m?m[2]:note }),
+              ]}),
+              n.jsx("button", { onClick:()=>deleteNote(idx), style:{ background:"none", border:"none", color:"#D1D5DB", cursor:"pointer", fontSize:13, padding:2, flexShrink:0 }, children:"✕" }),
+            ]}, idx);
+          }),
+        ]}),
+        historyNotes.length > 0 && n.jsxs("div", { style:{ marginTop:16 }, children:[
+          n.jsx("div", { style:{ fontSize:11, fontWeight:700, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:".5px", marginBottom:10 }, children:"Modifications fiche" }),
+          historyNotes.map((h,idx) => n.jsxs("div", { style:{ background:"#FDF2F8", borderRadius:10, border:"1px solid #FBCFE8", borderLeft:"3px solid #C03080", padding:"10px 14px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:6 }, children:[
+            n.jsxs("div", { style:{flex:1}, children:[
+              n.jsxs("div", { style:{ fontSize:11, color:"#9CA3AF", fontWeight:600, marginBottom:4 }, children:[new Date(h.date).toLocaleDateString("fr-FR"), h.score!==undefined&&n.jsxs("span",{style:{marginLeft:8,color:"#6B40D8"},children:["Score : ",h.score,"/100"]})] }),
+              n.jsx("div", { style:{ fontSize:13, color:"#1E1B30", lineHeight:1.55, whiteSpace:"pre-wrap" }, children:h.note }),
+            ]}),
+            n.jsx("button", { onClick:()=>deleteHistoryNote(idx), style:{ background:"none", border:"none", color:"#D1D5DB", cursor:"pointer", fontSize:13, padding:2, flexShrink:0 }, children:"✕" }),
+          ]}, idx)),
+        ]}),
+      ]}),
+
+      /* RDV */
+      n.jsxs("div", { className:"card", style:{ borderTop:"3px solid #C03080" }, children:[
+        n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }, children:[
+          cardTitle("📅 Prochains RDV"),
+          n.jsx("button", { onClick:()=>setShowRdvForm(!showRdvForm), style:{ fontSize:12, padding:"5px 12px", borderRadius:8, border:"none", background:"linear-gradient(135deg,#3B5BDB,#6B40D8)", color:"white", cursor:"pointer", fontFamily:"inherit", fontWeight:600 }, children:"+ Ajouter" }),
+        ]}),
+        showRdvForm && n.jsxs("div", { style:{ background:"#F8F8FB", border:"1px solid #E5E7EB", borderRadius:10, padding:14, marginBottom:14 }, children:[
+          n.jsxs("div", { style:{ marginBottom:10 }, children:[ n.jsx("label",{style:lbl,children:"Date"}), n.jsx("input",{type:"date",value:rdvForm.date,onChange:ev=>setRdvForm({...rdvForm,date:ev.target.value}),style:inp}) ] }),
+          n.jsxs("div", { style:{ marginBottom:10 }, children:[ n.jsx("label",{style:lbl,children:"Type"}), n.jsx("select",{value:rdvForm.type,onChange:ev=>setRdvForm({...rdvForm,type:ev.target.value}),style:{...inp,background:"white"},children:[n.jsx("option",{value:"",children:"Choisir..."}), ...rdvTypes.map(o=>n.jsx("option",{value:o,children:o},o))]}) ] }),
+          n.jsxs("div", { style:{ marginBottom:12 }, children:[ n.jsx("label",{style:lbl,children:"Notes"}), n.jsx("textarea",{value:rdvForm.notes,onChange:ev=>setRdvForm({...rdvForm,notes:ev.target.value}),placeholder:"Objectif, points clés…",style:{...inp,minHeight:56,resize:"vertical"}}) ] }),
+          n.jsxs("div",{style:{display:"flex",gap:8},children:[
+            n.jsx("button",{onClick:addRdv,style:{padding:"7px 16px",borderRadius:8,border:"none",background:"#6B40D8",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Enregistrer"}),
+            n.jsx("button",{onClick:()=>setShowRdvForm(false),style:{padding:"7px 16px",borderRadius:8,border:"1px solid #E5E7EB",background:"white",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
+          ]}),
+        ]}),
+        upcomingRdv.length===0&&!showRdvForm && n.jsx("div",{style:{fontSize:13,color:"#9CA3AF",textAlign:"center",padding:"24px 0",borderRadius:10,background:"#F8F8FB"},children:"Aucun RDV planifié"}),
+        upcomingRdv.map(r => n.jsxs("div",{key:r.id,style:{background:"#F5F3FF",border:"1px solid #DDD6FE",borderLeft:"3px solid #6B40D8",borderRadius:10,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-start"},children:[
+          n.jsxs("div",{children:[
+            n.jsx("div",{style:{fontSize:13,fontWeight:700,color:"#1E1B30"},children:new Date(r.date).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}),
+            r.type&&n.jsx("span",{style:{display:"inline-block",marginTop:4,background:"#6B40D8",color:"white",borderRadius:20,padding:"2px 10px",fontSize:11,fontWeight:700},children:r.type}),
+            r.notes&&n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginTop:6},children:r.notes}),
+          ]}),
+          n.jsx("button",{onClick:()=>delRdv(r.id),style:{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:14,padding:2},children:"✕"}),
+        ]})),
+        pastRdv.length>0 && n.jsxs("div",{style:{marginTop:14},children:[
+          n.jsx("div",{style:{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8},children:"RDV passés"}),
+          pastRdv.slice(0,3).map(r => n.jsxs("div",{key:r.id,style:{background:"#F9FAFB",border:"1px solid #F3F4F6",borderLeft:"3px solid #E5E7EB",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",opacity:.7},children:[
+            n.jsxs("div",{children:[
+              n.jsx("div",{style:{fontSize:12,fontWeight:600,color:"#6B7280"},children:new Date(r.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}),
+              r.type&&n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:r.type}),
+            ]}),
+            n.jsx("button",{onClick:()=>delRdv(r.id),style:{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:13,padding:2},children:"✕"}),
+          ]})),
+        ]}),
+      ]}),
+    ]}),
+
+    /* Row 2 : Temps */
+    n.jsxs("div", { className:"card", style:{ borderTop:"3px solid #059669" }, children:[
+      cardTitle("⏱ Temps passé"),
+      /* KPIs */
+      n.jsx("div", { style:{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:16 }, children:
+        [{ l:"Ce mois", v:fmt(thisMonth), c:"#6B40D8" },{ l:"Total cumulé", v:fmt(totalMins), c:"#C03080" },{ l:"Taux horaire", v:taux?`${taux}€/h`:"—", c:taux>=50?"#059669":taux>0?"#E85A30":"#9CA3AF" },{ l:"Contrat/mois", v:ct.montant?`${ct.montant} €`:"—", c:"#059669" }].map(({l,v,c})=>
+          n.jsxs("div",{key:l,style:{background:"#F8F8FB",borderRadius:10,padding:"12px 14px",border:"1px solid #E5E7EB",borderTop:`3px solid ${c}`,textAlign:"center"},children:[
+            n.jsx("div",{style:{fontSize:22,fontWeight:900,color:c,lineHeight:1.1,marginBottom:3},children:v}),
+            n.jsx("div",{style:{fontSize:11,color:"#6B7280"},children:l}),
+          ]})
+        )
+      }),
+      /* Ajouter session */
+      n.jsxs("div",{style:{display:"flex",gap:8,alignItems:"center",marginBottom:4},children:[
+        n.jsx("input",{value:tempsDesc,onChange:ev=>setTempsDesc(ev.target.value),placeholder:"Description (audit, appel, publication…)",className:"inp",style:{flex:1,margin:0,fontSize:13}}),
+        n.jsx("input",{type:"number",value:tempsMins,onChange:ev=>setTempsMins(ev.target.value),placeholder:"min",className:"inp",style:{width:70,margin:0,fontSize:13},onKeyDown:ev=>ev.key==="Enter"&&addSession()}),
+        n.jsx("button",{onClick:addSession,disabled:!tempsDesc.trim()||!tempsMins,style:{padding:"9px 16px",borderRadius:8,border:"none",background:"#6B40D8",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",flexShrink:0,opacity:tempsDesc.trim()&&tempsMins?1:.45},children:"+ Ajouter"}),
+        !timerInt ? n.jsx("button",{onClick:startTimer,style:{padding:"9px 14px",borderRadius:8,border:"1px solid #E5E7EB",background:"white",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",flexShrink:0,color:"#374151"},children:"▶ Chrono"})
+          : n.jsx("button",{onClick:stopTimer,style:{padding:"9px 14px",borderRadius:8,border:"none",background:"#dc2626",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",flexShrink:0},children:`⏹ ${Math.floor(timerSecs/60)}:${String(timerSecs%60).padStart(2,"0")}`}),
+      ]}),
+      /* Sessions */
+      sessions.length>0 && n.jsxs("div",{style:{marginTop:14},children:[
+        n.jsx("div",{style:{fontSize:11,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".5px",marginBottom:8},children:"Sessions enregistrées"}),
+        sessions.slice().reverse().slice(0,8).map(s => n.jsxs("div",{key:s.id,style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",borderRadius:9,marginBottom:4,background:"#F8F8FB",border:"1px solid #F3F4F6"},children:[
+          n.jsx("div",{style:{fontSize:13,color:"#1E1B30",flex:1},children:s.desc}),
+          n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10},children:[
+            n.jsx("div",{style:{fontSize:12,fontWeight:700,color:"#6B40D8"},children:fmt(s.mins)}),
+            n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:new Date(s.date).toLocaleDateString("fr-FR",{day:"numeric",month:"short"})}),
+            n.jsx("button",{onClick:()=>saveSessions(sessions.filter(ss=>ss.id!==s.id)),style:{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:13,padding:2},children:"✕"}),
+          ]}),
+        ]})),
+      ]}),
+    ]}),
+  ]});
+}
+function RdvTab({ client: e, clients: t, upd: i }) {
+  const storageKey = `rdv_${e.id}`;
+  const [rdvList, setRdvList] = D.useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch { return []; }
+  });
+  const [form, setForm] = D.useState({ date: "", heure: "", type: "", notes: "" });
+  const [showForm, setShowForm] = D.useState(false);
+  const save = (list) => {
+    setRdvList(list);
+    localStorage.setItem(storageKey, JSON.stringify(list));
+  };
+  const addRdv = () => {
+    if (!form.date) return;
+    save([...rdvList, { ...form, id: Date.now() }]);
+    setForm({ date: "", heure: "", type: "", notes: "" });
+    setShowForm(false);
+  };
+  const delRdv = (id) => save(rdvList.filter(r => r.id !== id));
+  const upcoming = rdvList.filter(r => r.date >= new Date().toISOString().slice(0,10)).sort((a,b) => a.date.localeCompare(b.date));
+  const past = rdvList.filter(r => r.date < new Date().toISOString().slice(0,10)).sort((a,b) => b.date.localeCompare(a.date));
+  const inputStyle = { padding:"8px 12px", borderRadius:8, border:"1px solid #E5E7EB", fontSize:13, fontFamily:"inherit", width:"100%", boxSizing:"border-box" };
+  const typeOptions = ["Appel découverte", "Présentation offre", "Signature contrat", "Bilan mensuel", "Relance", "Autre"];
+  return n.jsxs("div", { children: [
+    n.jsxs("div", { style:{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }, children:[
+      n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children: `${upcoming.length} RDV à venir` }),
+      n.jsx("button", { onClick:()=>setShowForm(!showForm), style:{ padding:"8px 16px", borderRadius:9, border:"none", background:"linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)", color:"white", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }, children:"+ Ajouter un RDV" }),
+    ]}),
+    showForm && n.jsxs("div", { style:{ background:"white", border:"1px solid #E5E7EB", borderRadius:12, padding:20, marginBottom:16 }, children:[
+      n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:12 }, children:"Nouveau RDV" }),
+      n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }, children:[
+        n.jsxs("div", { children:[n.jsx("div",{style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4},children:"Date"}), n.jsx("input",{type:"date",value:form.date,onChange:ev=>setForm({...form,date:ev.target.value}),style:inputStyle})]}),
+        n.jsxs("div", { children:[n.jsx("div",{style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4},children:"Heure"}), n.jsx("input",{type:"time",value:form.heure,onChange:ev=>setForm({...form,heure:ev.target.value}),style:inputStyle})]}),
+      ]}),
+      n.jsxs("div", { style:{ marginBottom:10 }, children:[
+        n.jsx("div",{style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4},children:"Type de RDV"}),
+        n.jsx("select",{value:form.type,onChange:ev=>setForm({...form,type:ev.target.value}),style:inputStyle,children:
+          [n.jsx("option",{value:"",children:"Choisir..."}), ...typeOptions.map(o=>n.jsx("option",{value:o,children:o},o))]
+        }),
+      ]}),
+      n.jsxs("div", { style:{ marginBottom:14 }, children:[
+        n.jsx("div",{style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4},children:"Notes"}),
+        n.jsx("textarea",{value:form.notes,onChange:ev=>setForm({...form,notes:ev.target.value}),placeholder:"Objectif du RDV, points à aborder...",style:{...inputStyle,minHeight:70,resize:"vertical"}}),
+      ]}),
+      n.jsxs("div",{style:{display:"flex",gap:8},children:[
+        n.jsx("button",{onClick:addRdv,style:{padding:"8px 18px",borderRadius:8,border:"none",background:"#6B40D8",color:"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Enregistrer"}),
+        n.jsx("button",{onClick:()=>setShowForm(false),style:{padding:"8px 18px",borderRadius:8,border:"1px solid #E5E7EB",background:"white",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"},children:"Annuler"}),
+      ]}),
+    ]}),
+    upcoming.length === 0 && !showForm && n.jsx("div",{style:{background:"white",border:"1px solid #E5E7EB",borderRadius:12,padding:24,textAlign:"center",fontSize:13,color:"#9CA3AF"},children:"Aucun RDV planifié — cliquez sur + Ajouter un RDV"}),
+    upcoming.map(r => n.jsxs("div",{key:r.id,style:{background:"white",border:"1px solid #E5E7EB",borderLeft:"3px solid #6B40D8",borderRadius:12,padding:"14px 16px",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12},children:[
+      n.jsxs("div",{children:[
+        n.jsxs("div",{style:{fontSize:13,fontWeight:700,color:"#1E1B30"},children:[new Date(r.date).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}), r.heure ? ` · ${r.heure}` : ""]}),
+        r.type && n.jsx("div",{style:{fontSize:12,color:"#6B40D8",fontWeight:600,marginTop:2},children:r.type}),
+        r.notes && n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginTop:4},children:r.notes}),
+      ]}),
+      n.jsx("button",{onClick:()=>delRdv(r.id),style:{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:16,padding:4},children:"✕"}),
+    ]})),
+    past.length > 0 && n.jsxs("div",{style:{marginTop:20},children:[
+      n.jsx("div",{style:{fontSize:12,fontWeight:700,color:"#9CA3AF",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"},children:"RDV passés"}),
+      past.map(r => n.jsxs("div",{key:r.id,style:{background:"#F9FAFB",border:"1px solid #F3F4F6",borderRadius:10,padding:"12px 14px",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,opacity:.7},children:[
+        n.jsxs("div",{children:[
+          n.jsxs("div",{style:{fontSize:12,fontWeight:600,color:"#6B7280"},children:[new Date(r.date).toLocaleDateString("fr-FR",{day:"numeric",month:"long"}), r.heure ? ` · ${r.heure}` : ""]}),
+          r.type && n.jsx("div",{style:{fontSize:11,color:"#9CA3AF"},children:r.type}),
+        ]}),
+        n.jsx("button",{onClick:()=>delRdv(r.id),style:{background:"none",border:"none",color:"#D1D5DB",cursor:"pointer",fontSize:14,padding:4},children:"✕"}),
+      ]})),
+    ]}),
+  ]});
+}
+function ClientNotesTab({ client: e, clients: t, upd: i }) {
+  const [draft, setDraft] = D.useState("");
+  const history = (e.history || []).filter((h) => h.note && h.type === "manual");
+
+  const addNote = () => {
+    if (!draft.trim()) return;
+    const dateStr = new Date().toLocaleDateString("fr-FR");
+    const newNotes = (e.notes ? e.notes + "\n\n" : "") + `[${dateStr}] ${draft.trim()}`;
+    i(t.map((c) => c.id === e.id ? { ...c, notes: newNotes } : c));
+    setDraft("");
+  };
+
+  const noteLines = (e.notes || "").split(/\n\n+/).filter(Boolean).reverse();
+
+  return n.jsxs("div", {
+    style: { padding: "28px 30px", maxWidth: 680 },
+    children: [
+      n.jsx("div", { style: { fontSize: 18, fontWeight: 800, color: "#1E1B30", marginBottom: 20 }, children: "📝 Notes de suivi" }),
+
+      n.jsxs("div", {
+        style: { background: "white", borderRadius: 12, border: "1px solid #E5E7EB", padding: "18px 20px", marginBottom: 24 },
+        children: [
+          n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#6B40D8", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 10 }, children: "Ajouter une note" }),
+          n.jsx("textarea", {
+            className: "ta",
+            rows: 4,
+            value: draft,
+            onChange: (ev) => setDraft(ev.target.value),
+            placeholder: "Compte-rendu d'appel, prochaine action, budget évoqué…",
+            style: { marginBottom: 12 },
+          }),
+          n.jsx("button", {
+            className: "btn",
+            onClick: addNote,
+            disabled: !draft.trim(),
+            style: { justifyContent: "center" },
+            children: "Enregistrer la note",
+          }),
+        ],
+      }),
+
+      noteLines.length > 0 && n.jsxs("div", {
+        children: [
+          n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 12 }, children: "Historique des notes" }),
+          ...noteLines.map((note, idx) => {
+            const match = note.match(/^\[([^\]]+)\]\s*([\s\S]*)/);
+            const date = match ? match[1] : "";
+            const text = match ? match[2] : note;
+            return n.jsxs("div", {
+              style: { background: "white", borderRadius: 10, border: "1px solid #E5E7EB", padding: "14px 18px", marginBottom: 10, borderLeft: "3px solid #6B40D8" },
+              children: [
+                date && n.jsx("div", { style: { fontSize: 11, color: "#9CA3AF", fontWeight: 600, marginBottom: 6 }, children: date }),
+                n.jsx("div", { style: { fontSize: 13.5, color: "#1E1B30", lineHeight: 1.6, whiteSpace: "pre-wrap" }, children: text }),
+              ],
+            }, idx);
+          }),
+        ],
+      }),
+
+      history.length > 0 && n.jsxs("div", {
+        style: { marginTop: 28 },
+        children: [
+          n.jsx("div", { style: { fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 12 }, children: "Notes de modification fiche" }),
+          ...history.slice().reverse().map((h, idx) =>
+            n.jsxs("div", {
+              style: { background: "#F8F8FB", borderRadius: 10, border: "1px solid #E5E7EB", padding: "14px 18px", marginBottom: 10, borderLeft: "3px solid #C03080" },
+              children: [
+                n.jsxs("div", { style: { fontSize: 11, color: "#9CA3AF", fontWeight: 600, marginBottom: 6 }, children: [
+                  new Date(h.date).toLocaleDateString("fr-FR"),
+                  h.score !== undefined && n.jsxs("span", { style: { marginLeft: 8, color: "#6B40D8" }, children: ["Score : ", h.score, "/100"] }),
+                ]}),
+                n.jsx("div", { style: { fontSize: 13.5, color: "#1E1B30", lineHeight: 1.6, whiteSpace: "pre-wrap" }, children: h.note }),
+              ],
+            }, idx)
+          ),
+        ],
+      }),
+
+      noteLines.length === 0 && history.length === 0 && n.jsx("div", {
+        style: { background: "#F8F8FB", borderRadius: 10, border: "1px dashed #D1D5DB", padding: "28px 24px", textAlign: "center", color: "#9CA3AF", fontSize: 13.5 },
+        children: "Aucune note pour l'instant. Ajoutez votre premier compte-rendu ci-dessus.",
+      }),
+    ],
+  });
+}
+
 function ManualEditModal({
   client: e,
   clients: t,
@@ -20973,6 +21396,10 @@ function ManualEditModal({
         const newAvisData = { ...(e.avisData || {}) };
         if (p.rating) newAvisData.note = p.rating;
         if (p.reviewCount) newAvisData.totalAvis = p.reviewCount;
+        const dateStr = new Date().toLocaleDateString("fr-FR");
+        const newNotes = x
+          ? (e.notes ? e.notes + "\n\n" : "") + `[${dateStr}] ${x}`
+          : e.notes || "";
         const _ = {
           ...e,
           scores: N,
@@ -20982,6 +21409,7 @@ function ManualEditModal({
           history: P,
           tasksDone: newTasksDone,
           avisData: newAvisData,
+          notes: newNotes,
         };
       (i(t.map((V) => (V.id === e.id ? _ : V))),
         z(!0),
@@ -26468,11 +26896,11 @@ Rédige la publication GMB.`;
 
             n.jsxs("div", { style: { background: "white", border: "1px solid var(--border)", borderTop: "3px solid var(--indigo2)", borderRadius: 12, padding: "22px 24px", marginBottom: 20 }, children: [
               // Bandeau titre
-              n.jsxs("div", { style: { display:"flex", alignItems:"center", gap:14, marginBottom:22, padding:"15px 18px", borderRadius:14, background:"linear-gradient(135deg,#F5F3FF,#FDF2F8)", border:"1px solid #E9D5FF" }, children:[
-                n.jsx("div", { style:{ width:42, height:42, borderRadius:12, background:"linear-gradient(135deg,#6B40D8,#C03080)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, boxShadow:"0 4px 14px rgba(107,64,216,.3)" }, children:"✨" }),
-                n.jsxs("div", { style:{ flex:1, minWidth:0 }, children:[
-                  n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"#1E1B30", marginBottom:2 }, children:"Générateur de publications" }),
-                  n.jsx("div", { style:{ fontSize:12, color:"#6B7280" }, children:"Décrivez votre sujet, l'IA rédige un post GMB optimisé pour Google en quelques secondes" }),
+              n.jsxs("div", { style: { display:"none" }, children:[
+                n.jsx("div", { children:"✨" }),
+                n.jsxs("div", { children:[
+                  n.jsx("div", { children:"Générateur de publications" }),
+                  n.jsx("div", { children:"" }),
                 ]}),
                 !hasKey && n.jsx("div", { style:{ background:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:8, padding:"6px 12px", fontSize:11.5, color:"#92400E", fontWeight:600, flexShrink:0, whiteSpace:"nowrap" }, children:"⚠️ Clé API requise" }),
               ]}),
@@ -29896,6 +30324,7 @@ function TemplatesTab({
       try { return { ...def, ...JSON.parse(localStorage.getItem(`report_sections_${e.id}`) || "{}") }; } catch { return def; }
     }),
     [showSecPanel, setShowSecPanel] = D.useState(false),
+    [showEditPanel, setShowEditPanel] = D.useState(false),
     [shareLink, setShareLink] = D.useState(null),
     [sharing, setSharing] = D.useState(false),
     [shareCopied, setShareCopied] = D.useState(false),
@@ -30010,6 +30439,16 @@ function TemplatesTab({
     T = P.extracted || {},
     _ = P.insights || {},
     U = P.roadmap || {},
+    _strengths = (_.strengths||[]).filter(s=>!s.includes("[")).slice(0,3),
+    _weaknesses = (_.weaknesses||[]).filter(s=>!s.includes("[")).slice(0,4),
+    _qw = (_.quickWins||[]).filter(s=>!s.includes("[")).slice(0,3),
+    _rm1 = U.month1||{}, _rm2 = U.month2||{}, _rm3 = U.month3||{},
+    _eStr = [0,1,2].map(i => (m[`str_${i}`]!==undefined?m[`str_${i}`]:_strengths[i]||"")).filter(Boolean),
+    _eWeak = [0,1,2,3].map(i => (m[`wk_${i}`]!==undefined?m[`wk_${i}`]:_weaknesses[i]||"")).filter(Boolean),
+    _eQw = [0,1,2].map(i => (m[`qw_${i}`]!==undefined?m[`qw_${i}`]:_qw[i]||"")).filter(Boolean),
+    _eRm1 = {..._rm1, title:(m.rm1_t!==undefined?m.rm1_t:_rm1.title||"Fondations"), objective:(m.rm1_o!==undefined?m.rm1_o:_rm1.objective||""), actions:[0,1,2,3].map(i=>(m[`rm1_a${i}`]!==undefined?m[`rm1_a${i}`]:(_rm1.actions||[])[i]||"")).filter(Boolean)},
+    _eRm2 = {..._rm2, title:(m.rm2_t!==undefined?m.rm2_t:_rm2.title||"Notoriété & Contenu"), objective:(m.rm2_o!==undefined?m.rm2_o:_rm2.objective||""), actions:[0,1,2,3].map(i=>(m[`rm2_a${i}`]!==undefined?m[`rm2_a${i}`]:(_rm2.actions||[])[i]||"")).filter(Boolean)},
+    _eRm3 = {..._rm3, title:(m.rm3_t!==undefined?m.rm3_t:_rm3.title||"Domination Locale"), objective:(m.rm3_o!==undefined?m.rm3_o:_rm3.objective||""), actions:[0,1,2,3].map(i=>(m[`rm3_a${i}`]!==undefined?m[`rm3_a${i}`]:(_rm3.actions||[])[i]||"")).filter(Boolean)},
     V = e.history || [],
     G =
       V.length > 0
@@ -30184,18 +30623,27 @@ function TemplatesTab({
             n.jsxs("div", {
               style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" },
               children: [
-                Object.keys(m).length > 0 &&
+                n.jsx("button", {
+                  onClick: () => {
+                    const ct = document.getElementById("rapport-content");
+                    if (!ct) return;
+                    localStorage.setItem(`report_html_${e.id}`, ct.innerHTML);
+                    const btn = document.getElementById("rapport-save-btn");
+                    if (btn) { btn.textContent = "✓ Sauvegardé"; setTimeout(() => { btn.textContent = "💾 Sauvegarder"; }, 2000); }
+                  },
+                  id: "rapport-save-btn",
+                  style: { fontSize: 11, padding: "5px 12px", whiteSpace: "nowrap", background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 },
+                  children: "💾 Sauvegarder",
+                }),
+                localStorage.getItem(`report_html_${e.id}`) &&
                   n.jsx("button", {
-                    onClick: () => {
-                      (C({}), localStorage.removeItem(`report_edits_${e.id}`));
-                    },
-                    className: "btn-ghost",
-                    style: { fontSize: 11.5, color: "#dc2626" },
-                    children: "↺ Réinitialiser les modifications",
+                    onClick: () => { localStorage.removeItem(`report_html_${e.id}`); C({}); },
+                    style: { fontSize: 11, padding: "5px 9px", whiteSpace: "nowrap", background: "transparent", color: "#dc2626", border: "none", cursor: "pointer", fontFamily: "inherit" },
+                    children: "↺ Réinitialiser",
                   }),
                 n.jsx("button", {
                   className: "btn-ghost",
-                  onClick: () => setShowSecPanel((L) => !L),
+                  onClick: () => { setShowSecPanel((L) => !L); setShowEditPanel(false); },
                   style: { fontSize: 11, padding: "5px 9px", whiteSpace: "nowrap" },
                   children: "📑 Sections",
                 }),
@@ -30399,8 +30847,11 @@ function TemplatesTab({
           style: { overflowY: "auto", flex: 1 },
           children: n.jsx("div", {
             id: "rapport-content",
+            contentEditable: true,
+            suppressContentEditableWarning: true,
+            style: { outline: "none" },
             dangerouslySetInnerHTML: {
-              __html: (() => {
+              __html: localStorage.getItem(`report_html_${e.id}`) || (() => {
                 // Score & piliers = EXACTEMENT le même calcul que l'onglet Résumé (calcScore + pillarsRecap sur {...e.scores, ...e.manualOverrides})
                 // → mêmes chiffres partout (Résumé / Bilan / Évolution / Rapport client)
                 const _Mscore  = { ...(e.scores || {}), ...(e.manualOverrides || {}) };
@@ -30457,8 +30908,16 @@ function TemplatesTab({
                 const strengths =(_.strengths||[]).filter(s=>!s.includes("[")).slice(0,3);
                 const weaknesses=(_.weaknesses||[]).filter(s=>!s.includes("[")).slice(0,4);
                 const qw        =(_.quickWins||[]).filter(s=>!s.includes("[")).slice(0,3);
+                const eStr = _eStr;
+                const eWeak = _eWeak;
+                const eQw = _eQw;
+                const eRm1 = _eRm1;
+                const eRm2 = _eRm2;
+                const eRm3 = _eRm3;
                 const _ext      = P.extracted || {};
-                const _secCatSugg = (_ext.secondaryCategories?.suggested||[]).filter(s=>s&&!s.includes("[")).slice(0,3);
+                const _manualCats = (e.manualCategories||[]).filter(Boolean);
+                const _aiCatSugg = (_ext.secondaryCategories?.suggested||[]).filter(s=>s&&!s.includes("["));
+                const _secCatSugg = [..._manualCats, ..._aiCatSugg.filter(s=>!_manualCats.includes(s))].slice(0,3);
                 const _servicesSugg = (_ext.services?.suggested||[]).filter(s=>s&&!(typeof s==="string"?s:s.name||"").includes("[")).slice(0,3);
                 const _productsSugg = (_ext.products?.suggested||[]).filter(s=>s&&!(typeof s==="string"?s:s.name||"").includes("[")).slice(0,3);
                 const rm1=U.month1||{}; const rm2=U.month2||{}; const rm3=U.month3||{};
@@ -30503,7 +30962,8 @@ function TemplatesTab({
                   const rangMoyen = valid.length ? (valid.reduce((a,b)=>a+b,0)/valid.length).toFixed(1) : null;
                   const pctTrouve = valid.length ? Math.round(valid.filter(r=>r<=20).length/valid.length*100) : 0;
                   const scanDateStr = posScan.date ? new Date(posScan.date).toLocaleDateString("fr-FR") : "";
-                  const html = `<div class="rp-section">🗺️ Carte de positionnement local — "${posKw}"</div>
+                  const html = `<div class="carte-block">
+                  <div class="rp-section">🗺️ Carte de positionnement local — "${posKw}"</div>
                   <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
                     <div style="display:flex;gap:18px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:13px;padding:14px 20px">
                       <div style="text-align:center"><div style="font-size:24px;font-weight:900;color:#6B40D8;line-height:1">${rangMoyen!=null?rangMoyen:"—"}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-top:3px">Rang moyen</div></div>
@@ -30519,7 +30979,8 @@ function TemplatesTab({
                     </div>
                   </div>
                   <div id="${mapElId}" style="height:280px;border-radius:13px;overflow:hidden;border:1px solid #E5E7EB;margin-bottom:10px;background:#F4F5FA"></div>
-                  <div style="font-size:11.5px;color:#9CA3AF;margin:0 0 24px;line-height:1.6">Carte du scan géographique réel autour de votre établissement (zone locale de ${rayonKm} km de rayon, grille ${gs}×${gs}${scanDateStr?`, scan du ${scanDateStr}`:""}) — chaque point représente votre position effective sur Google Maps à cet endroit pour « ${posKw} ». Ce scan est régénéré régulièrement dans le cadre de notre suivi continu, pour cibler précisément les zones à renforcer en priorité.</div>`;
+                  <div style="font-size:11.5px;color:#9CA3AF;margin:0 0 24px;line-height:1.6">Carte du scan géographique réel autour de votre établissement (zone locale de ${rayonKm} km de rayon, grille ${gs}×${gs}${scanDateStr?`, scan du ${scanDateStr}`:""}) — chaque point représente votre position effective sur Google Maps à cet endroit pour « ${posKw} ». Ce scan est régénéré régulièrement dans le cadre de notre suivi continu, pour cibler précisément les zones à renforcer en priorité.</div>
+                  </div>`;
                   return { html, rangMoyen };
                 };
                 const _carte1 = _buildCarteHtml(_posEntries[0]?.kw, _posEntries[0]?.scan, "rapport-positioning-map");
@@ -30555,7 +31016,7 @@ function TemplatesTab({
                   <div style="font-size:10.5px;color:#D1D5DB;margin-bottom:24px">* Estimations basées sur vos statistiques mensuelles renseignées (vues, appels, clics) et un objectif d'optimisation continue de la fiche. Les demandes d'itinéraire sont estimées proportionnellement au volume de vues.</div>`;
                 } else {
                   projectionsHtml = `<div class="rp-section">📊 Projections à 3 mois</div>
-                  <div style="background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;font-size:13px;color:#9CA3AF;margin-bottom:24px">Renseignez le suivi mensuel (vues, appels, clics) de cette fiche pour afficher des projections personnalisées à 3 mois.</div>`;
+                  <div style="background:#F9FAFB;border-radius:10px;padding:16px;text-align:center;font-size:13px;color:#9CA3AF;margin-bottom:24px">Vos statistiques détaillées (vues, appels, clics) seront intégrées dès le premier mois de suivi — ce rapport présentera alors des projections personnalisées à 3 mois.</div>`;
                 }
 
                 // ── CE QUE VOUS PERDEZ EN NE FAISANT RIEN ──
@@ -30590,7 +31051,17 @@ function TemplatesTab({
 
                 const css = `<style>
                   .rp-page{background:white;width:100%;margin-bottom:20px;position:relative;overflow:hidden}
-                  @media print{.rp-page{page-break-after:always;margin:0!important}body{background:white}}
+                  [data-edit-id]{outline:none;border-radius:3px;transition:background .15s;cursor:text}
+                  [data-edit-id]:hover{background:rgba(107,64,216,.07)}
+                  [data-edit-id]:focus{background:rgba(107,64,216,.1);box-shadow:0 0 0 2px #6B40D844}
+                  @media print{
+                    .rp-page{page-break-after:always;break-after:page;margin:0!important}
+                    body{background:white}
+                    table{page-break-inside:avoid;break-inside:avoid}
+                    tr{page-break-inside:avoid;break-inside:avoid}
+                    .rp-section{page-break-after:avoid;break-after:avoid}
+                    div[style*="border-radius"]{page-break-inside:avoid;break-inside:avoid}
+                  }
                   .rp-inner{padding:40px 44px}
                   .rp-top-bar{height:5px;background:linear-gradient(90deg,#6B40D8,#C03080,#E85A30);width:100%}
                   .rp-section{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#6B40D8;margin-bottom:14px;display:flex;align-items:center;gap:8px}
@@ -30607,6 +31078,7 @@ function TemplatesTab({
                   .rp-map-tt{background:transparent!important;border:none!important;box-shadow:none!important;color:white;font-weight:800;font-size:11px;padding:0!important}
                   .rp-map-tt::before{display:none!important}
                   .leaflet-container{font-family:inherit}
+                  .carte-block{page-break-inside:avoid!important;break-inside:avoid-page!important}
                 </style>`;
 
                 // ── PAGE 1 COVER ──
@@ -30688,11 +31160,11 @@ function TemplatesTab({
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
                       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px">
                         <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#059669;margin-bottom:10px">✓ Points forts</div>
-                        ${strengths.length?strengths.map(s=>`<div style="display:flex;gap:7px;margin-bottom:7px;font-size:12.5px;color:#374151;line-height:1.5"><span style="color:#059669;font-weight:900;flex-shrink:0">✓</span>${s}</div>`).join(""):`<div style="font-size:12px;color:#9CA3AF">Lancez un audit pour obtenir l'analyse</div>`}
+                        ${eStr.length?eStr.map((s,i)=>`<div style="display:flex;gap:7px;margin-bottom:7px;font-size:12.5px;color:#374151;line-height:1.5"><span style="color:#059669;font-weight:900;flex-shrink:0">✓</span><span contenteditable="true" data-edit-id="str_${i}">${s}</span></div>`).join(""):`<div style="font-size:12px;color:#9CA3AF">Lancez un audit pour obtenir l'analyse</div>`}
                       </div>
                       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px">
                         <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#dc2626;margin-bottom:10px">! Points à améliorer</div>
-                        ${weaknesses.length?weaknesses.map(s=>`<div style="display:flex;gap:7px;margin-bottom:7px;font-size:12.5px;color:#374151;line-height:1.5"><span style="color:#dc2626;font-weight:900;flex-shrink:0">!</span>${s}</div>`).join(""):`<div style="font-size:12px;color:#9CA3AF">Lancez un audit pour obtenir l'analyse</div>`}
+                        ${eWeak.length?eWeak.map((s,i)=>`<div style="display:flex;gap:7px;margin-bottom:7px;font-size:12.5px;color:#374151;line-height:1.5"><span style="color:#dc2626;font-weight:900;flex-shrink:0">!</span><span contenteditable="true" data-edit-id="wk_${i}">${s}</span></div>`).join(""):`<div style="font-size:12px;color:#9CA3AF">Lancez un audit pour obtenir l'analyse</div>`}
                       </div>
                     </div>
                     ${noteForces}`}
@@ -30708,9 +31180,9 @@ function TemplatesTab({
                     </table>
                     ${noteBenchmark}`}
 
-                    ${(!sec.quickwins || !qw.length)?"":`<div style="background:linear-gradient(135deg,#EEF2FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:13px;padding:18px 20px;margin-bottom:16px">
+                    ${(!sec.quickwins || !eQw.length)?"":`<div style="background:linear-gradient(135deg,#EEF2FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:13px;padding:18px 20px;margin-bottom:16px">
                       <div style="font-size:11px;font-weight:800;color:#3B5BDB;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px">⚡ 3 actions rapides — résultats en moins de 30 jours</div>
-                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${qw.map((q,i)=>`<div style="background:white;border-radius:9px;padding:11px 13px;border:1px solid #E9D5FF;font-size:12px;color:#374151;line-height:1.4;display:flex;gap:7px;align-items:flex-start"><div style="width:19px;height:19px;background:linear-gradient(135deg,#6B40D8,#C03080);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:white;flex-shrink:0;margin-top:1px">${i+1}</div>${q}</div>`).join("")}</div>
+                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${eQw.map((q,i)=>`<div style="background:white;border-radius:9px;padding:11px 13px;border:1px solid #E9D5FF;font-size:12px;color:#374151;line-height:1.4;display:flex;gap:7px;align-items:flex-start"><div style="width:19px;height:19px;background:linear-gradient(135deg,#6B40D8,#C03080);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:white;flex-shrink:0;margin-top:1px">${i+1}</div><span contenteditable="true" data-edit-id="qw_${i}">${q}</span></div>`).join("")}</div>
                     </div>
                     ${lossHtml}`}
 
@@ -30767,16 +31239,16 @@ function TemplatesTab({
 
                     ${!sec.roadmap ? "" : `
                     <div class="rp-section">🗺️ Roadmap mois par mois</div>
-                    ${[[rm1,"#dc2626","#fef2f2","#fecaca","Mois 1","Fondations"],
-                       [rm2,"#d97706","#fffbeb","#fde68a","Mois 2","Notoriété & Contenu"],
-                       [rm3,"#059669","#f0fdf4","#bbf7d0","Mois 3","Domination Locale"]].map(([rm,col,bg,bor,num,title])=>`
+                    ${[[eRm1,"#dc2626","#fef2f2","#fecaca","Mois 1","rm1","Fondations"],
+                       [eRm2,"#d97706","#fffbeb","#fde68a","Mois 2","rm2","Notoriété & Contenu"],
+                       [eRm3,"#059669","#f0fdf4","#bbf7d0","Mois 3","rm3","Domination Locale"]].map(([rm,col,bg,bor,num,pfx,title])=>`
                       <div style="background:${bg};border:1px solid ${bor};border-radius:13px;padding:16px 18px;margin-bottom:10px">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-                          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:${col};margin-bottom:2px">${num}</div><div style="font-size:15px;font-weight:900;color:#1E1B30">${rm.title||title}</div></div>
-                          <div style="background:rgba(107,64,216,.08);border:1px solid rgba(107,64,216,.2);color:#6B40D8;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px">${rm.objective||"—"}</div>
+                          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:${col};margin-bottom:2px">${num}</div><div style="font-size:15px;font-weight:900;color:#1E1B30"><span contenteditable="true" data-edit-id="${pfx}_t">${rm.title||title}</span></div></div>
+                          <div style="background:rgba(107,64,216,.08);border:1px solid rgba(107,64,216,.2);color:#6B40D8;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px"><span contenteditable="true" data-edit-id="${pfx}_o">${rm.objective||"—"}</span></div>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
-                          ${(rm.actions||[]).filter(a=>a&&!a.includes("action")).slice(0,4).map((a,i)=>{const ci=a.indexOf(":");const txt=ci>0&&ci<80?`<strong>${a.slice(0,ci)}</strong>${a.slice(ci)}`:a;return`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div>${txt}</div>`;}).join("")}
+                          ${(rm.actions||[]).filter(a=>a&&!a.includes("action")).map((a,i)=>`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div><span contenteditable="true" data-edit-id="${pfx}_a${i}"><strong>${a}</strong></span></div>`).join("")}
                         </div>
                       </div>`).join("")}`}
 
