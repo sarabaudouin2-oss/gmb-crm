@@ -18573,8 +18573,9 @@ function ClientDetail({
     U = o(_),
     V = ALL_CRITERIA.filter((Q) => M[Q.id] === !1).sort((Q, Z) => Z.points - Q.points),
     G = ALL_CRITERIA.filter((Q) => M[Q.id] === !0),
-    y = Object.keys(T).filter((Q) => T[Q] && M[Q] === !1).length,
-    O = V.length > 0 ? Math.min(100, Math.round((y / V.length) * 100)) : 100,
+    _auditFalse = ALL_CRITERIA.filter((Q) => N[Q.id] === !1),
+    y = _auditFalse.filter((Q) => T[Q.id]).length,
+    O = _auditFalse.length > 0 ? Math.min(100, Math.round((y / _auditFalse.length) * 100)) : 100,
     F = P.extracted || {},
     H = P.insights || {},
     S = P.keywords || {};
