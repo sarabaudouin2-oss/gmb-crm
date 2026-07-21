@@ -16422,6 +16422,19 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
   /* Geocode avec fallbacks progressifs */
   const y = async (addr) => {
+    // 0. Google Geocoding API (priorité — clé déjà disponible)
+    const tryGoogle = async (q) => {
+      if (!o) return null;
+      try {
+        const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${o}&language=fr`);
+        const j = await r.json();
+        if (j.status === "OK" && j.results && j.results[0]) {
+          const loc = j.results[0].geometry.location;
+          return { lat: loc.lat, lng: loc.lng };
+        }
+      } catch { return null; }
+      return null;
+    };
     const tryNominatim = async (q) => {
       try {
         const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, { headers: { "User-Agent": "BTO-CRM" } });
@@ -16429,21 +16442,33 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         return j && j[0] ? { lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon) } : null;
       } catch { return null; }
     };
-    // 1. Adresse complète
-    let res = await tryNominatim(addr);
+    // 1. Google — adresse complète
+    let res = await tryGoogle(addr);
     if (res) return res;
-    // 2. Supprimer le nom de zone commerciale/parc (tout avant le numéro de rue)
+    // 2. Nominatim — adresse complète
+    res = await tryNominatim(addr);
+    if (res) return res;
+    // 3. Supprimer le nom de zone commerciale/parc (tout avant le numéro de rue)
     const simplified = addr.replace(/^[^,]*,\s*/, "").trim();
-    if (simplified !== addr) { res = await tryNominatim(simplified); if (res) return res; }
-    // 3. Numéro + rue + code postal + ville (sans complément)
+    if (simplified !== addr) {
+      res = await tryGoogle(simplified) || await tryNominatim(simplified);
+      if (res) return res;
+    }
+    // 4. Numéro + rue + code postal + ville (sans complément)
     const m3 = addr.match(/(\d+\s+[^,]+),?\s*(\d{5})\s+(\w+)/);
-    if (m3) { res = await tryNominatim(`${m3[1]}, ${m3[2]} ${m3[3]}`); if (res) return res; }
-    // 4. Code postal + ville seulement
+    if (m3) {
+      res = await tryGoogle(`${m3[1]}, ${m3[2]} ${m3[3]}`) || await tryNominatim(`${m3[1]}, ${m3[2]} ${m3[3]}`);
+      if (res) return res;
+    }
+    // 5. Code postal + ville seulement
     const m4 = addr.match(/(\d{5})\s+(\w[\w\s-]+)/);
-    if (m4) { res = await tryNominatim(`${m4[1]} ${m4[2].trim()}`); if (res) return res; }
-    // 5. Ville seule
+    if (m4) {
+      res = await tryGoogle(`${m4[1]} ${m4[2].trim()}`) || await tryNominatim(`${m4[1]} ${m4[2].trim()}`);
+      if (res) return res;
+    }
+    // 6. Ville seule
     const city = (e.city || addr.split(",").pop() || "").trim();
-    if (city) { res = await tryNominatim(city); if (res) return res; }
+    if (city) { res = await tryGoogle(city) || await tryNominatim(city); if (res) return res; }
     return null;
   };
 
