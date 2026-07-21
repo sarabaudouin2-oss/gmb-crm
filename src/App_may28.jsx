@@ -16901,23 +16901,23 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
             const row = Math.floor(idx / p), col = idx % p;
             const isCenter = row === mid && col === mid;
             const rank = E[idx];
-            const bg = isCenter ? "#1E1B30" : rank == null ? "#E5E7EB" : rank <= 3 ? "#059669" : rank <= 10 ? "#E85A30" : rank <= 20 ? "#DC2626" : "#94A3B8";
-            const label = isCenter ? "📍" : rank == null ? "—" : rank > 20 ? "20+" : String(rank);
+            const bg = rank == null ? "#E5E7EB" : rank <= 3 ? "#059669" : rank <= 10 ? "#E85A30" : rank <= 20 ? "#DC2626" : "#94A3B8";
+            const label = rank == null ? "—" : rank > 20 ? "20+" : String(rank);
             const cellInfo = cellDataFull[idx];
             return n.jsx("div", {
-              onClick: () => !isCenter && setSelCell({ idx, row, col, rank, top10: (cellInfo && cellInfo.top10) || [] }),
-              title: isCenter ? "Centre — votre établissement" : rank ? `Position #${rank} — cliquez pour voir les concurrents` : "Pas de données",
+              onClick: () => setSelCell({ idx, row, col, rank, top10: (cellInfo && cellInfo.top10) || [] }),
+              title: isCenter ? `Position #${rank} (centre — votre établissement)` : rank ? `Position #${rank} — cliquez pour voir les concurrents` : "Pas de données",
               style:{
                 width: cellSize, height: cellSize,
                 background: bg,
-                borderRadius: isCenter ? 10 : 8,
+                borderRadius: 8,
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize: isCenter ? 16 : rank != null && rank <= 9 ? 15 : 13,
+                fontSize: rank != null && rank <= 9 ? 15 : 13,
                 fontWeight: 900,
                 color: "white",
-                cursor: isCenter ? "default" : "pointer",
-                border: isCenter ? "3px solid white" : selCell?.idx === idx ? "3px solid #6B40D8" : "none",
-                boxShadow: isCenter ? "0 0 0 3px #1E1B30" : selCell?.idx === idx ? "0 0 0 2px #a78bfa" : "none",
+                cursor: "pointer",
+                border: isCenter ? "3px solid #1E1B30" : selCell?.idx === idx ? "3px solid #6B40D8" : "none",
+                boxShadow: isCenter ? "0 0 0 2px white, 0 0 0 4px #1E1B30" : selCell?.idx === idx ? "0 0 0 2px #a78bfa" : "none",
                 transition: "transform .1s, box-shadow .1s",
                 userSelect: "none",
               },
