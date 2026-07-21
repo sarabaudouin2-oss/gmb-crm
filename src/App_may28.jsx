@@ -3691,6 +3691,7 @@ Ne pas inventer de données. Se baser uniquement sur des informations plausibles
           },
           apiKey: e,
           hasEnvKey: t,
+          clients: o,
         }),
     ],
   });
@@ -3784,15 +3785,19 @@ function ProspectCard({
   onConvert: l,
   apiKey: a,
   hasEnvKey: d,
+  clients: clientsList,
 }) {
   const [p, b] = D.useState("analyse"),
     [x, j] = D.useState(e.notes || ""),
     [I, z] = D.useState(!1),
     [g, h] = D.useState(null),
     f = rn.find((C) => C.id === e.status) || rn[0],
-    realScore = (e.scores && Object.keys(e.scores).length > 0)
-      ? calcScore({ ...(e.scores || {}), ...(e.manualOverrides || {}) })
-      : (e.score || 0),
+    _matchedClient = (clientsList || []).find((cl) => cl.name && e.name && cl.name.trim().toLowerCase() === e.name.trim().toLowerCase()),
+    realScore = (_matchedClient && _matchedClient.scores && Object.keys(_matchedClient.scores).length > 0)
+      ? calcScore({ ...(_matchedClient.scores || {}), ...(_matchedClient.manualOverrides || {}) })
+      : (e.scores && Object.keys(e.scores).length > 0)
+        ? calcScore({ ...(e.scores || {}), ...(e.manualOverrides || {}) })
+        : (e.score || 0),
     c = async () => {
       var B;
       z(!0);
