@@ -10346,6 +10346,7 @@ function App() {
       const today = new Date().toISOString().slice(0,10);
       let count = reviewAlerts.length + ficheAlerts.length;
       b.forEach(cl => {
+        if (cl.statutAudit !== "client") return;
         // Posts planifiés en retard (scheduledPosts dont date ≤ today et status !== published)
         const overduePosts = (cl.scheduledPosts || []).filter(p => p.date && p.date <= today && p.status !== "published").length;
         count += overduePosts;
