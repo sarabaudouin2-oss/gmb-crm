@@ -10122,6 +10122,7 @@ function App() {
           V = 864e5,
           G = parseInt(localStorage.getItem("gmb_notif_delay") || "30") * V;
         b.forEach((y) => {
+          if (y.statutAudit !== "client") return;
           const O = y.date ? new Date(y.date).getTime() : 0;
           U - O > G &&
             new Notification("Agence Be the one — Rappel", {
@@ -13642,6 +13643,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
     [z, g] = D.useState(!1),
     h = e
       .flatMap((B) => {
+        if (B.statutAudit !== "client") return [];
         const k = B.tasksDone || {};
         return ALL_CRITERIA.filter((R) => (B.scores || {})[R.id] === !1 && !k[R.id]).map(
           (R) => R.id,
@@ -13778,6 +13780,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
           const todayStr = now.toISOString().slice(0,10);
           const rdvs = [];
           e.forEach(cl => {
+            if (cl.statutAudit !== "client") return;
             try {
               const list = JSON.parse(localStorage.getItem(`rdv_${cl.id}`) || "[]");
               list.forEach(r => {
@@ -18573,7 +18576,7 @@ function ClientDetail({
     U = o(_),
     V = ALL_CRITERIA.filter((Q) => M[Q.id] === !1).sort((Q, Z) => Z.points - Q.points),
     G = ALL_CRITERIA.filter((Q) => M[Q.id] === !0),
-    _auditFalse = ALL_CRITERIA.filter((Q) => N[Q.id] === !1),
+    _auditFalse = ALL_CRITERIA.filter((Q) => M[Q.id] === !1),
     y = _auditFalse.filter((Q) => T[Q.id]).length,
     O = _auditFalse.length > 0 ? Math.min(100, Math.round((y / _auditFalse.length) * 100)) : 100,
     F = P.extracted || {},
@@ -18583,7 +18586,7 @@ function ClientDetail({
   const w = P.roadmap || {},
     W = e.history || [],
     L = W.length > 0 ? s(W[W.length - 1].scores || {}) : null,
-    $ = L !== null ? s(N) - L : null;
+    $ = L !== null ? _ - L : null;
   D.useEffect(() => {
     let Q = 0;
     const Z = setInterval(() => {
