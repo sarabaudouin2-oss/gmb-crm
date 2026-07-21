@@ -16369,6 +16369,40 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
   /* Réinitialiser l'index de scan quand le mot-clé change */
   D.useEffect(() => { setSelScanIdx(null); }, [a]),
 
+  /* Auto-géocoder l'adresse si aucun centre n'est défini */
+  D.useEffect(() => {
+    if (e?.geoGrid?.center) return; // centre déjà défini
+    const addr = e?.address || e?.data?.extracted?.address || e?.city || "";
+    if (!addr) return;
+    (async () => {
+      // Essai Google Geocoding
+      if (o) {
+        try {
+          const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${o}&language=fr`);
+          const j = await r.json();
+          if (j.status === "OK" && j.results?.[0]) {
+            const { lat, lng } = j.results[0].geometry.location;
+            const newGeoGrid = { ...(e?.geoGrid || {}), center: { lat, lng } };
+            t(s.map(cl => cl.id === e.id ? { ...cl, geoGrid: newGeoGrid } : cl));
+            if (m.current) m.current.setView([lat, lng], 13);
+            return;
+          }
+        } catch {}
+      }
+      // Fallback Nominatim
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`, { headers: { "User-Agent": "BTO-CRM" } });
+        const j = await r.json();
+        if (j?.[0]) {
+          const lat = parseFloat(j[0].lat), lng = parseFloat(j[0].lon);
+          const newGeoGrid = { ...(e?.geoGrid || {}), center: { lat, lng } };
+          t(s.map(cl => cl.id === e.id ? { ...cl, geoGrid: newGeoGrid } : cl));
+          if (m.current) m.current.setView([lat, lng], 13);
+        }
+      } catch {}
+    })();
+  }, [e?.id]),
+
   /* Init map */
   D.useEffect(() => {
     var $, X, te, Q;
