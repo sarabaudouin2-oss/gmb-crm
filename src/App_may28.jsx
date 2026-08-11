@@ -25,10 +25,17 @@ const CATS = [
           action: "Choisir la catégorie principale la plus précise",
           static: !0,
         },
-{
+        {
+          id: "category_secondary",
+          label: "Catégories secondaires renseignées",
+          points: 4,
+          action: "Ajouter toutes les catégories secondaires pertinentes dans GBP",
+          static: !0,
+        },
+        {
           id: "social_links",
           label: "Réseaux sociaux liés (FB, Insta...)",
-          points: 4,
+          points: 2,
           action: "Lier Facebook, Instagram, YouTube depuis la fiche GMB",
           static: !0,
         },
@@ -63,78 +70,88 @@ const CATS = [
         },
         {
           id: "hours_regular",
-          label: "Horaires complets 7j/7",
+          label: "Horaires complets",
           points: 4,
-          action: "Renseigner les horaires de chaque jour",
+          action: "Renseigner les horaires de chaque jour de la semaine",
           static: !0,
         },
         {
           id: "hours_special",
-          label: "Horaires exceptionnels/fériés",
+          label: "Horaires exceptionnels et jours fériés renseignés",
           points: 3,
           action: "Ajouter les fermetures exceptionnelles et jours fériés",
           static: !0,
+        },
+        {
+          id: "nap_consistency",
+          label: "Coordonnées cohérentes (NAP)",
+          points: 3,
+          action: "Vérifier la cohérence Nom / Adresse / Téléphone entre la fiche GMB, le site web et les annuaires",
+          static: !0,
+        },
+        {
+          id: "chat_link",
+          label: "WhatsApp / SMS / Messagerie activée",
+          points: 2,
+          action: "Ajouter un lien WhatsApp ou SMS pour réduire la friction contact",
+          static: !0,
+          domainTags: ["restaurant", "café", "bar", "coiffeur", "beauté", "spa", "artisan", "plombier", "électricien", "menuisier", "peintre", "maçon", "carreleur", "serrurier", "chauffagiste", "médecin", "dentiste", "ostéopathe", "kiné", "avocat", "comptable", "coach", "immobilier", "agence", "commerce", "boutique"],
         },
       ],
     },
     {
       id: "description",
-      label: "Description & Présence",
+      label: "Optimisation de la fiche",
       icon: "✍️",
       type: "static",
       criteria: [
         {
           id: "desc_length",
-          label: "Description 700+ caractères",
+          label: "Description de 700 caractères ou plus",
           points: 4,
           action: "Rédiger une description proche des 750 caractères",
           static: !0,
         },
         {
           id: "desc_keywords",
-          label: "Mots-clés locaux dans la description",
+          label: "Mots-clés locaux intégrés dans la description",
           points: 4,
           action: "Intégrer les mots-clés locaux et métier dans la description",
+          static: !0,
+        },
+        {
+          id: "services_listed",
+          label: "Services renseignés",
+          points: 2,
+          action: "Lister tous les services proposés dans la section Services de GBP",
+          static: !0,
+        },
+        {
+          id: "services_desc",
+          label: "Descriptions des services complètes",
+          points: 2,
+          action: "Ajouter une description détaillée pour chaque service listé dans GBP",
           static: !0,
         },
         {
           id: "attributes",
           label: "Attributs complétés",
           points: 3,
-          action:
-            "Compléter tous les attributs disponibles (Wi-Fi, accessibilité, etc.)",
-          static: !0,
-        },
-        {
-          id: "services_listed",
-          label: "Services renseignés dans la fiche",
-          points: 3,
-          action:
-            "Lister tous les services proposés dans la section Services de GBP avec nom et description",
+          action: "Compléter tous les attributs disponibles (Wi-Fi, accessibilité, paiements, etc.)",
           static: !0,
         },
         {
           id: "products_listed",
-          label: "Produits / Menu renseignés dans la fiche",
+          label: "Produits renseignés dans la fiche",
           points: 2,
-          action:
-            "Lister les produits ou plats phares avec nom, prix et description dans GBP",
+          action: "Lister les produits phares avec nom et description dans GBP",
           static: !0,
-          domainTags: ["restaurant", "café", "bar", "boulangerie", "pâtisserie", "pizzeria", "traiteur", "épicerie", "boutique", "magasin", "commerce", "librairie", "pharmacie", "bijouterie", "fleuriste", "fromagerie", "boucherie", "charcuterie", "salon de thé", "glacier", "vente", "retail"],
         },
         {
-          id: "booking_link",
-          label: "Lien réservation/commande",
+          id: "products_desc",
+          label: "Descriptions des produits complètes",
           points: 2,
-          action: "Ajouter un bouton Réserver ou Commander en ligne",
-          static: !0,
-          domainTags: ["coiffeur", "coiffure", "barbier", "beauté", "esthétique", "spa", "massage", "kiné", "médecin", "dentiste", "ostéopathe", "psychologue", "avocat", "notaire", "comptable", "coach", "formation", "hôtel", "restaurant", "réservation", "rendez-vous", "consultation", "soin"],
-        },
-        {
-          id: "photo_cover",
-          label: "Photo de couverture optimisée",
-          points: 2,
-          action: "Mettre une image pro et représentative en couverture",
+          action: "Ajouter une description détaillée et attractive pour chaque produit listé",
           static: !0,
         },
         {
@@ -145,12 +162,27 @@ const CATS = [
           static: !0,
         },
         {
-          id: "chat_link",
-          label: "Lien WhatsApp ou message",
-          points: 3,
-          action:
-            "Ajouter un lien WhatsApp ou SMS pour réduire la friction contact",
+          id: "photo_cover",
+          label: "Photo de couverture optimisée",
+          points: 2,
+          action: "Mettre une image pro et représentative en couverture",
           static: !0,
+        },
+        {
+          id: "menu_listed",
+          label: "Menu renseigné dans la fiche",
+          points: 2,
+          action: "Ajouter le menu complet avec plats, prix et descriptions dans GBP",
+          static: !0,
+          domainTags: ["restaurant", "café", "bar", "boulangerie", "pâtisserie", "pizzeria", "traiteur", "glacier", "salon de thé", "restauration", "bistronomie", "brasserie", "crêperie", "kebab", "sushi", "cuisine"],
+        },
+        {
+          id: "booking_link",
+          label: "Lien réservation / commande",
+          points: 2,
+          action: "Ajouter un bouton Réserver ou Commander en ligne dans GBP",
+          static: !0,
+          domainTags: ["coiffeur", "coiffure", "barbier", "beauté", "esthétique", "spa", "massage", "kiné", "médecin", "dentiste", "ostéopathe", "psychologue", "avocat", "notaire", "comptable", "coach", "formation", "hôtel", "restaurant", "réservation", "rendez-vous", "consultation", "soin"],
         },
       ],
     },
@@ -161,28 +193,34 @@ const CATS = [
       type: "dynamic",
       criteria: [
         {
-          id: "photo_count",
-          label: "20+ photos publiées",
-          points: 4,
-          action: "Publier 20+ photos (90% plus de visites avec des photos)",
-        },
-        {
           id: "photo_interior",
-          label: "Photos intérieur/réalisations",
+          label: "Photos intérieur / réalisations",
           points: 3,
           action: "Ajouter des photos des locaux ou réalisations",
         },
         {
           id: "photo_team",
-          label: "Photos équipe/produits",
+          label: "Photos équipe / produits",
           points: 2,
           action: "Ajouter photos équipe ou produits",
         },
         {
           id: "photo_recent",
-          label: "Photos récentes (< 3 mois)",
-          points: 2,
+          label: "Activité photo récente (< 30 jours)",
+          points: 3,
           action: "Publier de nouvelles photos ce mois-ci",
+        },
+        {
+          id: "photo_renamed",
+          label: "Photos renommées avec des mots-clés pertinents",
+          points: 2,
+          action: "Renommer les fichiers photos avec des mots-clés métier et locaux avant publication",
+        },
+        {
+          id: "photo_count",
+          label: "Galerie photo développée (20+ photos)",
+          points: 4,
+          action: "Publier 20+ photos (90% plus de visites avec des photos)",
         },
       ],
     },
@@ -194,23 +232,15 @@ const CATS = [
       criteria: [
         {
           id: "rating",
-          label: "Note globale ≥ 4.0",
+          label: "Note moyenne ≥ 4,0",
           points: 5,
           action: "Mettre en place une stratégie de collecte d avis 5 étoiles",
         },
         {
-          id: "review_count",
-          label: "50+ avis",
-          points: 4,
-          action:
-            "Atteindre 50 avis minimum (91% des consommateurs lisent les avis)",
-        },
-        {
           id: "response_rate",
-          label: "Taux de réponse ≥ 80%",
+          label: "Taux de réponse aux avis ≥ 80 %",
           points: 4,
-          action:
-            "Répondre à tous les avis — 65% choisissent le commerce qui répond",
+          action: "Répondre à tous les avis — 65% choisissent le commerce qui répond",
         },
         {
           id: "response_quality",
@@ -219,50 +249,80 @@ const CATS = [
           action: "Personnaliser chaque réponse avec le prénom et le contexte",
         },
         {
+          id: "response_keywords",
+          label: "Réponses avec mots-clés métier et locaux",
+          points: 2,
+          action: "Intégrer des mots-clés métier et de localisation dans les réponses aux avis",
+        },
+        {
           id: "recent_reviews",
-          label: "Avis récents (< 1 mois)",
+          label: "Au moins 1 avis reçu dans les 30 derniers jours",
           points: 3,
-          action:
-            "Créer un QR code avis et le placer en caisse, sur factures, devis",
+          action: "Créer un QR code avis et le placer en caisse, sur factures, devis",
+        },
+        {
+          id: "review_count_20",
+          label: "20+ avis",
+          points: 2,
+          action: "Atteindre 20 avis minimum pour établir la crédibilité",
+        },
+        {
+          id: "review_count",
+          label: "50+ avis",
+          points: 2,
+          action: "Atteindre 50 avis minimum (91% des consommateurs lisent les avis)",
         },
         {
           id: "qr_reviews",
-          label: "QR code avis configuré",
+          label: "QR Code avis mis en place",
           points: 1,
           action: "Créer et utiliser le QR code Google pour collecter des avis",
+          bonus: !0,
         },
       ],
     },
     {
       id: "posts",
-      label: "Publications GMB",
+      label: "Activité Google",
       icon: "📢",
       type: "dynamic",
       criteria: [
         {
+          id: "posts_recent",
+          label: "Publication publiée dans les 30 derniers jours",
+          points: 3,
+          action: "Publier au minimum 1 post ce mois-ci",
+        },
+        {
           id: "posts_frequency",
-          label: "1+ publication/semaine",
+          label: "Publications régulières",
           points: 4,
-          action: "Publier au minimum 1 post par semaine (5x plus de vues)",
+          action: "Maintenir un rythme régulier de publications (minimum 1/semaine)",
         },
         {
           id: "posts_cta",
-          label: "CTA dans les publications",
+          label: "Appel à l'action (CTA) présent",
           points: 2,
           action: "Ajouter un bouton d appel à l action dans chaque post",
         },
         {
-          id: "posts_offers",
-          label: "Offres/Événements publiés",
+          id: "posts_keywords",
+          label: "Mots-clés métier et localisation dans les publications",
           points: 2,
-          action:
-            "Créer une offre ou événement (62% motivés par les offres limitées)",
+          action: "Intégrer des mots-clés métier et de localisation dans chaque publication",
+        },
+        {
+          id: "posts_offers",
+          label: "Offres ou événements publiés",
+          points: 2,
+          action: "Créer une offre ou événement (62% motivés par les offres limitées)",
         },
         {
           id: "posts_variety",
-          label: "3 types de posts différents",
-          points: 0,
-          action: "Varier : Updates + Offres + Événements",
+          label: "Diversité des publications (actualités, offres, événements)",
+          points: 2,
+          action: "Varier les types de posts : actualités, offres, événements",
+          bonus: !0,
         },
       ],
     },
@@ -319,10 +379,13 @@ const CATS = [
   ],
   getLvl = (e) => Ri.find((t) => e >= t.min) || Ri[4],
   Oc = () => Object.fromEntries(ALL_CRITERIA.map((e) => [e.id, null])),
-  calcScore = (e) =>
-    Math.round(
-      (ALL_CRITERIA.reduce((t, i) => (e[i.id] === !0 ? t + i.points : t), 0) / Ef) * 100,
-    ),
+  calcScore = (e) => {
+    const audited = ALL_CRITERIA.filter((c) => !c.bonus && e[c.id] !== null && e[c.id] !== void 0);
+    const total = audited.reduce((s, c) => s + c.points, 0);
+    if (total === 0) return 0;
+    const earned = audited.filter((c) => e[c.id] === !0).reduce((s, c) => s + c.points, 0);
+    return Math.min(100, Math.round((earned / total) * 100));
+  },
   /* Dérive les critères des 3 piliers à partir des données toujours à jour
      du Résumé (e.data.extracted), pour ne jamais afficher de chiffres figés
      issus d'un ancien audit (qui peut être incomplet/obsolète après une
@@ -330,34 +393,57 @@ const CATS = [
   deriveGmbScores = (e) => {
     const ext = (e.data && e.data.extracted) || {};
     const perf = e.perf || {};
+    const reviewNb = parseInt(ext.reviewCount)||parseInt(perf.avisGoogleNb)||0;
+    const photoNb  = parseInt(ext.photoCount)||parseInt(ext.photos)||0;
+    const postsNb  = parseInt(ext.postsCount)||0;
     const derived = {
+      // identity
+      business_name:      !!(e.name || ext.name),
       category_primary:   !!(e.category || ext.category),
       category_secondary: !!(ext.secondaryCategories && Object.keys(ext.secondaryCategories).length > 0),
-      desc_length:        !!((ext.description||"").length > 200),
-      desc_keywords:      !!((ext.description||"").length > 100),
-      services_listed:    !!((ext.services && Object.keys(ext.services).length > 0) || (e.manualServices||[]).length > 0),
-      products_listed:    !!((ext.products && Object.keys(ext.products).length > 0) || (e.manualProducts||[]).length > 0),
-      attributes:         !!(ext.attributes && Object.keys(ext.attributes).length > 0),
-      business_name:      !!(e.name || ext.name),
-      address:            !!(e.address || ext.address),
-      service_area:       !!((e.manualZones||[]).length > 0 || ext.serviceArea),
+      social_links:       !!(ext.socialLinks && Object.keys(ext.socialLinks).length > 0),
+      // contact
       phone:              !!(e.phone || ext.phone),
+      website:            !!(e.website || ext.website),
+      address:            !!(e.address || ext.address),
       hours_regular:      !!(ext.hours || ext.hoursRegular),
       hours_special:      !!(ext.hoursSpecial),
+      nap_consistency:    !!(e.phone && e.address),
+      chat_link:          !!(ext.chatLink || ext.messagingEnabled),
+      // description
+      desc_length:        !!((ext.description||"").length >= 700),
+      desc_keywords:      null, // cannot verify keywords without NLP — left for audit AI
+      services_listed:    !!((ext.services && Object.keys(ext.services).length >= 3) || (e.manualServices||[]).length >= 3),
+      services_desc:      !!((ext.services && Object.values(ext.services||{}).some(s => s && s.length > 20)) || false),
+      attributes:         !!(ext.attributes && Object.keys(ext.attributes).length > 0),
+      products_listed:    !!((ext.products && Object.keys(ext.products).length > 0) || (e.manualProducts||[]).length > 0),
+      products_desc:      !!((ext.products && Object.values(ext.products||{}).some(p => p && p.length > 20)) || false),
+      photo_logo:         !!(ext.hasLogo || ext.photoLogo),
+      photo_cover:        !!(ext.hasCover || ext.photoCover),
+      menu_listed:        null, // sector-dependent, left for audit AI
+      booking_link:       null, // sector-dependent, left for audit AI
+      // photos
+      photo_interior:     !!(photoNb >= 10),
+      photo_team:         !!(photoNb >= 15),
+      photo_recent:       null, // cannot derive date of last photo from count alone
+      photo_renamed:      null,
+      photo_count:        !!(photoNb >= 20),
+      // reviews
       rating:             !!((parseFloat(ext.rating)||0) >= 4.0),
-      review_count:       !!((parseInt(ext.reviewCount)||parseInt(perf.avisGoogleNb)||0) >= 10),
-      response_rate:      !!((parseFloat(perf.tauxReponse)||0) >= 50),
+      response_rate:      !!((parseFloat(perf.tauxReponse)||0) >= 80),
       response_quality:   !!(perf.tauxReponse),
-      recent_reviews:     !!((parseInt(ext.reviewCount)||0) > 5),
-      photo_count:        !!((parseInt(ext.photoCount)||parseInt(ext.photos)||0) >= 5),
-      photo_cover:        !!(ext.photoCount || ext.photos),
-      photo_logo:         !!(ext.photoCount || ext.photos),
-      photo_interior:     !!((parseInt(ext.photoCount)||parseInt(ext.photos)||0) >= 10),
-      photo_team:         !!((parseInt(ext.photoCount)||parseInt(ext.photos)||0) >= 15),
-      photo_recent:       !!(ext.photoCount || ext.photos),
-      posts_frequency:    !!((parseInt(ext.postsCount)||0) >= 2),
-      posts_cta:          !!(ext.postsCount),
-      posts_offers:       !!(ext.postsCount),
+      response_keywords:  null,
+      recent_reviews:     null, // cannot derive from total count alone
+      review_count_20:    !!(reviewNb >= 20),
+      review_count:       !!(reviewNb >= 50),
+      qr_reviews:         null,
+      // posts
+      posts_recent:       !!(postsNb >= 1),
+      posts_frequency:    !!(postsNb >= 4),
+      posts_cta:          null, // cannot verify CTA without reading post content
+      posts_keywords:     null,
+      posts_offers:       null, // cannot verify offer type without reading post content
+      posts_variety:      null,
     };
     /* Les corrections manuelles de l'utilisateur restent prioritaires,
        mais on ne garde plus jamais les anciens scores d'audit figés. */
@@ -1325,10 +1411,9 @@ Entrée libre — venez nombreux.
 async function callAI(e, t, i = 0) {
   var p;
   const r = t;
-  if (!r) throw new Error("Clé API manquante — entrez votre clé Anthropic.");
   let o;
   try {
-    o = await fetch("https://api.anthropic.com/v1/messages", {
+    o = await fetch("/api/data/sync?action=ai", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -1423,11 +1508,13 @@ async function callAI(e, t, i = 0) {
 }
 async function $c(e, t, i, zones = []) {
   const zonesSection = zones.length > 0
-    ? `\nZONES DESSERVIES DÉCLARÉES (${zones.length}) :\n${zones.map((z,idx) => `${idx+1}. ${z}`).join('\n')}\n→ Utilise ces zones EXACTES dans les zoneRankings, les mots-clés locaux et les posts. Chaque zone doit apparaître dans au moins un mot-clé et une recommandation.\n→ Le "service_area" doit être TRUE si ces zones sont présentes.\n`
+    ? `\nZONES DESSERVIES DÉCLARÉES (${zones.length}) :\n${zones.map((z,idx) => `${idx+1}. ${z}`).join('\n')}\n→ Utilise ces zones EXACTES dans les zoneRankings, les mots-clés locaux et les posts. Chaque zone doit apparaître dans au moins un mot-clé et une recommandation.\n→ Intègre ces zones dans les zoneRankings et les recommandations de mots-clés locaux.\n`
     : `\nAucune zone desservie déclarée — génère des suggestions de zones réalistes basées sur la ville et le secteur d'activité.\n`;
 
   return callAI(
-    `Analyse cette fiche Google Business Profile. Utilise les vraies données extraites. AUCUN emoji dans les posts, Q&R, services, produits.
+    `Tu es un expert SEO local francophone. Toutes tes réponses sont rédigées en français correct avec tous les accents (é, è, ê, à, ù, î, ô, ç…) et toutes les apostrophes (l', d', n', c', j', qu'…). N'utilise jamais de translittération ni de caractères ASCII en remplacement des caractères accentués. AUCUN emoji dans les textes, Q&R, services, produits.
+
+Analyse cette fiche Google Business Profile. Utilise les vraies données extraites.
 
 FICHE :
 """${t}"""
@@ -1460,7 +1547,7 @@ SI ARTISAN / SERVICE À DOMICILE :
 - Local Service Ads (Annonces Services Locaux) : signaler cette opportunité dans les insights.quickWins si la fiche n'a pas de badge "Google Garanti"
 - Dans les posts : réalisations avant/après avec la VRAIE commune dans le titre du post + mots-clés du service
 - Vérifier les attributs de certification (RGE, QualiPAC, garanties) → signaler si absents
-- "menu_or_services" = true si liste de services avec catégories, descriptions et au moins 1 prix visible
+- "menu_listed" = null pour les artisans (critère non applicable hors secteur restaurant/food/loisirs)
 
 SI BEAUTÉ / BIEN-ÊTRE :
 - Vérifie système de réservation en ligne (Planity, Treatwell, Vagaro...) → CRITIQUE
@@ -1470,7 +1557,7 @@ SI BEAUTÉ / BIEN-ÊTRE :
 SI TOURS & ATTRACTIONS / LOISIRS :
 - Vérifie si activités et billets sont listés (Ticket Editor Google ou partenaire Evendo, GetYourGuide) → CRITIQUE
 - "booking_link" = lien de réservation ou achat de billets en ligne
-- "menu_or_services" = liste des activités avec durées, tarifs et niveaux
+- "menu_listed" = liste des activités avec durées, tarifs et niveaux
 - Vérifie les attributs : famille-friendly, accessibilité, groupes, durée de l'activité
 - Dans les posts : Événement avec date + offre limitée + vidéos ambiance
 - Dans la roadmap : Ticket Editor → photos ambiance → lien réservation → posts événements
@@ -1482,52 +1569,72 @@ OBJECTIF TOP 3 GOOGLE MAPS — RÈGLES TRANSVERSALES :
 - Dans la roadmap, "month1.objective" doit être "Bases TOP 10", "month2.objective" = "TOP 5", "month3.objective" = "TOP 3"
 
 RÈGLES ABSOLUES POUR LA ROADMAP (PRIORITÉ CRITIQUE) :
-La roadmap ne contient QUE des actions directement réalisables dans Google Business Profile.
-Actions AUTORISÉES dans la roadmap :
-- Optimiser la description GMB (mots-clés, longueur)
-- Ajouter/modifier les catégories principales et secondaires dans GBP
-- Compléter les attributs de la fiche (horaires, accessibilité, paiements, etc.)
-- Ajouter ou mettre à jour les photos (couverture, logo, réalisations, équipe)
-- Publier des posts GMB (actualités, offres, événements)
-- Répondre aux avis Google (taux de réponse, qualité des réponses)
-- Mettre en place une stratégie de collecte d'avis Google (QR code, lien court)
-- Configurer la zone de service dans GBP
-- Ajouter/mettre à jour les services et produits dans la fiche GBP
-- Lier les réseaux sociaux depuis la fiche GBP
-- Ajouter un lien de réservation ou commande dans GBP
-- Activer WhatsApp/messagerie dans GBP
-- Vérifier et corriger les horaires (réguliers + exceptionnels) dans GBP
-- Optimiser les mots-clés dans les posts et réponses aux avis
-Actions STRICTEMENT INTERDITES dans la roadmap (ne jamais mentionner) :
-- Backlinks, partenariats pour liens entrants, netlinking
-- Citations locales dans des annuaires externes (PagesJaunes, Yelp, etc.)
-- SEO on-page du site web
-- Création de contenu blog ou pages web
-- Publicité Google Ads ou Meta Ads
-- Toute action hors de la plateforme Google Business Profile
+La roadmap couvre TOUS les critères en échec (false) identifiés dans les scores — chaque critère false doit générer au minimum une action dans la roadmap. Ne rien oublier.
+INTERDIT ABSOLU : inclure dans la roadmap une action pour un critère dont le score est true. Si desc_length = true → NE PAS inclure d'action sur la description. Si posts_recent = true → NE PAS inclure d'action sur les posts récents. Si rating = true → NE PAS inclure d'action sur la note. Appliquer ce filtre pour CHAQUE critère true.
+Répartis les actions sur 3 mois selon la priorité : Mois 1 = critères fondamentaux (identité, coordonnées, description), Mois 2 = critères de contenu et visibilité (photos, services, produits, posts), Mois 3 = critères de notoriété et progression (avis, réponses, mots-clés, optimisations avancées).
+FORMAT : chaque action en UNE phrase courte et concrète (15 mots maximum), sans liste intégrée ni parenthèses longues.
+ORTHOGRAPHE — RÈGLE CRITIQUE : toutes les actions DOIVENT être écrites avec les accents et apostrophes français corrects. C'est NON-NÉGOCIABLE.
+❌ FAUX (interdit) : "Rediger une description de 700 caracteres", "Ajouter des categories secondaires", "Repondre aux avis clients"
+✅ JUSTE (obligatoire) : "Rédiger une description de 700 caractères", "Ajouter des catégories secondaires", "Répondre aux avis clients"
+Caractères obligatoires : é è ê ë à â ù û î ô ç œ — apostrophe : l' d' n' c' j' qu' s'
+Ne jamais écrire : "e" à la place de "é", "a" à la place de "à", "c" à la place de "ç", ni aucune lettre sans accent quand l'accent est requis en français.
+Nombre d'actions : autant que nécessaire pour couvrir tous les critères en échec — minimum 4, pas de maximum.
+Actions AUTORISÉES : optimiser description, catégories, attributs, photos, posts GMB, répondre aux avis, collecte d'avis, zone de service, services/produits GBP, réseaux sociaux liés, lien réservation, messagerie GBP, horaires.
+Actions INTERDITES : backlinks, annuaires externes, SEO site web, blog, Google Ads, toute action hors GBP.
 
-CADENCE MENSUELLE — ALIGNEMENT SUR LE FORFAIT "LEADER LOCAL" (139€/mois) :
-Le client est accompagné via un abonnement mensuel qui inclut déjà, chaque mois : 4 posts Google, 10 photos,
-réponse aux avis récents sous 24h + traitement des anciens avis en attente, optimisation continue de la fiche,
-veille concurrentielle locale, suivi du positionnement des mots-clés, un rapport mensuel PDF et un accès WhatsApp
-prioritaire (réponse sous 3h). La roadmap doit donc être calibrée sur ce rythme réel et non le dépasser inutilement :
-- Ne jamais demander plus de 4 posts/mois ni plus de 10 photos/mois dans les actions (ce sont déjà les volumes livrés
-  dans le cadre de l'abonnement) — préciser plutôt LE TYPE et LE SUJET des posts/photos à prioriser ce mois-ci
-  (ex: "1 post Offre + 1 post Réalisation + 2 posts Conseil ciblant [mot-clé local]", "10 photos : 4 réalisations
-  récentes, 3 équipe, 3 lieux/zone desservie") plutôt que d'augmenter la cadence
-- Pour les avis, formuler les actions en cohérence avec l'engagement "réponse sous 24h" déjà en place
-  (ex: "Traiter les X avis en attente identifiés ce mois", "Relancer une campagne de collecte d'avis via QR code")
-- Pour le positionnement, s'appuyer sur le suivi mensuel des mots-clés déjà inclus dans le forfait
-- Chaque action de la roadmap doit rester réalisable DANS le volume déjà prévu par l'abonnement — la progression
-  vers le TOP 3 se fait par la PRIORISATION et la QUALITÉ du contenu mensuel, pas par une charge de travail accrue
+CRITÈRES À ÉVALUER — RÈGLES PRÉCISES PAR ID :
+🏢 IDENTITÉ
+- "business_name" : true si le nom ne contient pas de mots-clés ajoutés artificiellement (ex: "Plombier Vannes - Jean Dupont" → false)
+- "category_primary" : true si la catégorie principale GBP est précise et correspond exactement au cœur de métier
+- "category_secondary" : true si au moins 2 catégories secondaires pertinentes sont renseignées
+- "social_links" : true si au moins un réseau social est lié à la fiche (Facebook, Instagram, YouTube, X/Twitter)
 
-CRITÈRES NOUVEAUX À ÉVALUER (Google Playbooks 2026) :
-- "chat_link" : true si WhatsApp, SMS Chat ou numéro de messagerie présent (67% préfèrent les messages aux appels)
-- "social_links" : true si au moins un réseau social est lié à la fiche (Facebook, Instagram, YouTube, X)
-- "booking_link" : true si lien de réservation, commande, billets en ligne ou prise de RDV présent
-- "menu_or_services" : true si menu structuré (restaurant) OU liste de services/activités avec prix (autres secteurs)
-- "posts_variety" : true si au moins 2 types de posts différents (Updates + Offres + Événements)
-- "qr_reviews" : true si mention de QR code avis ou stratégie de collecte d avis active
+📞 COORDONNÉES & HORAIRES
+- "phone" : true si un numéro de téléphone local est renseigné
+- "website" : true si un site web est renseigné
+- "address" : true si l'adresse postale complète est présente et exacte
+- "hours_regular" : true si les horaires sont renseignés pour chaque jour de la semaine
+- "hours_special" : true si des horaires exceptionnels ou jours fériés sont configurés
+- "nap_consistency" : true si Nom/Adresse/Téléphone semblent cohérents (pas de doublon, pas de variation d'adresse visible)
+- "chat_link" : true si WhatsApp, SMS Chat ou messagerie GBP est activée (selon pertinence secteur)
+
+✍️ OPTIMISATION DE LA FICHE
+- "desc_length" : true si la description fait 700 caractères ou plus
+- "desc_keywords" : true si la description contient des mots-clés locaux et métier pertinents
+- "services_listed" : true si au moins 3 services sont listés dans la section Services de GBP
+- "services_desc" : true si les services listés ont des descriptions complètes (pas juste un nom)
+- "attributes" : true si les attributs GBP sont complétés (accessibilité, paiements, Wi-Fi, etc.)
+- "products_listed" : true si des produits sont listés dans la section Produits GBP
+- "products_desc" : true si les produits ont des descriptions et/ou prix renseignés
+- "photo_logo" : true si un logo haute qualité est uploadé
+- "photo_cover" : true si une photo de couverture professionnelle est présente
+- "menu_listed" : true si un menu structuré est présent (secteur restaurant/food uniquement — sinon null)
+- "booking_link" : true si un lien de réservation/commande/RDV est configuré (secteur pertinent — sinon null)
+
+📸 PHOTOS
+- "photo_interior" : true si des photos d'intérieur, locaux ou réalisations sont présentes
+- "photo_team" : true si des photos d'équipe ou de produits sont présentes
+- "photo_recent" : true si une photo a été publiée dans les 30 derniers jours
+- "photo_renamed" : null (impossible à vérifier depuis la fiche — laisser null)
+- "photo_count" : true si 20 photos ou plus sont publiées
+
+⭐ AVIS & RÉPUTATION
+- "rating" : true si la note moyenne est ≥ 4,0
+- "response_rate" : true si le taux de réponse aux avis semble ≥ 80% (regarder le ratio réponses/avis visibles)
+- "response_quality" : true si les réponses sont personnalisées (prénom du client, contexte spécifique)
+- "response_keywords" : true si les réponses aux avis intègrent des mots-clés métier et locaux
+- "recent_reviews" : true si au moins 1 avis a été reçu dans les 30 derniers jours
+- "review_count_20" : true si 20 avis ou plus sont présents
+- "review_count" : true si 50 avis ou plus sont présents
+- "qr_reviews" : true si mention d'un QR code avis ou stratégie active de collecte d'avis (bonus)
+
+📢 ACTIVITÉ GOOGLE
+- "posts_recent" : true si au moins 1 post a été publié dans les 30 derniers jours
+- "posts_frequency" : true si les posts sont réguliers (au moins 1/semaine sur les 3 derniers mois visibles)
+- "posts_cta" : true si les posts contiennent un appel à l'action (bouton CTA, lien, invitation à agir)
+- "posts_keywords" : true si les posts intègrent des mots-clés métier et de localisation
+- "posts_offers" : true si au moins une offre ou un événement a été publié récemment
+- "posts_variety" : true si au moins 2 types de posts différents sont visibles (actualités + offres, ou offres + événements) (bonus)
 
 RÈGLES ABSOLUES POUR LES MOTS-CLÉS (PRIORITÉ CRITIQUE — NE JAMAIS ENFREINDRE) :
 - Le nom de la fiche fourni est le NOM EXACT sur Google Maps — utilise-le tel quel pour identifier l'établissement
@@ -1553,41 +1660,20 @@ RÈGLES CRITIQUES POUR LES ZONES GÉOGRAPHIQUES (PRIORITÉ ABSOLUE) :
 - Pour geoZones, liste aussi les vraies communes du secteur
 - Les zoneRecos doivent mentionner le vrai nom de la zone entre guillemets
 
-RÈGLES POUR LES 12 POSTS GOOGLE (CRITIQUE) :
-Tu publies des Google Posts pour la fiche Google My Business de cet établissement. Tu rédiges le texte comme si tu étais le gérant qui s'adresse directement à ses clients.
+CONCURRENTS — RÈGLE ABSOLUE (PRIORITÉ CRITIQUE) :
+Tu n'as accès qu'à la fiche GBP du client — tu ne peux pas voir les résultats de recherche Google Maps ni identifier de vrais concurrents locaux.
+INTERDIT : inventer des noms de concurrents, utiliser des descriptions génériques ("profil type concurrent", "établissement concurrent", "kinésiologue local"…), ou fabriquer des données concurrentielles.
+Si tu ne peux pas nommer un concurrent réel avec certitude depuis les données fournies, laisse le tableau competitors vide : "competitors":[]
+Le scan carte (fonctionnalité séparée) fournira les vrais concurrents avec données réelles.
 
-Ton et style :
-- Écris comme un professionnel passionné qui parle à ses clients, pas comme un rédacteur marketing.
-- Sois concret, ancré dans la réalité du métier : vocabulaire du terrain, situations vécues, détails que seul un expert connaît.
-- Chaque phrase doit apporter de la valeur (un fait, un conseil, une nuance) — rien de remplissage.
-
-Structure de chaque post :
-- Accroche en première phrase : pose un problème, une question ou un fait concret — jamais une présentation générique.
-- Corps : développe avec l'expertise métier sur le sujet, alterne phrases courtes percutantes et phrases plus développées. Intègre naturellement 2-3 mots-clés SEO locaux réels (ville + métier + service).
-- Fermeture : une ouverture naturelle qui donne envie d'agir (visiter, appeler, se renseigner) sans appel à l'action explicite.
-- Ajoute 3-4 hashtags pertinents sur la dernière ligne (ville, métier, secteur).
-
-Contraintes techniques :
-- Longueur cible : 1200 caractères (entre 1100 et 1300, jamais au-dessus de 1400).
-- Termine OBLIGATOIREMENT par une phrase complète (point, point d'exclamation ou point d'interrogation). Jamais d'idée en suspens.
-- Aucun markdown : pas de gras, pas de listes à puces, pas de titres.
-- Pas de liens, pas de numéro de téléphone, pas de prix dans le texte.
-- AUCUN emoji dans le corps du texte.
-
-Génère EXACTEMENT 4 posts (semaines 1 à 4).
-Varie les types : 1 Realisation, 1 Conseil, 1 Offre, 1 Temoignage.
-Chaque post doit mentionner la ville réelle, le secteur d'activité réel, et des termes métier concrets et authentiques.
+IDÉES DE PUBLICATIONS GOOGLE (4 titres uniquement) :
+Génère EXACTEMENT 4 idées de titres de posts Google (semaines 1 à 4).
+- 1 Realisation, 1 Conseil, 1 Offre, 1 Temoignage.
+- Chaque titre doit être accrocheur, sans emoji, 8-10 mots max, ancré dans la ville réelle et le secteur d'activité réel.
+- NE génère PAS de contenu de post — uniquement le titre, le type, les mots-clés et le meilleur moment de publication.
 
 JSON complet :
-{"scores":{"business_name":true,"category_primary":false,"category_secondary":false,"address":true,"service_area":false,"phone":true,"website":false,"hours_regular":false,"hours_special":false,"desc_length":false,"desc_keywords":false,"attributes":false,"services_listed":false,"products_listed":false,"photo_count":false,"photo_cover":false,"photo_logo":false,"photo_interior":false,"photo_team":false,"photo_recent":false,"rating":true,"review_count":false,"response_rate":false,"response_quality":false,"recent_reviews":false,"posts_frequency":false,"posts_cta":false,"posts_offers":false},"pillars":{"pertinence":{"score":42,"label":"Moyen","details":"Explication concrète basée sur la fiche"},"proximite":{"score":65,"label":"Bon","details":"Explication proximité"},"prominence":{"score":38,"label":"Faible","details":"Explication proéminence"},"avis":{"score":55,"label":"Moyen","details":"Explication avis"},"completion":{"score":70,"label":"Bon","details":"Explication complétion"}},"extracted":{"name":"NOM RÉEL","category":"CATÉGORIE","address":"ADRESSE","phone":"TEL","website":"SITE","rating":"NOTE/5","reviewCount":"NB","photoCount":"NB","postsCount":"NB","city":"VILLE","sector":"SECTEUR","secondaryCategories":{"present":["catégorie secondaire réelle si présente"],"suggested":["suggestion 1","suggestion 2","suggestion 3"]},"services":{"present":[{"name":"Service réel","description":"Description"}],"suggested":[{"name":"Service suggéré","description":"Pourquoi l ajouter"}]},"products":{"present":[{"name":"Produit réel","description":"Description","price":"Prix"}],"suggested":[{"name":"Produit suggéré","description":"Pourquoi l ajouter","price":""}]}},"competitorRanking":{"estimatedPosition":"3-5","marketShareEstimate":"15%","rankingFactors":[{"factor":"Note","ourValue":"4.2","avgCompetitor":"4.6","gap":"-0.4","impact":"Fort"},{"factor":"Avis","ourValue":"28","avgCompetitor":"45","gap":"-17","impact":"Fort"},{"factor":"Photos","ourValue":"12","avgCompetitor":"30","gap":"-18","impact":"Moyen"},{"factor":"Posts","ourValue":"Non","avgCompetitor":"Oui","gap":"Absent","impact":"Fort"}],"rankingOpportunity":"Comment passer TOP 3 concrètement"},"insights":{"summary":"Synthèse 2-3 phrases concrètes","strengths":["force 1","force 2","force 3"],"weaknesses":["faiblesse 1","faiblesse 2","faiblesse 3"],"quickWins":["action 1","action 2","action 3"]},"keywords":{"primary":[{"kw":"[MÉTIER] [VRAIE VILLE — OBLIGATOIRE, ex: plombier Vannes]","volume":"500–1k","position":6,"positionLabel":"TOP 6","evolution":"+2","evolutionDir":"up","competition":"Forte","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":13,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":16,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 4]","rank":20,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"reco":"Publiez un post mentionnant "Ville Centre" + 2 avis de cette zone"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"reco":"Créez du contenu ciblé + citations locales"}]},{"kw":"[SERVICE PRINCIPAL] [VRAIE VILLE — ex: urgence plomberie Vannes]","volume":"200–500","position":8,"positionLabel":"TOP 8","evolution":"+3","evolutionDir":"up","competition":"Moyenne","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":12,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":18,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"reco":"Ajouter ce mot-clé dans la description et les posts"}]},{"kw":"[MÉTIER] [VRAIE COMMUNE PROCHE — ex: plombier Séné]","volume":"<50","position":3,"positionLabel":"🏆 TOP 3","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Maintenir","action":"Maintenir — posts + avis réguliers","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"label":"🏆 TOP 3"},{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":7,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE VOISINE]","rank":14,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"reco":"Maintenir avec 2 posts/mois mentionnant cette zone"}]}],"secondary":[{"kw":"[SERVICE SECONDAIRE] [VRAIE VILLE — ex: détartrage chauffe-eau Vannes]","volume":"50–200","position":15,"positionLabel":"TOP 15","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"Post dédié + intégrer dans description","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"reco":"Un post ciblé suffirait à passer TOP 10"}]},{"kw":"[SERVICE 2] [VRAIE VILLE]","volume":"50–100","position":11,"positionLabel":"TOP 11","evolution":"0","evolutionDir":"stable","competition":"Faible","priority":"Rapide","action":"Ajouter dans les services GMB + 1 post","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"reco":"Ajouter ce service dans la fiche + photos"}]},{"kw":"[SERVICE 3] [VRAIE VILLE]","volume":"<50","position":5,"positionLabel":"TOP 5","evolution":"+2","evolutionDir":"up","competition":"Très faible","priority":"Maintenir","action":"Maintenir la fréquence de posts","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"label":"Bonne visib."}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"reco":"Continuer les posts réguliers"}]},{"kw":"[SERVICE 4] [VRAIE VILLE]","volume":"100–200","position":19,"positionLabel":"TOP 19","evolution":"-1","evolutionDir":"down","competition":"Moyenne","priority":"Urgent","action":"Optimiser description + créer contenu dédié","trend":"↓","zoneRankings":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"label":"Non visible"},{"zone":"[NOM RÉEL COMMUNE PROCHE]","rank":24,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"reco":"Ajouter mot-clé dans description + 2 posts urgents"}]},{"kw":"[SERVICE 5] [VRAIE VILLE]","volume":"50–100","position":8,"positionLabel":"TOP 8","evolution":"+4","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"1 post + répondre aux avis mentionnant ce service","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"reco":"Post + photo de réalisation spécifique"}]}],"longTail":["[requête longue traîne AVEC VRAIE VILLE 1]","[requête longue traîne AVEC VRAIE VILLE 2]","[requête longue traîne AVEC VRAIE VILLE 3]","[requête longue traîne AVEC VRAIE VILLE 4]","[requête longue traîne AVEC VRAIE VILLE 5]","[requête longue traîne AVEC VRAIE VILLE 6]","[requête longue traîne AVEC VRAIE VILLE 7]","[requête longue traîne AVEC VRAIE VILLE 8]"],"geoZones":["[VRAIE VILLE]","[VRAIE COMMUNE 1]","[VRAIE COMMUNE 2]","[VRAIE COMMUNE 3]","[VRAIE COMMUNE 4]","[VRAIE ZONE ÉLARGIE]"]},"competitors":[{"name":"Nom réel concurrent 1","rating":"4.8","reviews":87,"photos":45,"posts":true,"responseRate":"90%","mainKeywords":["kw1 ville","kw2 ville","kw3"],"topPosition":2,"strengths":["Force principale","Deuxième force"],"weaknesses":["Faiblesse identifiée"],"threat":"Haute","monthlyEstimatedVisits":"300-500"},{"name":"Nom réel concurrent 2","rating":"4.6","reviews":52,"photos":30,"posts":true,"responseRate":"70%","mainKeywords":["kw1 ville","kw2"],"topPosition":4,"strengths":["Force principale"],"weaknesses":["Faiblesse identifiée","2e faiblesse"],"threat":"Haute","monthlyEstimatedVisits":"200-300"},{"name":"Nom réel concurrent 3","rating":"4.4","reviews":34,"photos":18,"posts":false,"responseRate":"40%","mainKeywords":["kw1","kw2 ville"],"topPosition":6,"strengths":["Force principale"],"weaknesses":["Peu de posts","Peu d'avis"],"threat":"Moyenne","monthlyEstimatedVisits":"100-200"},{"name":"Nom réel concurrent 4","rating":"4.2","reviews":21,"photos":12,"posts":false,"responseRate":"20%","mainKeywords":["kw1"],"topPosition":9,"strengths":["Force principale"],"weaknesses":["Fiche peu optimisée"],"threat":"Faible","monthlyEstimatedVisits":"50-100"},{"name":"Nom réel concurrent 5","rating":"3.9","reviews":15,"photos":8,"posts":false,"responseRate":"10%","mainKeywords":["kw1"],"topPosition":11,"strengths":["Ancienneté"],"weaknesses":["Note basse","Peu actif"],"threat":"Faible","monthlyEstimatedVisits":"<50"}],"competitorSummary":"Analyse marché 2-3 phrases concrètes sur la densité concurrentielle","competitorOpportunities":["opportunité concrète 1","opportunité concrète 2","opportunité concrète 3"],"reviews":{"analysis":"Analyse 3 phrases","score":"note","totalReviews":"nb","responseRate":"%","positiveThemes":["thème 1","thème 2","thème 3"],"negativeThemes":["point 1","point 2"],"sentimentScore":75,"responseTemplates":[{"type":"Avis positif 5 étoiles","template":"Bonjour [Prénom], merci..."},{"type":"Avis négatif","template":"Bonjour [Prénom], nous sommes navrés..."},{"type":"Avis neutre","template":"Bonjour [Prénom], merci pour ce retour..."}],"acquisitionTips":["conseil 1","conseil 2","conseil 3","conseil 4"]},"postIdeas":[{"week":1,"type":"Realisation","title":"Titre accrocheur sans emoji — 8-10 mots max","content":"Accroche percutante sur un fait concret ou un problème du métier.
-
-Paragraphe 1 : développement avec le vocabulaire du terrain, les détails que seul un expert connaît. Situations vécues, techniques réelles, matériaux utilisés. 3-4 phrases qui décrivent l'enjeu et la solution apportée.
-
-Paragraphe 2 : résultat concret, ancré dans la réalité de la ville et du secteur. Intègre naturellement 2-3 mots-clés SEO locaux (ville + métier + service). Phrases courtes et percutantes alternant avec des phrases plus développées.
-
-Fermeture naturelle qui donne envie d'agir sans appel à l'action explicite.
-
-#VilleRéelle #MétierRéel #Secteur #[MotCléLocal]","keywords":["mot-clé 1","mot-clé 2","mot-clé 3"],"cta":"","bestDay":"Lundi","bestTime":"10h"},{"week":2,"type":"Conseil","title":"Titre conseil","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA adapté","bestDay":"Jeudi","bestTime":"14h"},{"week":3,"type":"Offre","title":"Titre offre","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA offre","bestDay":"Lundi","bestTime":"9h"},{"week":4,"type":"Temoignage","title":"Titre témoignage","content":"Contenu complet...","keywords":["kw1","kw2"],"cta":"CTA témoignage","bestDay":"Mercredi","bestTime":"10h"}],"roadmap":{"month1":{"title":"Fondations","objective":"Fiche à 80%","actions":["action 1","action 2","action 3","action 4","action 5"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month2":{"title":"Notoriété","objective":"TOP 5","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month3":{"title":"TOP 3","objective":"TOP 3","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"beyond":{"title":"Consolidation","actions":["stratégie 1","stratégie 2","stratégie 3"],"expectedResults":{"visibilité":"+300%","appels":"+200%","position":"TOP 1-3"}}}}`,
+{"scores":{"business_name":true,"category_primary":false,"category_secondary":false,"social_links":false,"phone":true,"website":false,"address":true,"hours_regular":false,"hours_special":false,"nap_consistency":false,"chat_link":null,"desc_length":false,"desc_keywords":false,"services_listed":false,"services_desc":false,"attributes":false,"products_listed":false,"products_desc":false,"photo_logo":false,"photo_cover":false,"menu_listed":null,"booking_link":null,"photo_interior":false,"photo_team":false,"photo_recent":false,"photo_renamed":null,"photo_count":false,"rating":true,"response_rate":false,"response_quality":false,"response_keywords":false,"recent_reviews":false,"review_count_20":false,"review_count":false,"qr_reviews":null,"posts_recent":false,"posts_frequency":false,"posts_cta":false,"posts_keywords":false,"posts_offers":false,"posts_variety":null},"extracted":{"name":"NOM RÉEL","category":"CATÉGORIE","address":"ADRESSE","phone":"TEL","website":"SITE","rating":"NOTE/5","reviewCount":"NB","photoCount":"NB","postsCount":"NB","city":"VILLE","sector":"SECTEUR","secondaryCategories":{"present":["catégorie secondaire réelle si présente"],"suggested":["suggestion 1","suggestion 2","suggestion 3"]},"services":{"present":[{"name":"Service réel","description":"Description"}],"suggested":[{"name":"Service suggéré","description":"Pourquoi l ajouter"}]},"products":{"present":[{"name":"Produit réel","description":"Description","price":"Prix"}],"suggested":[{"name":"Produit suggéré","description":"Pourquoi l ajouter","price":""}]}},"competitorRanking":{"estimatedPosition":"3-5","marketShareEstimate":"15%","rankingFactors":[{"factor":"Note","ourValue":"4.2","avgCompetitor":"4.6","gap":"-0.4","impact":"Fort"},{"factor":"Avis","ourValue":"28","avgCompetitor":"45","gap":"-17","impact":"Fort"},{"factor":"Photos","ourValue":"12","avgCompetitor":"30","gap":"-18","impact":"Moyen"},{"factor":"Posts","ourValue":"Non","avgCompetitor":"Oui","gap":"Absent","impact":"Fort"}],"rankingOpportunity":"Comment passer TOP 3 concrètement"},"insights":{"summary":"Synthèse 2-3 phrases concrètes","strengths":["force 1","force 2","force 3"],"weaknesses":["faiblesse 1","faiblesse 2","faiblesse 3"],"quickWins":["action 1","action 2","action 3"]},"keywords":{"primary":[{"kw":"[MÉTIER] [VRAIE VILLE — OBLIGATOIRE, ex: plombier Vannes]","volume":"500–1k","position":6,"positionLabel":"TOP 6","evolution":"+2","evolutionDir":"up","competition":"Forte","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":13,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":16,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 4]","rank":20,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":6,"reco":"Publiez un post mentionnant "Ville Centre" + 2 avis de cette zone"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":9,"reco":"Créez du contenu ciblé + citations locales"}]},{"kw":"[SERVICE PRINCIPAL] [VRAIE VILLE — ex: urgence plomberie Vannes]","volume":"200–500","position":8,"positionLabel":"TOP 8","evolution":"+3","evolutionDir":"up","competition":"Moyenne","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":12,"label":"À optimiser"},{"zone":"[NOM RÉEL COMMUNE 2]","rank":18,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 3]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":8,"reco":"Ajouter ce mot-clé dans la description et les posts"}]},{"kw":"[MÉTIER] [VRAIE COMMUNE PROCHE — ex: plombier Séné]","volume":"<50","position":3,"positionLabel":"🏆 TOP 3","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Maintenir","action":"Maintenir — posts + avis réguliers","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"label":"🏆 TOP 3"},{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":7,"label":"Bonne visib."},{"zone":"[NOM RÉEL COMMUNE VOISINE]","rank":14,"label":"À travailler"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":3,"reco":"Maintenir avec 2 posts/mois mentionnant cette zone"}]}],"secondary":[{"kw":"[SERVICE SECONDAIRE] [VRAIE VILLE — ex: détartrage chauffe-eau Vannes]","volume":"50–200","position":15,"positionLabel":"TOP 15","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"Post dédié + intégrer dans description","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"label":"À travailler"},{"zone":"[NOM RÉEL COMMUNE 1]","rank":22,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE] Centre","rank":15,"reco":"Un post ciblé suffirait à passer TOP 10"}]},{"kw":"[SERVICE 2] [VRAIE VILLE]","volume":"50–100","position":11,"positionLabel":"TOP 11","evolution":"0","evolutionDir":"stable","competition":"Faible","priority":"Rapide","action":"Ajouter dans les services GMB + 1 post","trend":"→","zoneRankings":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL COMMUNE CIBLE]","rank":11,"reco":"Ajouter ce service dans la fiche + photos"}]},{"kw":"[SERVICE 3] [VRAIE VILLE]","volume":"<50","position":5,"positionLabel":"TOP 5","evolution":"+2","evolutionDir":"up","competition":"Très faible","priority":"Maintenir","action":"Maintenir la fréquence de posts","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"label":"Bonne visib."}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":5,"reco":"Continuer les posts réguliers"}]},{"kw":"[SERVICE 4] [VRAIE VILLE]","volume":"100–200","position":19,"positionLabel":"TOP 19","evolution":"-1","evolutionDir":"down","competition":"Moyenne","priority":"Urgent","action":"Optimiser description + créer contenu dédié","trend":"↓","zoneRankings":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"label":"Non visible"},{"zone":"[NOM RÉEL COMMUNE PROCHE]","rank":24,"label":"Non visible"}],"zoneRecos":[{"zone":"[NOM RÉEL VILLE PRINCIPALE]","rank":19,"reco":"Ajouter mot-clé dans description + 2 posts urgents"}]},{"kw":"[SERVICE 5] [VRAIE VILLE]","volume":"50–100","position":8,"positionLabel":"TOP 8","evolution":"+4","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"1 post + répondre aux avis mentionnant ce service","trend":"↑","zoneRankings":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"label":"À optimiser"}],"zoneRecos":[{"zone":"[NOM RÉEL ZONE CIBLE]","rank":8,"reco":"Post + photo de réalisation spécifique"}]}],"longTail":["[requête longue traîne AVEC VRAIE VILLE 1]","[requête longue traîne AVEC VRAIE VILLE 2]","[requête longue traîne AVEC VRAIE VILLE 3]","[requête longue traîne AVEC VRAIE VILLE 4]","[requête longue traîne AVEC VRAIE VILLE 5]","[requête longue traîne AVEC VRAIE VILLE 6]","[requête longue traîne AVEC VRAIE VILLE 7]","[requête longue traîne AVEC VRAIE VILLE 8]"],"geoZones":["[VRAIE VILLE]","[VRAIE COMMUNE 1]","[VRAIE COMMUNE 2]","[VRAIE COMMUNE 3]","[VRAIE COMMUNE 4]","[VRAIE ZONE ÉLARGIE]"]},"competitors":[{"name":"Nom réel concurrent 1","rating":"4.8","reviews":87,"photos":45,"posts":true,"responseRate":"90%","mainKeywords":["kw1 ville","kw2 ville","kw3"],"topPosition":2,"strengths":["Force principale","Deuxième force"],"weaknesses":["Faiblesse identifiée"],"threat":"Haute","monthlyEstimatedVisits":"300-500"},{"name":"Nom réel concurrent 2","rating":"4.6","reviews":52,"photos":30,"posts":true,"responseRate":"70%","mainKeywords":["kw1 ville","kw2"],"topPosition":4,"strengths":["Force principale"],"weaknesses":["Faiblesse identifiée","2e faiblesse"],"threat":"Haute","monthlyEstimatedVisits":"200-300"},{"name":"Nom réel concurrent 3","rating":"4.4","reviews":34,"photos":18,"posts":false,"responseRate":"40%","mainKeywords":["kw1","kw2 ville"],"topPosition":6,"strengths":["Force principale"],"weaknesses":["Peu de posts","Peu d'avis"],"threat":"Moyenne","monthlyEstimatedVisits":"100-200"},{"name":"Nom réel concurrent 4","rating":"4.2","reviews":21,"photos":12,"posts":false,"responseRate":"20%","mainKeywords":["kw1"],"topPosition":9,"strengths":["Force principale"],"weaknesses":["Fiche peu optimisée"],"threat":"Faible","monthlyEstimatedVisits":"50-100"},{"name":"Nom réel concurrent 5","rating":"3.9","reviews":15,"photos":8,"posts":false,"responseRate":"10%","mainKeywords":["kw1"],"topPosition":11,"strengths":["Ancienneté"],"weaknesses":["Note basse","Peu actif"],"threat":"Faible","monthlyEstimatedVisits":"<50"}],"competitorSummary":"Analyse marché 2-3 phrases concrètes sur la densité concurrentielle","competitorOpportunities":["opportunité concrète 1","opportunité concrète 2","opportunité concrète 3"],"reviews":{"analysis":"Analyse 3 phrases","score":"note","totalReviews":"nb","responseRate":"%","positiveThemes":["thème 1","thème 2","thème 3"],"negativeThemes":["point 1","point 2"],"sentimentScore":75,"responseTemplates":[{"type":"Avis positif 5 étoiles","template":"Bonjour [Prénom], merci..."},{"type":"Avis négatif","template":"Bonjour [Prénom], nous sommes navrés..."},{"type":"Avis neutre","template":"Bonjour [Prénom], merci pour ce retour..."}],"acquisitionTips":["conseil 1","conseil 2","conseil 3","conseil 4"]},"postIdeas":[{"week":1,"type":"Realisation","title":"Titre accrocheur sans emoji — 8-10 mots max","keywords":["mot-clé 1","mot-clé 2","mot-clé 3"],"bestDay":"Lundi","bestTime":"10h"},{"week":2,"type":"Conseil","title":"Titre conseil accrocheur","keywords":["kw1","kw2"],"bestDay":"Jeudi","bestTime":"14h"},{"week":3,"type":"Offre","title":"Titre offre accrocheur","keywords":["kw1","kw2"],"bestDay":"Lundi","bestTime":"9h"},{"week":4,"type":"Temoignage","title":"Titre témoignage accrocheur","keywords":["kw1","kw2"],"bestDay":"Mercredi","bestTime":"10h"}],"roadmap":{"month1":{"title":"Fondations","objective":"Fiche à 80%","actions":["action 1","action 2","action 3","action 4","action 5"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month2":{"title":"Notoriété","objective":"TOP 5","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month3":{"title":"TOP 3","objective":"TOP 3","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"beyond":{"title":"Consolidation","actions":["stratégie 1","stratégie 2","stratégie 3"],"expectedResults":{"visibilité":"+300%","appels":"+200%","position":"TOP 1-3"}}}}`,
     i,
   );
 }
@@ -2134,6 +2220,456 @@ Votre projet ? Contactez [NOM] pour en discuter.`,
       icon: "✅",
     },
   ];
+function SimulateurROI({ client, clients, upd }) {
+  /* ── initialisation depuis client.roi si dispo ── */
+  const roi0 = client?.roi || {};
+  /* ── état formulaire ── */
+  const [keywords, setKeywords] = D.useState(
+    roi0.keywords || [{ id: 1, kw: "", vol: "" }]
+  );
+  const [position,     setPosition]    = D.useState(roi0.position    || "");
+  const [mission,      setMission]     = D.useState(roi0.mission     || "");
+  const [txContact,    setTxContact]   = D.useState(roi0.txContact   || "5");
+  const [txClient,     setTxClient]    = D.useState(roi0.txClient    || "20");
+  const [prudence,     setPrudence]    = D.useState(roi0.prudence    || "50");
+  const [showAdvanced, setShowAdvanced] = D.useState(false);
+  const [showGMB,      setShowGMB]     = D.useState(!!(roi0.gmbImpressions));
+  const [useRealRate,  setUseRealRate]  = D.useState(roi0.useRealRate !== false);
+  /* données GMB (R2) */
+  const [gmbImpressions, setGmbImpressions] = D.useState(roi0.gmbImpressions || "");
+  const [gmbAppels,      setGmbAppels]      = D.useState(roi0.gmbAppels      || "");
+  const [gmbItineraires, setGmbItineraires] = D.useState(roi0.gmbItineraires || "");
+  const [gmbClicsSite,   setGmbClicsSite]   = D.useState(roi0.gmbClicsSite   || "");
+  const nextId = D.useRef(Math.max(4, ...( (roi0.keywords||[]).map(k=>k.id||0) )) + 1);
+
+  /* ── persistance par client ── */
+  const saveROI = D.useCallback((patch) => {
+    if (!client || !clients || !upd) return;
+    const current = clients.find(c => c.id === client.id) || client;
+    const updated = clients.map(c => c.id === client.id ? { ...c, roi: { ...(current.roi||{}), ...patch } } : c);
+    upd(updated);
+  }, [client, clients, upd]);
+
+  /* auto-save sur changement (seulement si mode client) */
+  D.useEffect(() => {
+    if (!client) return;
+    saveROI({ keywords, position, mission, txContact, txClient, prudence, useRealRate, gmbImpressions, gmbAppels, gmbItineraires, gmbClicsSite });
+  }, [keywords, position, mission, txContact, txClient, prudence, useRealRate, gmbImpressions, gmbAppels, gmbItineraires, gmbClicsSite]); // eslint-disable-line
+
+  const addKeyword = () => {
+    setKeywords(ks => [...ks, { id: nextId.current++, kw: "", vol: "" }]);
+  };
+  const removeKeyword = (id) => setKeywords(ks => ks.filter(k => k.id !== id));
+  const updKeyword = (id, field, val) =>
+    setKeywords(ks => ks.map(k => k.id === id ? { ...k, [field]: val } : k));
+
+  /* ── calculs ── */
+  const fmt = (x, d = 0) => Number.isFinite(x) ? x.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
+  const eur = (x) => Number.isFinite(x) ? x.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }) : "–";
+
+  const totalVol  = keywords.reduce((s, k) => s + (parseFloat(k.vol) || 0), 0);
+  const pos       = parseInt(position, 10);
+  const missionV  = parseFloat(mission)    || 0;
+  const txCo      = (parseFloat(txContact) || 0) / 100;
+  const txCl      = (parseFloat(txClient)  || 0) / 100;
+  const coef      = (parseFloat(prudence)  || 100) / 100;
+
+  /* données GMB parsées */
+  const gmbImp  = parseFloat(gmbImpressions) || 0;
+  const gmbApp  = parseFloat(gmbAppels)      || 0;
+  const gmbIti  = parseFloat(gmbItineraires) || 0;
+  const gmbClic = parseFloat(gmbClicsSite)   || 0;
+  const hasGMB  = gmbImp > 0;
+
+  /* CTR Local Pack — % des recherches totales capté par position
+     Source : étude BrightLocal / Search Engine Land sur la répartition des clics
+     Local Pack total = 44 % | Pos 1 = 17,8 % | Pos 2 = 13,6 % | Pos 3 = 10,4 % | Top 3 moyen = 14 %
+     Hors pack : 8 % "more local" répartis sur de nombreux résultats → très faible */
+  const getCTR = (p) => {
+    if (!p || p <= 0) return NaN;
+    if (p === 1) return 17.8;
+    if (p === 2) return 13.6;
+    if (p === 3) return 10.4;
+    if (p <= 6)  return 1.0;
+    if (p <= 10) return 0.5;
+    if (p <= 20) return 0.3;
+    return 0.1;
+  };
+
+  /* CTR actuel : GMB (impressions réelles / volume mots-clés) si dispo, sinon table position */
+  const ctrActuelGMB = hasGMB && totalVol > 0 ? (gmbImp / totalVol) * 100 : NaN;
+  const ctrActuelR1  = getCTR(pos);
+  const ctrActuel    = hasGMB && Number.isFinite(ctrActuelGMB) ? ctrActuelGMB : ctrActuelR1;
+
+  const hasData     = totalVol > 0 && Number.isFinite(ctrActuel) && ctrActuel > 0;
+  const visitActuel = hasData ? totalVol * (ctrActuel / 100) : NaN;
+
+  /* taux de conversion réels si GMB dispo */
+  const totalInteractions = gmbApp + gmbIti + gmbClic;
+  const txReel    = hasGMB && gmbImp > 0 ? totalInteractions / gmbImp : NaN;
+  const hasReel   = Number.isFinite(txReel) && txReel > 0;
+  const txCoEffectif = hasReel && useRealRate ? txReel : txCo;
+
+  const scenarios = [
+    { label: "Top 3", share: 14, color: "#E85A30" },
+    { label: "Top 2", share: 13.6, color: "#C03080" },
+    { label: "Top 1", share: 17.8, color: "#6B40D8" },
+  ].map(s => {
+    const visits   = hasData ? totalVol * (s.share / 100) : NaN;
+    const gain     = visits - visitActuel;
+    const mult     = Number.isFinite(ctrActuel) && ctrActuel > 0 ? s.share / ctrActuel : NaN;
+    const contacts    = visits * txCoEffectif;
+    const clients     = contacts * txCl;           // clients/mois réaliste
+    const clientsPrud = clients * coef;            // clients/mois prudent
+    const caReal      = clients * missionV;        // CA/mois réaliste
+    const caPrud      = clientsPrud * missionV;    // CA/mois prudent
+    const caAnnReal   = caReal * 12;
+    const caAnnPrud   = caPrud * 12;
+    const clientsAnnReal = Math.round(clients * 12);
+    const clientsAnnPrud = Math.round(clientsPrud * 12);
+    return { ...s, visits, gain, mult, contacts, clients, clientsPrud, caReal, caPrud, caAnnReal, caAnnPrud, clientsAnnReal, clientsAnnPrud };
+  });
+
+  const imgl = scenarios[0]; // Top 3 = référence IMGL
+
+  /* ── styles partagés ── */
+  const cardAccent = (color) => ({
+    background: "white", borderRadius: 14, border: "1px solid #E5E7EB",
+    borderTop: `3px solid ${color}`, padding: "18px 20px", marginBottom: 16,
+    boxShadow: "0 1px 3px rgba(0,0,0,.06)",
+  });
+  const thS = { fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink4)", fontWeight: 600, textAlign: "left", padding: "8px 10px", borderBottom: "1px solid var(--border)" };
+  const tdS = { padding: "9px 10px", borderBottom: "1px solid var(--border)", fontSize: 13.5, color: "var(--ink)" };
+  const tdN = { ...tdS, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+  const inp = { fontFamily: "inherit", fontSize: 13.5, padding: "7px 11px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#F4F5FA", color: "var(--ink)", outline: "none", width: "100%" };
+  const secTitle = { fontSize: 13.5, fontWeight: 700, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8, marginBottom: 14 };
+
+  /* pitch auto */
+  const pitchLines = hasData ? [
+    `Sur les principales requêtes liées à votre activité, nous avons identifié ${fmt(totalVol)} recherches mensuelles.`,
+    hasGMB
+      ? `Votre fiche GMB génère actuellement ${fmt(gmbImp, 0)} impressions par mois sur ces requêtes, soit une captation estimée de ${fmt(ctrActuelGMB, 2)} % du volume de recherches identifié — ${fmt(visitActuel, 0)} visites/mois.`
+      : `Votre fiche apparaît actuellement autour de la ${pos}${pos === 1 ? "ère" : "ème"} position, ce qui correspond à une captation estimée d'environ ${fmt(ctrActuelR1, 1)} % du volume de recherches identifié, soit ~${fmt(visitActuel, 0)} visites/mois.`,
+    `Aujourd'hui, votre fiche capte probablement moins de 1 % de la demande locale identifiée. Les trois premières positions Google Maps concentrent une part importante des clics — environ 14 % en moyenne selon les données de référence du Local Pack.`,
+    Number.isFinite(imgl.mult) ? `Un positionnement dans ce Top 3 pourrait vous permettre de multiplier votre visibilité par plus de ×${fmt(imgl.mult, 0)} et de générer plusieurs dizaines de contacts qualifiés supplémentaires chaque année.` : "",
+    missionV > 0 ? `Sur la base d'une valeur moyenne de ${eur(missionV)} par client, cela représente un potentiel estimé de ${imgl.clientsAnnPrud} à ${imgl.clientsAnnReal} nouveaux clients par an, soit environ ${eur(imgl.caAnnPrud)} à ${eur(imgl.caAnnReal)} de chiffre d'affaires supplémentaire.\n\nCes projections constituent un ordre de grandeur et non une garantie de résultat. Elles reposent sur des hypothèses de captation et de conversion qui peuvent varier selon la requête, la concurrence, la zone géographique et l'activité.` : "",
+  ].filter(Boolean).join("\n\n") : null;
+
+  return n.jsxs("div", {
+    style: { display: "flex", height: "100%", flexDirection: "column", overflow: "hidden", background: "#F4F5FA" },
+    children: [
+
+      /* ── HEADER ── */
+      n.jsxs("div", {
+        style: { background: "white", borderBottom: "1px solid #E5E7EB", borderTop: "3px solid #6B40D8", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
+        children: [
+          n.jsxs("div", { children: [
+            n.jsx("div", { style: { fontSize: 28, fontWeight: 900, color: "#1E1B30", letterSpacing: "-.02em" }, children: "Simulateur ROI" }),
+            n.jsx("div", { style: { fontSize: 12.5, color: "#6B7280", marginTop: 2 }, children: "Potentiel de visibilité locale · Opportunité commerciale · Projection CA" }),
+          ]}),
+          hasData && n.jsxs("div", {
+            style: { background: "var(--grad-main)", borderRadius: 12, padding: "10px 18px", color: "#fff", textAlign: "center" },
+            children: [
+              n.jsx("div", { style: { fontSize: 22, fontWeight: 900, letterSpacing: "-.02em" }, children: Number.isFinite(imgl.mult) ? `×${fmt(imgl.mult, 1)}` : "–" }),
+              n.jsx("div", { style: { fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", opacity: .85 }, children: "Potentiel Top 3" }),
+            ],
+          }),
+        ],
+      }),
+
+      /* ── CONTENU ── */
+      n.jsxs("div", { style: { flex: 1, overflowY: "auto", padding: "20px 24px 60px" }, children: [
+
+        /* ── 1. Mots-clés ── */
+        n.jsxs("div", { style: cardAccent("#6B40D8"), children: [
+          n.jsxs("div", { style: secTitle, children: [n.jsx("span", { style: { fontSize: 18 } }, "🔎"), "🔎 Volume de recherches local"] }),
+          n.jsx("p", { style: { margin: "0 0 14px", fontSize: 13, color: "var(--ink3)", lineHeight: 1.6 }, children: "Saisis les mots-clés stratégiques du prospect et leur volume mensuel. Concentre-toi sur les requêtes qui correspondent réellement à son activité." }),
+
+          n.jsxs("table", { style: { width: "100%", borderCollapse: "collapse", marginBottom: 10 }, children: [
+            n.jsx("thead", { children: n.jsxs("tr", { children: [
+              n.jsx("th", { style: thS, children: "Mot-clé" }),
+              n.jsx("th", { style: { ...thS, textAlign: "right", width: 110 }, children: "Volume/mois" }),
+              n.jsx("th", { style: { ...thS, width: 36 } }),
+            ]})}),
+            n.jsx("tbody", { children: keywords.map(k =>
+              n.jsxs("tr", { className: "tr", children: [
+                n.jsx("td", { style: { ...tdS, paddingTop: 6, paddingBottom: 6 }, children:
+                  n.jsx("input", { style: inp, placeholder: "ex : architecte vannes", value: k.kw, onChange: ev => updKeyword(k.id, "kw", ev.target.value) })
+                }),
+                n.jsx("td", { style: { ...tdS, paddingTop: 6, paddingBottom: 6 }, children:
+                  n.jsx("input", { style: { ...inp, textAlign: "right" }, type: "number", placeholder: "590", value: k.vol, onChange: ev => updKeyword(k.id, "vol", ev.target.value) })
+                }),
+                n.jsx("td", { style: { ...tdS, paddingTop: 6, paddingBottom: 6, textAlign: "center" }, children:
+                  keywords.length > 1
+                    ? n.jsx("button", { onClick: () => removeKeyword(k.id), style: { background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16, lineHeight: 1 }, children: "×" })
+                    : null
+                }),
+              ]}, k.id)
+            )}),
+            n.jsx("tfoot", { children: n.jsxs("tr", { children: [
+              n.jsx("td", { style: { ...tdS, fontWeight: 700, borderBottom: "none" }, children: "Total identifié" }),
+              n.jsx("td", { style: { ...tdN, fontWeight: 900, fontSize: 16, color: "#6B40D8", borderBottom: "none" }, children: totalVol > 0 ? fmt(totalVol) : "–" }),
+              n.jsx("td", { style: { borderBottom: "none" } }),
+            ]})})
+          ]}),
+
+          n.jsx("button", {
+            onClick: addKeyword,
+            style: { background: "none", border: "1.5px dashed var(--border)", borderRadius: 8, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, color: "var(--ink3)", cursor: "pointer", fontFamily: "inherit" },
+            children: "+ Ajouter un mot-clé",
+          }),
+          n.jsx("p", { style: { margin: "10px 0 0", fontSize: 11.5, color: "var(--ink4)", lineHeight: 1.5 }, children: "💡 Ce total est un minimum — d'autres requêtes non identifiées existent. Il renforce la crédibilité de parler de \"plus de X recherches\"." }),
+        ]}),
+
+        /* ── 2. Paramètres ── */
+        n.jsxs("div", { style: cardAccent("#5a5aee"), children: [
+          n.jsxs("div", { style: secTitle, children: [n.jsx("span", { style: { fontSize: 18 } }, "⚙️"), "⚙️ Paramètres du prospect"] }),
+          n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "12px 16px" }, children: [
+
+            n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+              n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Position actuelle (n°)" }),
+              n.jsx("input", { style: inp, type: "number", placeholder: "ex : 16", value: position, onChange: ev => setPosition(ev.target.value) }),
+              position && Number.isFinite(getCTR(parseInt(position, 10)))
+                ? n.jsx("span", { style: { fontSize: 11, color: "var(--ink4)" }, children: `Captation actuelle estimée : ~${getCTR(parseInt(position, 10))}%` })
+                : null,
+            ]}),
+
+            n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+              n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Valeur moyenne d'un client (€)" }),
+              n.jsx("input", { style: inp, type: "number", placeholder: "ex : 5000", value: mission, onChange: ev => setMission(ev.target.value) }),
+            ]}),
+
+            n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+              n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Coefficient de prudence (%)" }),
+              n.jsx("input", { style: inp, type: "number", placeholder: "50", value: prudence, onChange: ev => setPrudence(ev.target.value) }),
+              n.jsx("span", { style: { fontSize: 11, color: "var(--ink4)" }, children: "Réduit la projection pour rester défendable" }),
+            ]}),
+
+          ]}),
+
+          n.jsx("button", {
+            onClick: () => setShowAdvanced(v => !v),
+            style: { marginTop: 12, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--ink4)", fontFamily: "inherit", padding: 0 },
+            children: showAdvanced ? "▲ Masquer les taux de conversion" : "▼ Taux de conversion (avancé)",
+          }),
+
+          showAdvanced && n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }, children: [
+            n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+              n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Visiteur → contact (%)" }),
+              n.jsx("input", { style: inp, type: "number", placeholder: "5", value: txContact, onChange: ev => setTxContact(ev.target.value) }),
+            ]}),
+            n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+              n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Contact → client (%)" }),
+              n.jsx("input", { style: inp, type: "number", placeholder: "20", value: txClient, onChange: ev => setTxClient(ev.target.value) }),
+            ]}),
+          ]}),
+        ]}),
+
+        /* ── 3. Données GMB (R2 — optionnel) ── */
+        n.jsxs("div", { style: { ...cardAccent("#059669"), background: showGMB ? "white" : "#F0FDF4" }, children: [
+          n.jsxs("div", {
+            style: { display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" },
+            onClick: () => setShowGMB(v => !v),
+            children: [
+              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+                n.jsx("span", { style: { fontSize: 18 }, children: "📊" }),
+                n.jsxs("div", { children: [
+                  n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "#065F46" }, children: "Données GMB réelles" }),
+                  n.jsx("div", { style: { fontSize: 11.5, color: "#6B7280", marginTop: 1 }, children: hasGMB ? `✓ Enrichi · ${fmt(gmbImp, 0)} impressions/mois` : "Optionnel · à renseigner en rendez-vous" }),
+                ]}),
+              ]}),
+              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+                hasGMB && n.jsx("span", { style: { fontSize: 11, fontWeight: 700, background: "#D1FAE5", color: "#065F46", padding: "3px 10px", borderRadius: 20 }, children: "✓ Enrichi" }),
+                n.jsx("span", { style: { fontSize: 12, color: "#6B7280" }, children: showGMB ? "▲" : "▼" }),
+              ]}),
+            ],
+          }),
+
+          showGMB && n.jsxs("div", { style: { marginTop: 16, paddingTop: 16, borderTop: "1px solid #D1FAE5" }, children: [
+            n.jsx("p", { style: { margin: "0 0 14px", fontSize: 13, color: "#374151", lineHeight: 1.6 }, children: "Renseigne les données de la fiche GMB du prospect (panel \"Voir les statistiques\" sur Google). Le simulateur utilisera ces chiffres réels à la place des estimations." }),
+            n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "12px 16px" }, children: [
+              n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4, gridColumn: "span 2" }, children: [
+                n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Impressions / mois (\"Recherches affichant votre fiche\")" }),
+                n.jsx("input", { style: inp, type: "number", placeholder: "ex : 1 200", value: gmbImpressions, onChange: ev => setGmbImpressions(ev.target.value) }),
+                n.jsx("span", { style: { fontSize: 11, color: "var(--ink4)" }, children: "Remplace la position estimée — calcule le CTR réel à partir du volume de mots-clés saisi" }),
+              ]}),
+              n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+                n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Appels / mois" }),
+                n.jsx("input", { style: inp, type: "number", placeholder: "ex : 18", value: gmbAppels, onChange: ev => setGmbAppels(ev.target.value) }),
+              ]}),
+              n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+                n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Demandes d'itinéraire / mois" }),
+                n.jsx("input", { style: inp, type: "number", placeholder: "ex : 24", value: gmbItineraires, onChange: ev => setGmbItineraires(ev.target.value) }),
+              ]}),
+              n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4 }, children: [
+                n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Clics vers le site / mois" }),
+                n.jsx("input", { style: inp, type: "number", placeholder: "ex : 42", value: gmbClicsSite, onChange: ev => setGmbClicsSite(ev.target.value) }),
+              ]}),
+            ]}),
+
+            hasGMB && totalVol > 0 && n.jsxs("div", { style: { marginTop: 14, padding: "12px 14px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 10, fontSize: 12.5, color: "#065F46", lineHeight: 1.6 }, children: [
+              n.jsxs("div", { style: { fontWeight: 700, marginBottom: 4 }, children: ["Données GMB calculées"] }),
+              n.jsxs("div", { children: [`CTR réel : ${fmt(ctrActuelGMB, 2)} % · Interactions totales : ${fmt(gmbApp + gmbIti + gmbClic, 0)} · Taux d'interaction : ${fmt(((gmbApp + gmbIti + gmbClic) / gmbImp) * 100, 1)} %`] }),
+              totalInteractions > 0 && n.jsxs("div", { style: { marginTop: 2 }, children: [`Appels ${fmt((gmbApp / totalInteractions) * 100, 0)}% · Itinéraires ${fmt((gmbIti / totalInteractions) * 100, 0)}% · Clics site ${fmt((gmbClic / totalInteractions) * 100, 0)}%`] }),
+            ]}),
+          ]}),
+        ]}),
+
+        /* ── 4. Potentiel de visibilité ── */
+        hasData && n.jsxs("div", {
+          style: { background: "var(--grad-main)", borderRadius: 14, padding: "20px 24px", marginBottom: 16, boxShadow: "var(--shadow-md)", color: "#fff" },
+          children: [
+            n.jsx("div", { style: { fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", background: "rgba(255,255,255,.18)", display: "inline-flex", padding: "3px 10px", borderRadius: 20, marginBottom: 14 }, children: "📊 Potentiel de visibilité locale" }),
+            n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }, children: [
+              n.jsxs("div", { style: { background: "rgba(255,255,255,.12)", borderRadius: 12, padding: "14px 16px" }, children: [
+                n.jsx("div", { style: { fontSize: 11, fontWeight: 700, opacity: .75, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }, children: hasGMB ? "Impressions actuelles" : "Position actuelle" }),
+                n.jsx("div", { style: { fontSize: 28, fontWeight: 900, letterSpacing: "-.02em", lineHeight: 1 }, children: hasGMB ? fmt(gmbImp, 0) : `#${pos}` }),
+                n.jsx("div", { style: { fontSize: 12, opacity: .8, marginTop: 4 }, children: hasGMB ? `Captation estimée : ${fmt(ctrActuelGMB, 2)} % · ${fmt(visitActuel, 0)} visites/mois` : `Captation estimée : ~${fmt(ctrActuel, 1)} % · ~${fmt(visitActuel, 0)} visites/mois` }),
+              ]}),
+              n.jsxs("div", { style: { background: "rgba(255,255,255,.12)", borderRadius: 12, padding: "14px 16px" }, children: [
+                n.jsx("div", { style: { fontSize: 11, fontWeight: 700, opacity: .75, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }, children: "Top 3 estimé" }),
+                n.jsx("div", { style: { fontSize: 28, fontWeight: 900, letterSpacing: "-.02em", lineHeight: 1 }, children: `~${fmt(imgl.visits, 0)}` }),
+                n.jsx("div", { style: { fontSize: 12, opacity: .8, marginTop: 4 }, children: "Captation estimée : ~11 % des recherches" }),
+              ]}),
+              n.jsxs("div", { style: { background: "rgba(255,255,255,.18)", borderRadius: 12, padding: "14px 16px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }, children: [
+                n.jsx("div", { style: { fontSize: 11, fontWeight: 700, opacity: .75, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }, children: "Potentiel" }),
+                n.jsxs("div", { style: { fontSize: 42, fontWeight: 900, letterSpacing: "-.03em", lineHeight: 1 }, children: ["×", fmt(imgl.mult, 1)] }),
+                n.jsx("div", { style: { fontSize: 12, opacity: .8, marginTop: 4, textAlign: "center" }, children: "potentiel de visibilité estimé en atteignant le Top 3" }),
+              ]}),
+            ]}),
+            n.jsx("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" }, children:
+              scenarios.map(s => n.jsxs("div", { style: { background: "rgba(255,255,255,.12)", borderRadius: 10, padding: "8px 14px", fontSize: 12.5 }, children: [
+                n.jsx("span", { style: { fontWeight: 700 }, children: `${s.label} : ` }),
+                n.jsx("span", { style: { opacity: .85 }, children: `~${fmt(s.visits, 0)} visites/mois · ×${fmt(s.mult, 1)}` }),
+              ]}, s.label))
+            }),
+          ],
+        }),
+
+        /* ── 5. Potentiel commercial ── */
+        hasData && missionV > 0 && n.jsxs("div", { style: cardAccent("#E85A30"), children: [
+          n.jsxs("div", { style: secTitle, children: [n.jsx("span", { style: { fontSize: 18 } }, "💰"), "💰 Opportunité commerciale"] }),
+
+          /* Toggle taux de conversion */
+          hasReel && n.jsxs("div", { style: { display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }, children: [
+            n.jsxs("button", {
+              onClick: () => setUseRealRate(true),
+              style: { display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `2px solid ${useRealRate ? "#E85A30" : "var(--border)"}`, background: useRealRate ? "#FFF7ED" : "white", cursor: "pointer", fontSize: 12.5, fontWeight: useRealRate ? 700 : 500, color: useRealRate ? "#92400E" : "var(--ink3)", fontFamily: "inherit" },
+              children: [
+                n.jsx("span", { children: useRealRate ? "☑" : "☐" }),
+                n.jsxs("span", { children: [`Taux réel GMB : ${fmt(txReel * 100, 1)} %`, n.jsx("span", { style: { fontWeight: 400, marginLeft: 4 }, children: `(${fmt(totalInteractions, 0)} interactions / ${fmt(gmbImp, 0)} vues)` })] }),
+              ],
+            }),
+            n.jsxs("button", {
+              onClick: () => setUseRealRate(false),
+              style: { display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `2px solid ${!useRealRate ? "#6B40D8" : "var(--border)"}`, background: !useRealRate ? "#F5F3FF" : "white", cursor: "pointer", fontSize: 12.5, fontWeight: !useRealRate ? 700 : 500, color: !useRealRate ? "#4C1D95" : "var(--ink3)", fontFamily: "inherit" },
+              children: [
+                n.jsx("span", { children: !useRealRate ? "☑" : "☐" }),
+                n.jsx("span", { children: `Taux standard : ${txContact} %` }),
+              ],
+            }),
+          ]}),
+
+          /* Chaîne de conversion — scénario Top 3 */
+          n.jsxs("div", { style: { background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 12, padding: "16px 18px", marginBottom: 16 }, children: [
+            n.jsx("div", { style: { fontSize: 11.5, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }, children: `Scénario Top 3 · ${fmt(imgl.visits, 0)} visites/mois` }),
+            n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13.5 }, children: [
+              n.jsxs("div", { style: { background: "white", borderRadius: 8, padding: "8px 14px", border: "1px solid #FED7AA", textAlign: "center" }, children: [
+                n.jsx("div", { style: { fontWeight: 900, fontSize: 22, color: "#6B40D8" }, children: fmt(imgl.visits, 0) }),
+                n.jsx("div", { style: { fontSize: 11, color: "#6B7280", marginTop: 2 }, children: "visites/mois" }),
+              ]}),
+              n.jsx("div", { style: { color: "#9CA3AF", fontWeight: 700 }, children: `× ${txContact}%` }),
+              n.jsxs("div", { style: { background: "white", borderRadius: 8, padding: "8px 14px", border: "1px solid #FED7AA", textAlign: "center" }, children: [
+                n.jsx("div", { style: { fontWeight: 900, fontSize: 22, color: "#6B40D8" }, children: fmt(imgl.contacts, 1) }),
+                n.jsx("div", { style: { fontSize: 11, color: "#6B7280", marginTop: 2 }, children: "contacts/mois" }),
+              ]}),
+              n.jsx("div", { style: { color: "#9CA3AF", fontWeight: 700 }, children: `× ${txClient}%` }),
+              n.jsxs("div", { style: { background: "white", borderRadius: 8, padding: "8px 14px", border: "1px solid #FED7AA", textAlign: "center" }, children: [
+                n.jsx("div", { style: { fontWeight: 900, fontSize: 22, color: "#6B40D8" }, children: fmt(imgl.clients, 2) }),
+                n.jsx("div", { style: { fontSize: 11, color: "#6B7280", marginTop: 2 }, children: "client/mois" }),
+              ]}),
+              n.jsx("div", { style: { color: "#9CA3AF", fontWeight: 700 }, children: `× ${eur(missionV)}` }),
+              n.jsxs("div", { style: { background: "#6B40D8", borderRadius: 8, padding: "8px 14px", textAlign: "center" }, children: [
+                n.jsx("div", { style: { fontWeight: 900, fontSize: 22, color: "#fff" }, children: eur(imgl.caReal) }),
+                n.jsx("div", { style: { fontSize: 11, color: "rgba(255,255,255,.8)", marginTop: 2 }, children: "CA potentiel/mois" }),
+              ]}),
+            ]}),
+            n.jsxs("div", { style: { marginTop: 10, fontSize: 12, color: "#92400E" }, children: [
+              `≈ ${imgl.clientsAnnReal} clients/an · `,
+              n.jsxs("strong", { children: [eur(imgl.caReal), "/mois · ", eur(imgl.caAnnReal), "/an réaliste"] }),
+              ` · prudent (${prudence}%) : `,
+              n.jsxs("strong", { children: [eur(imgl.caPrud), "/mois · ", eur(imgl.caAnnPrud), "/an"] }),
+            ]}),
+          ]}),
+
+          /* Tableau comparatif tous scénarios */
+          n.jsxs("table", { style: { width: "100%", borderCollapse: "collapse", marginBottom: 12 }, children: [
+            n.jsx("thead", { children: n.jsxs("tr", { children: [
+              n.jsx("th", { style: thS, children: "Scénario" }),
+              n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Visites/mois" }),
+              n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Clients/an" }),
+              n.jsx("th", { style: { ...thS, textAlign: "right" }, children: `Prudent (${prudence}%) — mois / an` }),
+              n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Réaliste — mois / an" }),
+            ]})}),
+            n.jsxs("tbody", { children: [
+              /* ligne actuel */
+              (() => {
+                const clientsAnnActuel = visitActuel * txCoEffectif * txCl * 12;
+                const clientsAnnActuelPrud = clientsAnnActuel * coef;
+                const caActuelReal = clientsAnnActuel * missionV;
+                const caActuelPrud = clientsAnnActuelPrud * missionV;
+                const clientsLabel = clientsAnnActuel < 1 ? "<1 client/an" : `${Math.round(clientsAnnActuelPrud)}–${Math.round(clientsAnnActuel)} clients/an`;
+                return n.jsxs("tr", { children: [
+                  n.jsx("td", { style: { ...tdS, fontWeight: 700, color: "var(--ink3)" }, children: hasGMB ? "Actuel (GMB)" : `Actuel (#${pos})` }),
+                  n.jsx("td", { style: { ...tdN, color: "var(--ink3)" }, children: fmt(visitActuel, 0) }),
+                  n.jsx("td", { style: { ...tdN, color: "var(--ink3)" }, children: clientsLabel }),
+                  n.jsxs("td", { style: { ...tdN, color: "var(--ink3)" }, children: [eur(caActuelPrud / 12), n.jsx("div", { style: { fontSize: 11, color: "var(--ink4)" }, children: eur(caActuelPrud) + "/an" })] }),
+                  n.jsxs("td", { style: { ...tdN, color: "var(--ink3)" }, children: [eur(caActuelReal / 12), n.jsx("div", { style: { fontSize: 11, color: "var(--ink4)" }, children: eur(caActuelReal) + "/an" })] }),
+                ]});
+              })(),
+              ...scenarios.map(s => n.jsxs("tr", { className: "tr", children: [
+                n.jsx("td", { style: { ...tdS, fontWeight: 700 }, children:
+                  n.jsxs("span", { style: { display: "inline-flex", alignItems: "center", gap: 6 }, children: [
+                    n.jsx("span", { style: { width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0, display: "inline-block" } }),
+                    s.label,
+                  ]})
+                }),
+                n.jsx("td", { style: { ...tdN, fontWeight: 700 }, children: fmt(s.visits, 0) }),
+                n.jsx("td", { style: tdN, children: s.clientsAnnReal < 1 ? "<1 client/an" : `${s.clientsAnnPrud}–${s.clientsAnnReal} clients/an` }),
+                n.jsxs("td", { style: { ...tdN, color: "var(--ink3)" }, children: [eur(s.caPrud), n.jsx("div", { style: { fontSize: 11, color: "var(--ink4)" }, children: eur(s.caAnnPrud) + "/an" })] }),
+                n.jsxs("td", { style: { ...tdN, fontWeight: 700, color: s.color }, children: [eur(s.caReal), n.jsx("div", { style: { fontSize: 11, color: "var(--ink4)", fontWeight: 400 }, children: eur(s.caAnnReal) + "/an" })] }),
+              ]}, s.label)),
+            ]}),
+          ]}),
+
+          n.jsxs("p", { style: { margin: 0, fontSize: 11.5, color: "var(--ink4)", lineHeight: 1.55 }, children: [
+            hasGMB && totalInteractions > 0
+              ? `Taux d'interaction GMB réel : ${fmt((totalInteractions / gmbImp) * 100, 1)} % · contact → client ${txClient}%. `
+              : `Taux de conversion : visiteur → contact ${txContact}%, contact → client ${txClient}%. `,
+            `La fourchette prudent/réaliste s'appuie sur un coefficient de ${prudence}%. Référentiel de captation : Google Maps / Local Pack — les taux utilisés sont des hypothèses de modélisation issues des données de référence du Local Pack.`,
+          ]}),
+        ]}),
+
+        /* ── 6. Pitch ── */
+        pitchLines && n.jsxs("div", { style: cardAccent("#059669"), children: [
+          n.jsxs("div", { style: secTitle, children: [n.jsx("span", { style: { fontSize: 18 } }, "💬"), "💬 Pitch prospect — prêt à copier"] }),
+          n.jsx("div", {
+            style: { background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "14px 16px", fontSize: 13.5, color: "#1E1B30", lineHeight: 1.7, whiteSpace: "pre-wrap", cursor: "pointer" },
+            title: "Cliquer pour copier",
+            onClick: () => { try { navigator.clipboard.writeText(pitchLines); } catch(_){} },
+            children: pitchLines,
+          }),
+          n.jsx("p", { style: { margin: "8px 0 0", fontSize: 11, color: "var(--ink4)" }, children: "Cliquer sur le texte pour copier" }),
+        ]}),
+
+        /* ── Disclaimer ── */
+        n.jsx("div", { style: { padding: "12px 16px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--surface)", fontSize: 12, color: "var(--ink4)", lineHeight: 1.6 }, children: "Ces projections sont basées sur des estimations de taux de clic moyens du Local Pack Google et des taux de conversion indicatifs. Elles constituent un ordre de grandeur, pas une garantie de résultat. Le coefficient de prudence est recommandé pour toute présentation commerciale." }),
+
+      ]}, /* fin contenu */),
+    ],
+  });
+}
+
 function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o }) {
   const [s, l] = D.useState(Uc),
     [a, d] = D.useState("pipeline"),
@@ -2172,15 +2708,6 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
     [placesSelected, setPlacesSelected] = D.useState(new Set()),
     [placesError, setPlacesError] = D.useState(""),
     [placesAdded, setPlacesAdded] = D.useState(0),
-    [searchMode, setSearchMode] = D.useState("ia"),
-    [iaLoading, setIaLoading] = D.useState(false),
-    [iaSecteur, setIaSecteur] = D.useState(""),
-    [iaZone, setIaZone] = D.useState("Vannes, Morbihan"),
-    [iaResult, setIaResult] = D.useState(null),
-    [iaLeads, setIaLeads] = D.useState([]),
-    [iaSelected, setIaSelected] = D.useState(new Set()),
-    [iaAdded, setIaAdded] = D.useState(0),
-    [iaError, setIaError] = D.useState(""),
     G = (v, A) => {
       (_(A), (v.dataTransfer.effectAllowed = "move"));
     },
@@ -3294,226 +3821,8 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
       }),
       a === "search" && n.jsxs("div", { style:{ padding:"0 0 40px" }, children:[
 
-        // Toggle IA / Google Maps
-        n.jsx("div", { style:{ background:"white", borderRadius:10, padding:3, display:"inline-flex", gap:3, marginBottom:14, border:"1px solid #E5E7EB" }, children:
-          [{ id:"ia", l:"🤖 IA Prospection" }, { id:"maps", l:"🗺️ Google Maps" }].map(t =>
-            n.jsx("button", { onClick:()=>setSearchMode(t.id), style:{ border:"none", borderRadius:7, padding:"7px 18px", fontSize:12.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit", background:searchMode===t.id?"white":"transparent", color:searchMode===t.id?"#1E1B30":"#9CA3AF", boxShadow:searchMode===t.id?"0 1px 4px rgba(0,0,0,.1)":"none" }, children:t.l }, t.id)
-          )
-        }),
-
-        // ── MODE IA PROSPECTION ──
-        searchMode === "ia" && n.jsxs("div", { children:[
-          n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"20px 22px", marginBottom:14, borderLeft:"3px solid #6B40D8" }, children:[
-            n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:2 }, children:"🤖 Prospection IA — Growth Hacking Local" }),
-            n.jsx("div", { style:{ fontSize:11.5, color:"#9CA3AF", marginBottom:16 }, children:"Claude analyse le secteur, score chaque lead (0-100) et classe automatiquement : 🔥 HOT · ⚠️ WARM · ❌ COLD" }),
-            n.jsxs("div", { style:{ display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:10, alignItems:"end" }, children:[
-              n.jsxs("div", { children:[
-                n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Secteur d'activité" }),
-                n.jsx("input", {
-                  value: iaSecteur,
-                  onChange: e => setIaSecteur(e.target.value),
-                  placeholder: "Ex : plombier, coiffeur, agence immobilière, restaurant...",
-                  style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"9px 12px", fontSize:13, fontFamily:"inherit", outline:"none", color:"#1E1B30", boxSizing:"border-box" },
-                }),
-              ]}),
-              n.jsxs("div", { children:[
-                n.jsx("label", { style:{ fontSize:11, fontWeight:600, color:"#6B7280", display:"block", marginBottom:4 }, children:"Ville + rayon" }),
-                n.jsx("input", {
-                  value: iaZone,
-                  onChange: e => setIaZone(e.target.value),
-                  placeholder: "Ex : Vannes, Morbihan — rayon 20 km",
-                  style:{ width:"100%", border:"1px solid #E5E7EB", borderRadius:8, padding:"9px 12px", fontSize:13, fontFamily:"inherit", outline:"none", color:"#1E1B30", boxSizing:"border-box" },
-                }),
-              ]}),
-              n.jsx("button", {
-                disabled: iaLoading || !iaSecteur.trim(),
-                onClick: async () => {
-                  const claudeKey = (() => { try { return localStorage.getItem("bto_apikey")||""; } catch { return ""; } })();
-                  if (!claudeKey) { setIaError("Clé API Claude manquante (onglet Paramètres)."); return; }
-                  setIaLoading(true); setIaError(""); setIaResult(null); setIaLeads([]); setIaSelected(new Set()); setIaAdded(0);
-                  const prompt = `Tu es un expert en growth hacking local et en prospection B2B spécialisée dans le référencement local (Google Business Profile / Google Maps).
-
-Ta mission est de constituer une base de prospects qualifiés à partir de recherches Google Maps dans le secteur suivant :
-
-SECTEUR : ${iaSecteur}
-ZONE GÉOGRAPHIQUE : ${iaZone}
-
-# 🧭 OBJECTIF FINAL
-Construire une base de prospects exploitables pour de la prospection commerciale (appel + email + audit SEO).
-Chaque entreprise doit être analysée comme un potentiel client pour une agence spécialisée en optimisation Google Business Profile et génération de leads locaux.
-
-# 🔎 ÉTAPE 1 — COLLECTE DES ENTREPRISES
-Simule une recherche Google Maps réelle. Trouve uniquement des entreprises actives, présentes sur Google Business Profile, situées dans la zone demandée, dans le secteur demandé.
-👉 Minimum : 20 entreprises
-
-# 📊 ÉTAPE 2 — DONNÉES À EXTRAIRE
-Pour chaque entreprise : Nom, Secteur exact, Adresse complète, Ville, Téléphone, Site web (ou "absent"), Note Google (/5), Nombre d'avis, Fréquence des avis (faible/moyenne/forte), Nombre de photos (faible/moyen/élevé), Posts Google (oui/non/inconnu).
-
-# 📈 ÉTAPE 3 — SCORING LEAD (OBLIGATOIRE)
-Attribue un score sur 100 selon ces critères :
-- Avis < 30 → +20 pts | Avis 30-100 → +15 pts | Avis > 100 → +5 pts
-- Note > 4.5 → +10 pts | Note 4.0-4.5 → +5 pts | Note < 4.0 → +0
-- Site web absent → +15 pts | Site faible/ancien → +10 pts | Site correct → +5 pts
-- Fiche inactive (peu de photos/posts) → +20 pts | Fiche moyenne → +10 pts | Fiche très active → +0
-- Peu d'avis récents → +15 pts | Avis récents réguliers → +0
-
-# 🎯 CLASSIFICATION AUTOMATIQUE
-- 🔥 HOT LEAD (70-100)
-- ⚠️ WARM LEAD (40-69)
-- ❌ COLD LEAD (0-39)
-
-# 🧠 ÉTAPE 4 — ANALYSE COMMERCIALE
-Pour chaque entreprise : 2 lignes d'analyse, problème principal probable (manque d'avis / mauvaise visibilité / site faible / fiche inactive / mauvaise conversion), angle d'approche (appel / email / LinkedIn).
-
-# 💬 ÉTAPE 5 — ANGLE DE PROSPECTION
-Pour les leads HOT uniquement : phrase d'accroche, promesse orientée résultat, proposition d'audit gratuit en 2 lignes.
-
-# 📊 ÉTAPE 6 — SORTIE STRUCTURÉE
-1. Tableau principal (toutes les entreprises)
-2. Top 10 HOT LEADS avec analyse détaillée
-3. Insights marché
-4. Script de prospection (appel court + email)
-
-# CONTRAINTE IMPORTANTE
-Ne pas inventer de données. Se baser uniquement sur des informations plausibles issues de Google Maps. Prioriser la qualité à la quantité.
-
----
-
-À la fin de ta réponse, ajoute impérativement un bloc JSON structuré entre les balises ###LEADS_JSON### et ###END### avec le format suivant pour chaque entreprise (tableau) :
-###LEADS_JSON###
-[{"name":"...","city":"...","phone":"...","website":"...","rating":4.2,"reviewCount":18,"score":75,"category":"🔥 HOT","problem":"...","pitch":"..."}]
-###END###`;
-
-                  try {
-                    const res = await fetch("https://api.anthropic.com/v1/messages", {
-                      method:"POST",
-                      headers:{ "x-api-key":claudeKey, "anthropic-version":"2023-06-01", "content-type":"application/json" },
-                      body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:8000, messages:[{ role:"user", content:prompt }] }),
-                    });
-                    const data = await res.json();
-                    const raw = data?.content?.[0]?.text || "";
-                    setIaResult(raw.replace(/###LEADS_JSON###[\s\S]*?###END###/,"").trim());
-                    const jsonMatch = raw.match(/###LEADS_JSON###([\s\S]*?)###END###/);
-                    if (jsonMatch) {
-                      try { setIaLeads(JSON.parse(jsonMatch[1].trim())); } catch {}
-                    }
-                  } catch(err) { setIaError("Erreur : " + err.message); }
-                  finally { setIaLoading(false); }
-                },
-                style:{ padding:"9px 20px", borderRadius:8, border:"none", background: iaLoading||!iaSecteur.trim()?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)", color: iaLoading||!iaSecteur.trim()?"#9CA3AF":"white", fontWeight:700, fontSize:13, cursor: iaLoading||!iaSecteur.trim()?"default":"pointer", fontFamily:"inherit", whiteSpace:"nowrap" },
-                children: iaLoading ? "⏳ Analyse en cours (30-60s)..." : "🚀 Prospecter",
-              }),
-            ]}),
-            iaError && n.jsx("div", { style:{ marginTop:10, color:"#dc2626", fontSize:12, background:"#FEF2F2", borderRadius:8, padding:"8px 12px" }, children: iaError }),
-          ]}),
-
-          // Résultats IA — leads JSON parsés
-          iaLeads.length > 0 && n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", overflow:"hidden", marginBottom:14 }, children:[
-            n.jsxs("div", { style:{ padding:"14px 20px", borderBottom:"1px solid #F3F4F6", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }, children:[
-              n.jsxs("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:[
-                iaLeads.length, " prospects analysés",
-                n.jsxs("span", { style:{ marginLeft:10, fontSize:12, fontWeight:500, color:"#6B7280" }, children:[
-                  "🔥 ", iaLeads.filter(l=>l.category?.includes("HOT")).length, " HOT · ",
-                  "⚠️ ", iaLeads.filter(l=>l.category?.includes("WARM")).length, " WARM · ",
-                  "❌ ", iaLeads.filter(l=>l.category?.includes("COLD")).length, " COLD",
-                ]}),
-                iaSelected.size > 0 && n.jsxs("span", { style:{ marginLeft:8, color:"#6B40D8", fontWeight:600 }, children:["· ", iaSelected.size, " sélectionné(s)"] }),
-              ]}),
-              n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center" }, children:[
-                n.jsx("button", {
-                  onClick: () => { const all = new Set(iaLeads.map((_,i)=>i)); setIaSelected(iaSelected.size===iaLeads.length ? new Set() : all); },
-                  style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #E5E7EB", background:"white", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-                  children: iaSelected.size===iaLeads.length ? "Tout désélectionner" : "Tout sélectionner",
-                }),
-                n.jsx("button", {
-                  onClick: () => { const hot = new Set(iaLeads.map((l,i)=>l.category?.includes("HOT")?i:null).filter(i=>i!==null)); setIaSelected(hot); },
-                  style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #FCA5A5", background:"#FEF2F2", color:"#dc2626", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-                  children:"🔥 HOT uniquement",
-                }),
-                iaSelected.size > 0 && n.jsx("button", {
-                  onClick: () => {
-                    const toAdd = [...iaSelected].map(i => iaLeads[i]).filter(Boolean);
-                    const newProspects = toAdd.map(l => ({
-                      id: Date.now()+Math.random(),
-                      name: l.name || "",
-                      city: l.city || iaZone.split(",")[0]||"",
-                      address: "", phone: l.phone||"", email:"", website: l.website||"",
-                      category: iaSecteur, type:"", note: l.rating ? String(l.rating) : "",
-                      reviewCount: String(l.reviewCount||""),
-                      status: "prospect",
-                      dateAdded: new Date().toISOString(),
-                      notes: `Score IA : ${l.score||"?"}/100 · ${l.category||""}\n${l.problem||""}\nPitch : ${l.pitch||""}`,
-                      emails:[],
-                    }));
-                    H([...s, ...newProspects]);
-                    setIaAdded(toAdd.length);
-                    setIaSelected(new Set());
-                  },
-                  style:{ fontSize:12, padding:"6px 16px", borderRadius:7, border:"none", background:"linear-gradient(135deg,#6B40D8,#C03080)", color:"white", cursor:"pointer", fontFamily:"inherit", fontWeight:700 },
-                  children:`+ Ajouter ${iaSelected.size} au pipeline`,
-                }),
-                iaAdded > 0 && n.jsx("div", { style:{ fontSize:12, color:"#059669", fontWeight:700 }, children:`✓ ${iaAdded} ajouté(s) !` }),
-              ]}),
-            ]}),
-            n.jsx("div", { style:{ overflowX:"auto" }, children:
-              n.jsxs("table", { style:{ width:"100%", borderCollapse:"collapse", fontSize:12.5 }, children:[
-                n.jsx("thead", { children:
-                  n.jsx("tr", { style:{ background:"#F9FAFB", borderBottom:"1px solid #E5E7EB" }, children:
-                    ["","Score","Catégorie","Nom","Ville","Note","Avis","Téléphone","Site","Problème"].map((h2,i2)=>
-                      n.jsx("th", { style:{ padding:"10px 12px", textAlign:"left", fontWeight:600, color:"#6B7280", fontSize:11, whiteSpace:"nowrap" }, children:h2 }, i2)
-                    )
-                  })
-                }),
-                n.jsx("tbody", { children:
-                  iaLeads.map((l, i2) => {
-                    const hotColor = l.category?.includes("HOT") ? "#FEF2F2" : l.category?.includes("WARM") ? "#FFFBEB" : "#F9FAFB";
-                    const sel = iaSelected.has(i2);
-                    return n.jsx("tr", {
-                      style:{ borderBottom:"1px solid #F3F4F6", background: sel?"#F5F3FF":hotColor, cursor:"pointer" },
-                      onClick: () => { const ns = new Set(iaSelected); ns.has(i2)?ns.delete(i2):ns.add(i2); setIaSelected(ns); },
-                      children:[
-                        n.jsx("td", { style:{ padding:"10px 12px" }, children: n.jsx("input", { type:"checkbox", checked:sel, readOnly:true, style:{ cursor:"pointer", width:15, height:15 } }) }),
-                        n.jsx("td", { style:{ padding:"10px 12px", fontWeight:700, fontSize:13, color: l.score>=70?"#dc2626":l.score>=40?"#d97706":"#6B7280" }, children: l.score ? l.score+"/100" : "—" }),
-                        n.jsx("td", { style:{ padding:"10px 12px", fontWeight:600, fontSize:13, whiteSpace:"nowrap" }, children: l.category || "—" }),
-                        n.jsx("td", { style:{ padding:"10px 12px", fontWeight:600, color:"#1E1B30", maxWidth:160 }, children: l.name }),
-                        n.jsx("td", { style:{ padding:"10px 12px", color:"#6B7280", whiteSpace:"nowrap" }, children: l.city||"—" }),
-                        n.jsx("td", { style:{ padding:"10px 12px", whiteSpace:"nowrap" }, children: l.rating ? n.jsxs("span",{style:{color:l.rating>=4?"#059669":l.rating>=3?"#d97706":"#dc2626",fontWeight:700},children:["⭐ ",l.rating]}) : n.jsx("span",{style:{color:"#D1D5DB"},children:"—"}) }),
-                        n.jsx("td", { style:{ padding:"10px 12px", color:"#6B7280", whiteSpace:"nowrap" }, children: l.reviewCount||"—" }),
-                        n.jsx("td", { style:{ padding:"10px 12px", whiteSpace:"nowrap" }, children: l.phone ? n.jsx("a",{href:`tel:${l.phone}`,onClick:e2=>e2.stopPropagation(),style:{color:"#3B5BDB",fontWeight:600,textDecoration:"none"},children:l.phone}) : n.jsx("span",{style:{color:"#D1D5DB"},children:"—"}) }),
-                        n.jsx("td", { style:{ padding:"10px 12px", maxWidth:120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children: l.website && l.website!=="absent" ? n.jsx("a",{href:l.website,target:"_blank",onClick:e2=>e2.stopPropagation(),style:{color:"#6B40D8",fontSize:11},children:l.website.replace(/^https?:\/\//,"").slice(0,25)}) : n.jsx("span",{style:{color:"#dc2626",fontSize:11,fontWeight:600},children:"Absent"}) }),
-                        n.jsx("td", { style:{ padding:"10px 12px", color:"#6B7280", fontSize:11, maxWidth:180 }, children: l.problem||"—" }),
-                      ]
-                    }, i2);
-                  })
-                }),
-              ]})
-            }),
-          ]}),
-
-          // Rapport complet IA
-          iaResult && n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", overflow:"hidden", marginBottom:14 }, children:[
-            n.jsxs("div", { style:{ padding:"14px 20px", borderBottom:"1px solid #F3F4F6", display:"flex", alignItems:"center", justifyContent:"space-between" }, children:[
-              n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30" }, children:"📋 Rapport complet IA" }),
-              n.jsx("button", {
-                onClick:()=>navigator.clipboard.writeText(iaResult),
-                style:{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid #E5E7EB", background:"#F9FAFB", color:"#374151", cursor:"pointer", fontFamily:"inherit", fontWeight:600 },
-                children:"📋 Copier",
-              }),
-            ]}),
-            n.jsx("div", { style:{ padding:"16px 20px", fontSize:12.5, lineHeight:1.75, color:"#374151", maxHeight:500, overflowY:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word" }, children: iaResult }),
-          ]}),
-
-          !iaResult && !iaLoading && n.jsx("div", { style:{ textAlign:"center", padding:"60px 20px", color:"#9CA3AF" }, children:
-            n.jsxs("div", { children:[
-              n.jsx("div", { style:{ fontSize:40, marginBottom:12 }, children:"🤖" }),
-              n.jsx("div", { style:{ fontSize:14, fontWeight:600, marginBottom:6 }, children:"Prospection automatisée par IA" }),
-              n.jsx("div", { style:{ fontSize:13 }, children:"Entrez un secteur et une zone, l'IA trouve, score et classe vos prospects en HOT · WARM · COLD" }),
-            ]})
-          }),
-        ]}),
-
         // ── MODE GOOGLE MAPS ──
-        searchMode === "maps" && n.jsxs("div", { children:[
+        n.jsxs("div", { children:[
         n.jsxs("div", { style:{ background:"white", borderRadius:14, border:"1px solid #E5E7EB", padding:"20px 22px", marginBottom:14 }, children:[
           n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:4 }, children:"🔍 Rechercher des prospects sur Google Maps" }),
           n.jsx("div", { style:{ fontSize:11.5, color:"#9CA3AF", marginBottom:14 }, children:"Trouvez des entreprises locales à contacter et ajoutez-les directement à votre pipeline." }),
@@ -3683,11 +3992,31 @@ Ne pas inventer de données. Se baser uniquement sur des informations plausibles
           onEmailAdd: L,
           onDelete: S,
           onConvert: (v) => {
-            if (!v.clientRef) return;
-            const A = s.map((q) =>
-              q.id === v.id ? { ...q, status: "signe", converted: !0 } : q,
+            const newClient = {
+              id: Date.now().toString(),
+              name: v.name || "",
+              category: v.category || "",
+              city: v.city || "",
+              phone: v.phone || null,
+              email: v.email || null,
+              website: v.website || null,
+              note: v.note || null,
+              reviewCount: v.reviewCount || null,
+              scores: v.scores || {},
+              manualOverrides: v.manualOverrides || {},
+              tasksDone: {},
+              history: [],
+              perf: null,
+              weeklyNotes: "",
+              calPosts: {},
+              statutAudit: "client",
+              dateAdded: new Date().toISOString(),
+            };
+            r([...o, newClient]);
+            const updatedProspects = s.map((q) =>
+              q.id === v.id ? { ...q, status: "signe", converted: true, clientRef: newClient.id } : q,
             );
-            (H(A), b(null));
+            (H(updatedProspects), b(null));
           },
           apiKey: e,
           hasEnvKey: t,
@@ -3807,7 +4136,7 @@ function ProspectCard({
             (
               (
                 await (
-                  await fetch("https://api.anthropic.com/v1/messages", {
+                  await fetch("/api/data/sync?action=ai", {
                     method: "POST",
                     headers: {
                       "content-type": "application/json",
@@ -4431,20 +4760,17 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                       }),
                     ],
                   }),
-                e.potentialReason &&
-                  n.jsxs("div", {
-                    style: {
-                      background: "#FDF2F8",
-                      borderRadius: 9,
-                      padding: "9px 12px",
-                      border: "1px solid #FBCFE8",
-                      marginBottom: 12,
-                      fontSize: 12.5,
-                      color: "#3B5BDB",
-                      lineHeight: 1.5,
-                    },
-                    children: ["💡 ", e.potentialReason],
-                  }),
+                realScore > 0 && realScore < 100 && (() => {
+                    const activeScores = (_matchedClient?.scores && Object.keys(_matchedClient.scores).length > 0) ? _matchedClient.scores : (e.scores || {});
+                    const failCount = ALL_CRITERIA.filter((cr) => activeScores[cr.id] === false).length;
+                    const dynamicReason = failCount > 0
+                      ? `Fiche à ${realScore}% — ${failCount} critère${failCount > 1 ? "s" : ""} à optimiser = autant d'arguments de vente`
+                      : `Fiche à ${realScore}% — potentiel d'amélioration important`;
+                    return n.jsxs("div", {
+                      style: { background: "#FDF2F8", borderRadius: 9, padding: "9px 12px", border: "1px solid #FBCFE8", marginBottom: 12, fontSize: 12.5, color: "#3B5BDB", lineHeight: 1.5 },
+                      children: ["💡 ", dynamicReason],
+                    });
+                  })(),
                 (e.weakPoints || []).length > 0 &&
                   n.jsxs("div", {
                     style: { marginBottom: 12 },
@@ -4839,7 +5165,7 @@ ${m.body}`),
                 }),
                 n.jsx("button", {
                   className: "btn-danger",
-                  onClick: () => s(e.id),
+                  onClick: () => { if (confirm(`Supprimer "${e.name}" ? Cette action est irréversible.`)) s(e.id); },
                   style: {
                     width: "100%",
                     justifyContent: "center",
@@ -4854,6 +5180,151 @@ ${m.body}`),
     ],
   });
 }
+function CTRReferentielPage() {
+  const thS = { padding: "8px 14px", textAlign: "left", fontSize: 10, textTransform: "uppercase", letterSpacing: ".5px", color: "var(--ink4)", fontWeight: 700, borderBottom: "2px solid var(--border)", background: "var(--surface2)" };
+  const tdS = { padding: "11px 14px", fontSize: 13, color: "var(--ink)", borderBottom: "1px solid var(--border)" };
+  const tdV = { ...tdS, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+  const tdN = { ...tdS, fontSize: 12, color: "var(--ink3)" };
+
+  const ctrRows = [
+    { pos: "Position 1 — Local Pack", val: "17,8 %", col: "#6B40D8", note: "Leader du pack — capte la majorité des clics" },
+    { pos: "Position 2 — Local Pack", val: "13,6 %", col: "#C03080", note: "Légèrement en retrait du n°1" },
+    { pos: "Position 3 — Local Pack", val: "10,4 %", col: "#E85A30", note: "Encore très visible — seuil cible principal" },
+    { pos: "Top 3 (moyenne)", val: "14 %", col: "#E85A30", note: "Utilisé comme référence dans le simulateur ROI" },
+    { pos: "Positions 4–6 — résultats étendus", val: "~1,0 %", col: "#d97706", note: "Hors pack principal, très faible exposition" },
+    { pos: "Positions 7–20", val: "~0,3 %", col: "#9CA3AF", note: "Pratiquement invisible sur les recherches locales" },
+    { pos: "Position 20+", val: "< 0,1 %", col: "#D1D5DB", note: "Non visible pour l'utilisateur moyen" },
+  ];
+
+  const faqs = [
+    ["D'où viennent vos chiffres ?", "Sur 100 recherches locales sur Google, 44 aboutissent sur le Local Pack (GBP). La position 1 capte 17,8 % des clics totaux, la position 2 en capte 13,6 %, et la position 3 en capte 10,4 %. La moyenne Top 3 retenue dans le simulateur est de 14 %. Le reste va au SEO classique (29) ou aux annonces (19)."],
+    ["Mes concurrents sont aussi sur Google — c'est pareil ?", "Non. Le SEO classique (site web) et le Local Pack (GBP) sont deux canaux distincts. Être bien positionné en GBP ne dépend pas du site web mais uniquement de la fiche Google Business Profile — optimisation, avis, posts, photos."],
+    ["Pourquoi la position 1 ne vaut pas 3× la position 3 ?", "Les 3 résultats du Local Pack sont toujours affichés ensemble. L'écart vient surtout de la perception visuelle et de la confiance accordée au premier résultat, pas de la visibilité brute."],
+    ["Ces chiffres sont-ils valables pour mon secteur ?", "Ce sont des moyennes observées sur des milliers de recherches locales. Ils varient selon la concurrence, la zone géographique et le type d'activité — ils servent de base de modélisation, pas de garantie."],
+  ];
+
+  return n.jsxs("div", { children: [
+
+    /* ── Bandeau gradient ── */
+    n.jsxs("div", { style: { background: "linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)", borderRadius: 20, padding: "20px 24px", marginBottom: 20, color: "#fff" }, children: [
+      n.jsx("div", { style: { fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".6px", color: "#94a3b8", marginBottom: 12 }, children: "📊 Référentiels CTR — Recherches locales Google Maps" }),
+      n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 8 }, children: [
+        { label: "Local Pack (GBP)", val: "44 %", sub: "des clics totaux" },
+        { label: "Position 1 du pack", val: "17,8 %", sub: "des recherches" },
+        { label: "Position 2 du pack", val: "13,6 %", sub: "des recherches" },
+        { label: "Position 3 du pack", val: "10,4 %", sub: "des recherches" },
+      ].map(({ label, val, sub }) => n.jsxs("div", { style: { background: "rgba(255,255,255,.08)", borderRadius: 10, padding: "12px 16px", borderLeft: "3px solid rgba(255,255,255,.3)" }, children: [
+        n.jsx("div", { style: { fontSize: 22, fontWeight: 900, lineHeight: 1 }, children: val }),
+        n.jsx("div", { style: { fontSize: 11, opacity: .8, marginTop: 3 }, children: label }),
+        n.jsx("div", { style: { fontSize: 10, opacity: .55, marginTop: 1 }, children: sub }),
+      ]})) }),
+    ]}),
+
+    /* ── Grille 2 colonnes ── */
+    n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }, children: [
+
+      /* Répartition des clics */
+      n.jsxs("div", { style: { background: "var(--surface)", borderRadius: 16, padding: "18px 20px", border: "1.5px solid #C7D2FE", boxShadow: "var(--shadow-sm)" }, children: [
+        n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }, children: [
+          n.jsx("span", { style: { fontSize: 20 }, children: "🔀" }),
+          n.jsxs("div", { children: [
+            n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }, children: "Répartition des clics" }),
+            n.jsx("div", { style: { fontSize: 11.5, color: "var(--ink4)" }, children: "Sur une recherche locale type" }),
+          ]}),
+        ]}),
+        n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 8 }, children: [
+          { label: "Local Pack (GBP)", val: 44, col: "#6B40D8" },
+          { label: "SEO classique", val: 29, col: "#3B5BDB" },
+          { label: "Annonces (Ads)", val: 19, col: "#d97706" },
+          { label: "Autres résultats locaux", val: 8, col: "#9CA3AF" },
+        ].map(({ label, val, col }) => n.jsxs("div", { key: label, children: [
+          n.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }, children: [
+            n.jsx("span", { style: { color: "var(--ink)", fontWeight: 600 }, children: label }),
+            n.jsx("span", { style: { color: col, fontWeight: 800 }, children: `${val} %` }),
+          ]}),
+          n.jsx("div", { style: { height: 6, background: "var(--border)", borderRadius: 4, overflow: "hidden" }, children:
+            n.jsx("div", { style: { height: "100%", width: `${val}%`, background: col, borderRadius: 4 } }),
+          }),
+        ]})) }),
+      ]}),
+
+      /* Top 3 — focus */
+      n.jsxs("div", { style: { background: "var(--surface)", borderRadius: 16, padding: "18px 20px", border: "1.5px solid #FED7AA", boxShadow: "var(--shadow-sm)" }, children: [
+        n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }, children: [
+          n.jsx("span", { style: { fontSize: 20 }, children: "🏆" }),
+          n.jsxs("div", { children: [
+            n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }, children: "Le Local Pack en détail" }),
+            n.jsx("div", { style: { fontSize: 11.5, color: "var(--ink4)" }, children: "CTR par position (% des recherches totales)" }),
+          ]}),
+        ]}),
+        n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+          { pos: "Pos. 1", val: 17.8, col: "#6B40D8" },
+          { pos: "Pos. 2", val: 13.6, col: "#C03080" },
+          { pos: "Pos. 3", val: 10.4, col: "#E85A30" },
+          { pos: "Pos. 4–6", val: 1.0, col: "#d97706" },
+          { pos: "Pos. 7+", val: 0.3, col: "#9CA3AF" },
+        ].map(({ pos, val, col }) => n.jsxs("div", { key: pos, children: [
+          n.jsxs("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }, children: [
+            n.jsx("span", { style: { color: "var(--ink)", fontWeight: 600 }, children: pos }),
+            n.jsx("span", { style: { color: col, fontWeight: 800 }, children: `${val} %` }),
+          ]}),
+          n.jsx("div", { style: { height: 5, background: "var(--border)", borderRadius: 4, overflow: "hidden" }, children:
+            n.jsx("div", { style: { height: "100%", width: `${Math.min(val / 18 * 100, 100)}%`, background: col, borderRadius: 4 } }),
+          }),
+        ]})) }),
+      ]}),
+    ]}),
+
+    /* ── Tableau complet ── */
+    n.jsxs("div", { style: { background: "var(--surface)", borderRadius: 16, padding: "18px 20px", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)", marginBottom: 14 }, children: [
+      n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }, children: [
+        n.jsx("span", { style: { fontSize: 20 }, children: "📋" }),
+        n.jsxs("div", { children: [
+          n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }, children: "Tableau de référence complet" }),
+          n.jsx("div", { style: { fontSize: 11.5, color: "var(--ink4)" }, children: "Utilisé dans les calculs du simulateur ROI" }),
+        ]}),
+      ]}),
+      n.jsx("div", { style: { overflowX: "auto" }, children: n.jsxs("table", { style: { width: "100%", borderCollapse: "collapse" }, children: [
+        n.jsx("thead", { children: n.jsxs("tr", { children: [
+          n.jsx("th", { style: thS, children: "Position" }),
+          n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "CTR" }),
+          n.jsx("th", { style: thS, children: "Interprétation" }),
+        ]}) }),
+        n.jsx("tbody", { children: ctrRows.map(({ pos, val, col, note }) => n.jsxs("tr", { key: pos, children: [
+          n.jsxs("td", { style: tdS, children: [
+            n.jsx("span", { style: { width: 8, height: 8, borderRadius: "50%", background: col, display: "inline-block", marginRight: 8, flexShrink: 0 } }),
+            pos,
+          ]}),
+          n.jsx("td", { style: { ...tdV, color: col }, children: val }),
+          n.jsx("td", { style: tdN, children: note }),
+        ]})) }),
+      ]}) }),
+      n.jsx("div", { style: { marginTop: 10, padding: "10px 14px", background: "#F4F5FA", borderRadius: 10, border: "1px solid #b8b8f8", fontSize: 12, color: "#4338ca" }, children: "💡 Le Local Pack (Top 3) représente 41,8 % des clics totaux (17,8 + 13,6 + 10,4), sur les 44 % alloués au canal GBP. Le simulateur utilise 14 % comme moyenne Top 3." }),
+    ]}),
+
+    /* ── FAQ ── */
+    n.jsxs("div", { style: { background: "var(--surface)", borderRadius: 16, padding: "18px 20px", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)", marginBottom: 14 }, children: [
+      n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }, children: [
+        n.jsx("span", { style: { fontSize: 20 }, children: "💡" }),
+        n.jsxs("div", { children: [
+          n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "var(--ink)" }, children: "Questions fréquentes d'un client" }),
+          n.jsx("div", { style: { fontSize: 11.5, color: "var(--ink4)" }, children: "Réponses prêtes à l'emploi pour vos RDV" }),
+        ]}),
+      ]}),
+      n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }, children:
+        faqs.map(([q, r2]) => n.jsxs("div", { key: q, style: { background: "var(--surface2)", borderRadius: 10, padding: "12px 16px" }, children: [
+          n.jsxs("div", { style: { fontSize: 12, fontWeight: 700, color: "var(--ink)", marginBottom: 6 }, children: ["❓ ", q] }),
+          n.jsx("div", { style: { fontSize: 12, color: "var(--ink3)", lineHeight: 1.6 }, children: r2 }),
+        ]}))
+      }),
+    ]}),
+
+    /* ── Source ── */
+    n.jsx("div", { style: { marginTop: 4, padding: "12px 16px", background: "#F4F5FA", borderRadius: 12, border: "1px solid #b8b8f8", fontSize: 12, color: "#4338ca" }, children: "📌 Source : étude BrightLocal / Search Engine Land sur la répartition des clics lors d'une recherche locale. Ces taux sont des moyennes observées — ils varient selon la concurrence locale, le secteur et la zone géographique." }),
+
+  ]});
+}
+
 function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
   const [r, o] = D.useState("overview"),
     s = Ff,
@@ -4973,6 +5444,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
       { id: "overview", label: "Vue d'ensemble" },
       { id: "secteurs", label: "Par secteur" },
       { id: "algorithme", label: "Algorithme" },
+      { id: "ctr", label: "📊 Référentiels CTR" },
       { id: "bibliotheque", label: "📚 Bibliothèque" },
     ];
   return n.jsxs("div", {
@@ -6275,6 +6747,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
             }),
           ],
         }),
+      r === "ctr" && n.jsx(CTRReferentielPage, {}),
       r === "bibliotheque" && n.jsx(SectorBenchmarkData, {}),
     ],
   });
@@ -7540,7 +8013,6 @@ function ContentMaitreTab() {
 
   const generer = async () => {
     if (!sujet.trim()) return;
-    if (!apiKey) { setError("Clé API Claude manquante (onglet Paramètres)."); return; }
     setLoading(true); setError(""); setResult(null);
 
     // Extrait le texte brut du HTML de l'article sélectionné
@@ -7626,11 +8098,11 @@ Canaux : LinkedIn / Facebook / Instagram / GBP
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 180000);
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch("/api/data/sync?action=ai", {
           method: "POST",
           signal: ctrl.signal,
           headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-          body: JSON.stringify({ model: "claude-opus-4-8", max_tokens: 8000, messages: [{ role: "user", content: p }] }),
+          body: JSON.stringify({ model: "claude-opus-4-5", max_tokens: 8000, messages: [{ role: "user", content: p }] }),
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error.message || JSON.stringify(d.error));
@@ -7939,14 +8411,13 @@ function SiteWebTab() {
 
   const genererFAQ = async () => {
     const apiKey = localStorage.getItem("bto_apikey") || "";
-    if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante." }); return; }
     if (!form.titre.trim()) { setMsg({ ok:false, text:"Remplis d'abord le titre de l'article." }); return; }
     setFaqLoading(true);
     try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetch("/api/data/sync?action=ai", {
         method:"POST",
         headers:{ "x-api-key":apiKey, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
-        body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:1200,
+        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:1200,
           messages:[{ role:"user", content:`Tu es expert SEO local. Génère exactement 5 questions/réponses FAQ pour un article de blog intitulé "${form.titre}".
 Ces FAQ doivent couvrir les vraies questions que se posent les dirigeants, artisans et TPE du Morbihan/Bretagne.
 Format de réponse — UNIQUEMENT ce JSON, sans markdown, sans explication :
@@ -7966,13 +8437,12 @@ Format de réponse — UNIQUEMENT ce JSON, sans markdown, sans explication :
 
   const genererIdees = async () => {
     const apiKey = localStorage.getItem("bto_apikey") || "";
-    if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante (onglet Paramètres)." }); return; }
     setIdeeLoading(true);
     try {
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetch("/api/data/sync?action=ai", {
         method:"POST",
         headers:{ "x-api-key":apiKey, "anthropic-version":"2023-06-01", "content-type":"application/json", "anthropic-dangerous-direct-browser-access":"true" },
-        body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:1500,
+        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:1500,
           messages:[{ role:"user", content:`Génère 6 idées de titres d'articles de blog SEO pour une agence de référencement local (Google Maps, Google Business Profile) basée à Vannes, Morbihan. Les clients sont des PME, artisans, commerçants locaux en Bretagne.
 
 Contraintes :
@@ -8070,7 +8540,6 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
   const genererIA = async () => {
     if (!form.titre.trim()) { setMsg({ ok:false, text:"Remplis d'abord le titre." }); return; }
     const apiKey = localStorage.getItem("bto_apikey") || "";
-    if (!apiKey) { setMsg({ ok:false, text:"Clé API Claude manquante (onglet Paramètres)." }); return; }
     setAiLoading(true);
     try {
       const prompt = `Tu es consultant SEO local spécialisé Google Business Profile.
@@ -8182,10 +8651,10 @@ Après la checklist et les CTAs, ajoute IMPÉRATIVEMENT ce bloc HTML exactement 
 
 Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
 
-      const r = await fetch("https://api.anthropic.com/v1/messages", {
+      const r = await fetch("/api/data/sync?action=ai", {
         method: "POST",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model:"claude-opus-4-8", max_tokens:16000, messages:[{ role:"user", content: prompt }] }),
+        body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:16000, messages:[{ role:"user", content: prompt }] }),
       });
       const data = await r.json();
       const html = data.content?.[0]?.text || "";
@@ -10211,7 +10680,7 @@ function App() {
             }
           }
 
-          // Vérification modification de fiche
+          // Vérification modification de fiche + sync données complètes
           try {
             const locRes = await fetch(`/api/gmb/check-location?location_name=${encodeURIComponent(cl.gmbLocationName)}`, { headers: { Authorization: `Bearer ${token}` } });
             const locData = await locRes.json();
@@ -10232,8 +10701,27 @@ function App() {
                   }
                 }
               }
-              // Sauvegarde le snapshot
-              x(prev2 => { const u = prev2.map(c => c.id===cl.id ? {...c, lastLocationSnapshot: curr} : c); saveClients(u); return u; });
+              // Sauvegarde snapshot + données extraites complètes dans e.data.extracted
+              x(prev2 => {
+                const u = prev2.map(c => {
+                  if (c.id !== cl.id) return c;
+                  const newExtracted = locData.extracted
+                    ? { ...(c.data?.extracted || {}), ...locData.extracted, syncedAt: new Date().toISOString() }
+                    : c.data?.extracted;
+                  return {
+                    ...c,
+                    lastLocationSnapshot: curr,
+                    name: locData.extracted?.name || c.name,
+                    phone: locData.extracted?.phone || c.phone,
+                    address: locData.extracted?.address || c.address,
+                    website: locData.extracted?.website || c.website,
+                    city: locData.extracted?.city || c.city,
+                    data: { ...(c.data || {}), extracted: newExtracted },
+                  };
+                });
+                saveClients(u);
+                return u;
+              });
             }
           } catch(_) {}
         } catch(_) {}
@@ -10515,7 +11003,9 @@ function App() {
                                 setAuth: t,
                                 upd: B,
                               })
-                            : null,
+                            : l === "simulateur"
+                              ? n.jsx(SimulateurROI, {})
+                              : null,
           ]
         }),
         n.jsx(ChatBot, {
@@ -10617,7 +11107,7 @@ Réponds en français, de façon concise et actionnable. Si Sara parle d'un clie
     },
     c = async () => {
       const u = e || localStorage.getItem("bto_apikey") || "";
-      if (!b.trim() || !u) return;
+      if (!b.trim()) return;
       const m = { role: "user", text: b };
       (p((C) => [...C, m]), x(""), I(!0));
       try {
@@ -10630,7 +11120,7 @@ Réponds en français, de façon concise et actionnable. Si Sara parle d'un clie
           R = (
             (
               await (
-                await fetch("https://api.anthropic.com/v1/messages", {
+                await fetch("/api/data/sync?action=ai", {
                   method: "POST",
                   headers: {
                     "content-type": "application/json",
@@ -11295,6 +11785,7 @@ function Sidebar({
       { id: "prospection", label: "Prospection", icon: "◉" },
       { id: "calendrier", label: "Calendrier", icon: "◷" },
       { id: "notifications", label: "Rappels", icon: "◆" },
+      { id: "simulateur", label: "Simulateur ROI", icon: "◑" },
     ],
     [j, I] = D.useState(() => {
       try {
@@ -14610,10 +15101,7 @@ function AuditForm({
   const O = async () => {
     var W, L, $, X, te, Q, Z, Y;
     const w = localStorage.getItem("bto_apikey") || o || "";
-    if (!u.trim() || !w) {
-      E("Clé API requise — configurez-la dans Mon Espace");
-      return;
-    }
+    if (!u.trim()) return;
     (E(""), B("loading"), R(0));
     try {
       const ee = await $c(a, u, w),
@@ -14641,6 +15129,7 @@ function AuditForm({
           perf: null,
           weeklyNotes: "",
           calPosts: K,
+          statutAudit: "client",
         };
       if (M === "prospect") {
         const re = calcScore(v),
@@ -14700,8 +15189,14 @@ function AuditForm({
             Ee.findIndex((Pe) => Pe.id === ce.id) >= 0
               ? Ee.map((Pe) => (Pe.id === ce.id ? ce : Pe))
               : [...Ee, ce];
-        (qc(hn), t([...e, ie]), i("prospection"));
-      } else (t([...e, ie]), i("client", ie));
+        const existingPIdx = e.findIndex(cl => cl.name && ie.name && cl.name.trim().toLowerCase() === ie.name.trim().toLowerCase());
+        const updatedClients = existingPIdx >= 0 ? e.map((cl, idx) => idx === existingPIdx ? { ...cl, ...ie, id: cl.id } : cl) : [...e, ie];
+        (qc(hn), t(updatedClients), i("prospection"));
+      } else {
+        const existingIdx = e.findIndex(cl => cl.name && ie.name && cl.name.trim().toLowerCase() === ie.name.trim().toLowerCase());
+        const updatedClients2 = existingIdx >= 0 ? e.map((cl, idx) => idx === existingIdx ? { ...cl, ...ie, id: cl.id } : cl) : [...e, ie];
+        t(updatedClients2); i("client", existingIdx >= 0 ? e[existingIdx] : ie);
+      }
     } catch (ee) {
       (console.error("Audit error:", ee),
         E(ee.message || "Erreur — vérifiez votre clé API dans Mon Espace."),
@@ -14815,7 +15310,7 @@ function AuditForm({
         }),
       ],
     });
-  const F = u.trim() && (r || o.trim() || !!localStorage.getItem("bto_apikey")),
+  const F = u.trim(),
     H = [
       { label: "Nom", ok: /nom|name/i.test(u) || u.length > 50 },
       { label: "Adresse", ok: /rue|avenue|boulevard|allée|\d{5}/i.test(u) },
@@ -15485,11 +15980,16 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
     [a, d] = D.useState("manual"),
     [p, b] = D.useState("desc"),
     [x, j] = D.useState("all"),
-    [filterGoogle, setFilterGoogle] = D.useState("all"), // "all" | "connected" | "disconnected"
+    [filterGoogle, setFilterGoogle] = D.useState("all"),
     [I, z] = D.useState(null),
     [g, h] = D.useState(null),
+    [page, setPage] = D.useState(0),
+    PAGE_SIZE = 20,
     f = (E) => {
-      confirm("Supprimer ce client ?") && t(e.filter((M) => M.id !== E));
+      const cl = e.find(M => M.id === E);
+      const name = cl ? cl.name : "ce client";
+      if (window.confirm(`Supprimer définitivement "${name}" ?\n\nToutes ses données (audit, historique, tâches) seront perdues. Cette action est irréversible.`))
+        t(e.filter((M) => M.id !== E));
     },
     c = (E) => {
       const P = ALL_CRITERIA.filter((T) => (E.scores || {})[T.id] === !1).length;
@@ -15526,6 +16026,10 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                 ? P * (c(M) - c(E))
                 : 0;
       })));
+  D.useEffect(() => { setPage(0); }, [s, x, filterGoogle, a]);
+  const totalPages = Math.ceil(u.length / PAGE_SIZE);
+  const safeP = Math.min(page, Math.max(0, totalPages - 1));
+  const uPage = u.slice(safeP * PAGE_SIZE, (safeP + 1) * PAGE_SIZE);
   const m = (E, M) => {
       a === "manual" && (z(M), (E.dataTransfer.effectAllowed = "move"));
     },
@@ -15772,7 +16276,8 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                   }),
             ],
           })
-        : n.jsx("div", {
+        : n.jsxs(n.Fragment, { children: [
+          n.jsx("div", {
             style: {
               background: "var(--surface)",
               borderRadius: 20,
@@ -15819,7 +16324,7 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                   }),
                 }),
                 n.jsx("tbody", {
-                  children: u.map((E, M) => {
+                  children: uPage.map((E, M) => { M = safeP * PAGE_SIZE + M; // preserve absolute index for drag
                     const P = o({
                         ...(E.scores || {}),
                         ...(E.manualOverrides || {}),
@@ -16044,6 +16549,28 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
               ],
             }),
           }),
+          totalPages > 1 && n.jsxs("div", {
+            style: { display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"14px 0" },
+            children: [
+              n.jsx("button", {
+                onClick: () => setPage(p2 => Math.max(0, p2 - 1)),
+                disabled: safeP === 0,
+                style: { padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--ink)", fontSize:13, fontWeight:600, cursor:safeP===0?"not-allowed":"pointer", opacity:safeP===0?0.4:1, fontFamily:"inherit" },
+                children: "← Préc.",
+              }),
+              n.jsxs("span", {
+                style: { fontSize:13, color:"var(--ink3)", fontWeight:600 },
+                children: ["Page ", safeP + 1, " / ", totalPages, " · ", u.length, " clients"],
+              }),
+              n.jsx("button", {
+                onClick: () => setPage(p2 => Math.min(totalPages - 1, p2 + 1)),
+                disabled: safeP >= totalPages - 1,
+                style: { padding:"6px 14px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--ink)", fontSize:13, fontWeight:600, cursor:safeP>=totalPages-1?"not-allowed":"pointer", opacity:safeP>=totalPages-1?0.4:1, fontFamily:"inherit" },
+                children: "Suiv. →",
+              }),
+            ],
+          }),
+        ]}),
     ],
   });
 }
@@ -16374,35 +16901,16 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
   /* Auto-géocoder l'adresse si aucun centre n'est défini */
   D.useEffect(() => {
-    if (e?.geoGrid?.center) return; // centre déjà défini
-    const addr = e?.address || e?.data?.extracted?.address || e?.city || "";
+    if (e?.geoGrid?.center) return;
+    const addr = e?.address || e?.data?.extracted?.address || e?.city || e?.name || "";
     if (!addr) return;
     (async () => {
-      // Essai Google Geocoding
-      if (o) {
-        try {
-          const r = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addr)}&key=${o}&language=fr`);
-          const j = await r.json();
-          if (j.status === "OK" && j.results?.[0]) {
-            const { lat, lng } = j.results[0].geometry.location;
-            const newGeoGrid = { ...(e?.geoGrid || {}), center: { lat, lng } };
-            t(s.map(cl => cl.id === e.id ? { ...cl, geoGrid: newGeoGrid } : cl));
-            if (m.current) m.current.setView([lat, lng], 13);
-            return;
-          }
-        } catch {}
+      const res = await y(addr);
+      if (res) {
+        const newGeoGrid = { ...(e?.geoGrid || {}), center: { lat: res.lat, lng: res.lng } };
+        i(t.map(cl => cl.id === e.id ? { ...cl, geoGrid: newGeoGrid } : cl));
+        if (m.current) m.current.setView([res.lat, res.lng], 13);
       }
-      // Fallback Nominatim
-      try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`, { headers: { "User-Agent": "BTO-CRM" } });
-        const j = await r.json();
-        if (j?.[0]) {
-          const lat = parseFloat(j[0].lat), lng = parseFloat(j[0].lon);
-          const newGeoGrid = { ...(e?.geoGrid || {}), center: { lat, lng } };
-          t(s.map(cl => cl.id === e.id ? { ...cl, geoGrid: newGeoGrid } : cl));
-          if (m.current) m.current.setView([lat, lng], 13);
-        }
-      } catch {}
     })();
   }, [e?.id]),
 
@@ -16431,6 +16939,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     m.current.setView([W, L], 10);
     const $ = Math.floor(p / 2), X = 111320;
 
+
     let te = 0;
     for (let Z = 0; Z < p; Z++)
       for (let Y = 0; Y < p; Y++) {
@@ -16440,7 +16949,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
           A = W + ee, q = L + v,
           ie = E[te],
           re = K ? "#1E1B30" : P(ie),
-          oe = K ? "📍" : T(ie),
+          oe = T(ie),
           he = window.L.divIcon({
             className: "",
             html: `<div style="width:36px;height:36px;border-radius:50%;background:${re};display:flex;align-items:center;justify-content:center;font-size:${K ? 14 : 12}px;font-weight:800;color:white;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:${K?'default':'pointer'}">${oe}</div>`,
@@ -16523,25 +17032,11 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     return nameScore * (cityOk || postalOk ? 2 : 0.5);
   };
 
-  /* ── Google Places API scan ── */
+  /* ── Scan via SerpAPI (backend) ── */
   const O = async (lat, lng, query, myName, attempt = 0) => {
-    if (!o) return null;
     try {
-      const resp = await fetch("https://places.googleapis.com/v1/places:searchText", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": o,
-          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.photos,places.id",
-        },
-        body: JSON.stringify({
-          textQuery: query,
-          locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: x * 2 } },
-          maxResultCount: 20,
-          rankPreference: "RELEVANCE",
-          languageCode: "fr",
-        }),
-      });
+      const q = encodeURIComponent(query);
+      const resp = await fetch(`/api/data/sync?action=serp-scan&query=${q}&lat=${lat}&lng=${lng}`);
 
       if (resp.status === 429) {
         if (attempt < 3) { await new Promise(r => setTimeout(r, 1500 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1); }
@@ -16550,8 +17045,8 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
       const json = await resp.json();
       if (json.error) {
-        const msg = json.error.message || json.error.status || "";
-        if (msg.includes("RESOURCE_EXHAUSTED") && attempt < 3) {
+        const msg = json.error || "";
+        if ((msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) && attempt < 3) {
           await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1);
         }
         throw new Error(`API Google : ${msg}`);
@@ -16566,18 +17061,18 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 
       let bestIdx = -1, bestScore = 0;
       places.forEach((pl, idx) => {
-        const score = scoreMatch(pl.displayName?.text || "", pl.formattedAddress || "", nameTokens, cityLow, postalCode);
+        const score = scoreMatch(pl.name || "", pl.address || "", nameTokens, cityLow, postalCode);
         if (score > bestScore && score > 0.3) { bestScore = score; bestIdx = idx; }
       });
 
       const rank = bestIdx >= 0 ? bestIdx + 1 : 21;
       const top10 = places.slice(0, 10).map((pl, idx) => ({
-        name: pl.displayName?.text || "?",
-        address: pl.formattedAddress || "",
+        name: pl.name || "?",
+        address: pl.address || "",
         rating: pl.rating || null,
-        reviews: pl.userRatingCount || 0,
+        reviews: pl.reviews || 0,
         rank: idx + 1,
-        hasPhoto: (pl.photos || []).length > 0,
+        hasPhoto: false,
         isMe: idx === bestIdx,
       }));
       return { rank, top10 };
@@ -16593,7 +17088,6 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
   const F = async () => {
     var v, A, q;
     setScanError(null);
-    if (!o) { alert("Clé Google Maps API manquante.\nVa dans Mon Espace → Paramètres → Clé Google Maps API."); return; }
     if (!a) { alert("Sélectionne un mot-clé d'abord."); return; }
     z(!0); h(0); setScanError(null);
     try {
@@ -16709,6 +17203,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
           onChange:w=>{ const v=parseInt(w.target.value); setRayon(v); },
           style:{fontSize:12,padding:"6px 10px",borderRadius:8,border:`1.5px solid ${savedCfg.rayon===rayon?"#6B40D8":"#E5E7EB"}`,fontFamily:"inherit",cursor:"pointer",outline:"none"},
           children:[
+            n.jsx("option",{value:2,children:"Zone 2 km"}),
             n.jsx("option",{value:5,children:"Zone 5 km"}),
             n.jsx("option",{value:10,children:"Zone 10 km"}),
             n.jsx("option",{value:20,children:"Zone 20 km ✓"}),
@@ -16731,8 +17226,24 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
           style:{fontSize:11,color:"#059669",fontWeight:600,padding:"5px 8px",background:"#F0FDF4",borderRadius:7,border:"1px solid #BBF7D0"},
           children:`✓ Config client`,
         }),
+        /* Bouton localiser */
+        n.jsx("button", {
+          title: e?.geoGrid?.center ? "Recalculer la position depuis l'adresse de la fiche" : "Géocoder l'adresse de la fiche",
+          onClick: async () => {
+            const addr = e?.address || e?.data?.extracted?.address || e?.city || e?.name || "";
+            if (!addr) { alert("Aucune adresse disponible sur cette fiche."); return; }
+            const res = await y(addr);
+            if (res) {
+              const ng = { ...(e?.geoGrid || {}), center: { lat: res.lat, lng: res.lng } };
+              i(t.map(cl => cl.id === e.id ? { ...cl, geoGrid: ng } : cl));
+              if (m.current) m.current.setView([res.lat, res.lng], 13);
+            } else { alert("Adresse introuvable — cliquez sur la carte pour placer le centre manuellement."); }
+          },
+          style:{ fontSize:12,padding:"7px 14px",borderRadius:8,border:"1.5px solid #6B40D8",background:"#F5F3FF",color:"#6B40D8",cursor:"pointer",fontFamily:"inherit",fontWeight:700,display:"flex",alignItems:"center",gap:5 },
+          children: e?.geoGrid?.center ? "📍 Relocaliser" : "📍 Localiser",
+        }),
         /* Scan button */
-        n.jsx("button", { onClick:F, disabled:I||!o, style:{ fontSize:12,padding:"7px 16px",borderRadius:8,border:"none",background:I?"#E5E7EB":o?"linear-gradient(135deg,#059669,#16a34a)":"#F3F4F6",color:I||!o?"#9CA3AF":"white",cursor:I||!o?"default":"pointer",fontFamily:"inherit",fontWeight:700,display:"flex",alignItems:"center",gap:6 }, children: I ? `⏳ Scan ${g}%` : "🔍 Lancer le scan" }),
+        n.jsx("button", { onClick:F, disabled:I, style:{ fontSize:12,padding:"7px 16px",borderRadius:8,border:"none",background:I?"#E5E7EB":"linear-gradient(135deg,#059669,#16a34a)",color:I?"#9CA3AF":"white",cursor:I?"default":"pointer",fontFamily:"inherit",fontWeight:700,display:"flex",alignItems:"center",gap:6 }, children: I ? `⏳ Scan ${g}%` : "🔍 Lancer le scan" }),
         I && n.jsx("div",{style:{fontSize:12,color:"#6B7280",alignSelf:"center"},children:`Point ${Math.round(g * M / 100)}/${M}`}),
       ]}),
     ]}),
@@ -16884,9 +17395,23 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       if (!hasCenter) return n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10,background:"#EEF2FF",border:"1.5px solid #a5b4fc",borderRadius:10,padding:"10px 14px",marginBottom:10},children:[
         n.jsx("span",{style:{fontSize:20},children:"📍"}),
         n.jsxs("div",{style:{flex:1},children:[
-          n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#3730a3"},children:"Cliquez sur la carte pour placer le centre du scan"}),
-          n.jsx("div",{style:{fontSize:12,color:"#6366f1",marginTop:2},children:"L'adresse de la fiche n'a pas pu être géocodée automatiquement. Un clic sur la carte définit la position de départ."}),
+          n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#3730a3"},children:"Position non définie — cliquez sur la carte ou utilisez la localisation automatique"}),
+          n.jsx("div",{style:{fontSize:12,color:"#6366f1",marginTop:2},children:"Un clic sur la carte définit la position de départ."}),
         ]}),
+        n.jsx("button",{
+          onClick: async () => {
+            const addr = e?.address || e?.data?.extracted?.address || e?.city || e?.name || "";
+            if (!addr) return;
+            const res = await y(addr);
+            if (res) {
+              const ng = { ...(e?.geoGrid || {}), center: { lat: res.lat, lng: res.lng } };
+              i(t.map(cl => cl.id === e.id ? { ...cl, geoGrid: ng } : cl));
+              if (m.current) m.current.setView([res.lat, res.lng], 13);
+            }
+          },
+          style:{fontSize:12,padding:"6px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"},
+          children:"📍 Localiser",
+        }),
       ]});
       return n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"},children:[
         n.jsxs("span",{style:{fontSize:12,color:"#6B7280"},children:["📍 Centre : ",e.geoGrid.center.lat.toFixed(4),"°N, ",e.geoGrid.center.lng.toFixed(4),"°E"]}),
@@ -18576,7 +19101,7 @@ function ClientDetail({
     U = o(_),
     V = ALL_CRITERIA.filter((Q) => M[Q.id] === !1).sort((Q, Z) => Z.points - Q.points),
     G = ALL_CRITERIA.filter((Q) => M[Q.id] === !0),
-    _auditFalse = ALL_CRITERIA.filter((Q) => M[Q.id] === !1),
+    _auditFalse = ALL_CRITERIA.filter((Q) => N[Q.id] === !1),
     y = _auditFalse.filter((Q) => T[Q.id]).length,
     O = _auditFalse.length > 0 ? Math.min(100, Math.round((y / _auditFalse.length) * 100)) : 100,
     F = P.extracted || {},
@@ -18618,6 +19143,7 @@ function ClientDetail({
       { id: "avis", label: "Avis" },
       { id: "visibilite", label: "Visibilité" },
       { id: "roadmap", label: "Roadmap" },
+      { id: "roi", label: "ROI" },
       { id: "commercial", label: "Commercial" },
       { id: "suivi", label: "Suivi mensuel" },
     ];
@@ -19578,10 +20104,10 @@ function ClientDetail({
                                         n.jsxs("span", {
                                           style: {
                                             fontSize: 11,
-                                            color: Y.c,
+                                            color: "#059669",
                                             fontWeight: 600,
                                           },
-                                          children: ["−", Q.points, "pts"],
+                                          children: ["+", Q.points, "pts"],
                                         }),
                                       ],
                                     }),
@@ -19667,14 +20193,18 @@ function ClientDetail({
                   const clientCat = (e.category || (e.data && e.data.extracted && e.data.extracted.category) || "").toLowerCase();
                   const isOptionalActive = (A) => enabledOptional.includes(A.id);
                   const isApplicable = (A) => isCriteriaApplicable(A, clientCat) !== false || isOptionalActive(A);
-                  const Z = Q.criteria.filter((A) => M[A.id] === !1 && isApplicable(A)),
-                    Y = Q.criteria.filter((A) => M[A.id] === !0 && isApplicable(A)),
-                    eeNull = Q.criteria.filter((A) => M[A.id] === null && isApplicable(A)),
-                    eeDomain = Q.criteria.filter((A) => isCriteriaApplicable(A, clientCat) === false && !isOptionalActive(A)),
+                  const isBonus = (A) => !!A.bonus;
+                  const Z = Q.criteria.filter((A) => M[A.id] === !1 && isApplicable(A) && !isBonus(A)),
+                    Y = Q.criteria.filter((A) => M[A.id] === !0 && isApplicable(A) && !isBonus(A)),
+                    eeNull = Q.criteria.filter((A) => M[A.id] === null && isApplicable(A) && !isBonus(A)),
+                    eeDomain = Q.criteria.filter((A) => isCriteriaApplicable(A, clientCat) === false && !isOptionalActive(A) && !isBonus(A)),
+                    eeBonus = Q.criteria.filter((A) => isBonus(A)),
                     ee = [];
-                  if (!Z.length && !Y.length && !eeNull.length && !eeDomain.length) return null;
+                  if (!Z.length && !Y.length && !eeNull.length && !eeDomain.length && !eeBonus.length) return null;
                   const allTodo = [...Z, ...eeNull];
-                  const v = allTodo.filter((A) => T[A.id]).length;
+                  const catOrigFails = Q.criteria.filter((A) => N[A.id] === !1 && isApplicable(A));
+                  const v = catOrigFails.filter((A) => T[A.id]).length;
+                  const vTotal = catOrigFails.length;
                   return n.jsxs(
                     "div",
                     {
@@ -19727,7 +20257,7 @@ function ClientDetail({
                                 color: "var(--indigo2)",
                                 fontWeight: 700,
                               },
-                              children: [v, "/", allTodo.length, " faites"],
+                              children: [v, "/", vTotal, " faites"],
                             }),
                           ],
                         }),
@@ -19789,12 +20319,10 @@ function ClientDetail({
                                         n.jsxs("span", {
                                           style: {
                                             fontSize: 10,
-                                            color: T[A.id]
-                                              ? "#059669"
-                                              : "#dc2626",
+                                            color: "#059669",
                                             fontWeight: 700,
                                           },
-                                          children: ["−", A.points, "pts"],
+                                          children: ["+", A.points, "pts"],
                                         }),
                                       ],
                                     }),
@@ -19816,7 +20344,7 @@ function ClientDetail({
                             A.id,
                           ),
                         ),
-                        /* NULL tasks — same as Z but with blue border (not assessed by audit) */
+                        /* NULL tasks — same style as Z (audited false) */
                         eeNull.map((A) =>
                           n.jsxs(
                             "div",
@@ -19824,9 +20352,7 @@ function ClientDetail({
                               className: `check-row ${T[A.id] ? "done" : ""}`,
                               onClick: () => X(A.id),
                               children: [
-                                n.jsx("div", {
-                                  className: `check-box ${T[A.id] ? "done" : ""}`,
-                                  style: { background: T[A.id] ? "#22c55e" : "#E5E7EB", borderRadius: 5, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+                                n.jsx("div", { className: `check-box ${T[A.id] ? "done" : ""}`,
                                   children: T[A.id] && n.jsx("span", { style: { color: "#fff", fontSize: 10, fontWeight: 800 }, children: "✓" }),
                                 }),
                                 n.jsxs("div", {
@@ -19836,10 +20362,10 @@ function ClientDetail({
                                       style: { fontSize: 12.5, fontWeight: 700, color: T[A.id] ? "#6B40D8" : "#1e293b", textDecoration: T[A.id] ? "line-through" : "none", marginBottom: 2 },
                                       children: [
                                         A.label, " ",
-                                        n.jsxs("span", { style: { fontSize: 10, color: T[A.id] ? "#059669" : "#6B40D8", fontWeight: 700 }, children: ["+", A.points, "pts"] }),
+                                        n.jsxs("span", { style: { fontSize: 10, color: "#059669", fontWeight: 700 }, children: ["+", A.points, "pts"] }),
                                       ],
                                     }),
-                                    n.jsxs("div", { style: { fontSize: 11, color: "#6B7280" }, children: [A.action, n.jsx("span", { style: { marginLeft: 6, fontSize: 10, color: "#a78bfa", fontWeight: 600, background: "#ede9fe", padding: "1px 5px", borderRadius: 3 }, children: "non audité" })] }),
+                                    n.jsx("div", { style: { fontSize: 11.5, color: "var(--ink3)" }, children: A.action }),
                                   ],
                                 }),
                               ],
@@ -19866,6 +20392,31 @@ function ClientDetail({
                                 ],
                               }, A.id),
                             ),
+                          ],
+                        }),
+                        /* BONUS criteria — shown at bottom with gold/amber style */
+                        eeBonus.length > 0 && n.jsxs("div", {
+                          style: { marginTop: 8, paddingTop: 8, borderTop: "1px dashed #FDE68A" },
+                          children: [
+                            n.jsx("div", { style: { fontSize: 10, color: "#D97706", fontWeight: 700, marginBottom: 6, paddingLeft: 2, letterSpacing: "0.04em" }, children: "✨ Points bonus" }),
+                            eeBonus.map((A) => {
+                              const isDone = !!(T[A.id]);
+                              return n.jsxs("div", {
+                                style: { display: "flex", alignItems: "center", gap: 9, padding: "8px 11px", borderRadius: 9, background: isDone ? "#FFFBEB" : "#FFFBEB", border: `1px solid ${isDone ? "#FCD34D" : "#FDE68A"}`, marginBottom: 4, cursor: "pointer", opacity: isDone ? 1 : 0.85 },
+                                onClick: () => X(A.id),
+                                title: "Point bonus — cliquer pour marquer comme fait",
+                                children: [
+                                  n.jsx("div", { style: { width: 18, height: 18, borderRadius: 5, background: isDone ? "#F59E0B" : "#FEF3C7", border: `1.5px solid ${isDone ? "#D97706" : "#FCD34D"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+                                    children: isDone && n.jsx("span", { style: { color: "#fff", fontSize: 10, fontWeight: 800 }, children: "✓" }),
+                                  }),
+                                  n.jsxs("div", { style: { flex: 1 }, children: [
+                                    n.jsx("div", { style: { fontSize: 12.5, fontWeight: 700, color: isDone ? "#D97706" : "#92400E", textDecoration: isDone ? "line-through" : "none", marginBottom: 1 }, children: A.label }),
+                                    n.jsx("div", { style: { fontSize: 11, color: "#B45309" }, children: A.action }),
+                                  ]}),
+                                  n.jsxs("span", { style: { fontSize: 10.5, color: "#D97706", fontWeight: 800, background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 6, padding: "2px 7px", whiteSpace: "nowrap" }, children: ["+", A.points, " pt", A.points > 1 ? "s" : ""] }),
+                                ],
+                              }, A.id);
+                            }),
                           ],
                         }),
                       ],
@@ -20061,6 +20612,7 @@ function ClientDetail({
               apiKey: a,
               score: _,
             }),
+          p === "roi" && n.jsx(SimulateurROI, { key: e.id, client: e, clients: t, upd: i }),
           p === "commercial" && n.jsx(CommercialTab, { key: e.id, client: e, clients: t, upd: i, calcScore: s }),
           p === "suivi" && n.jsx("div", { style:{ margin:"-24px -30px", height:"calc(100% + 48px)" }, children: n.jsx(ErrorBoundary, { children: n.jsx(MonthlyTab, { client: e, clients: t, upd: i, calcScore: s }) }) }),
           p === "roadmap" &&
@@ -20228,13 +20780,13 @@ Réponds UNIQUEMENT avec le texte de la réponse, sans commentaire ni explicatio
     },
     y = async (v, A) => {
       const q = o || localStorage.getItem("bto_apikey") || "";
-      if (!(!q || !v.texte.trim())) {
+      if (v.texte.trim()) {
         f(A);
         try {
           const re = (
               (
                 await (
-                  await fetch("https://api.anthropic.com/v1/messages", {
+                  await fetch("/api/data/sync?action=ai", {
                     method: "POST",
                     headers: {
                       "content-type": "application/json",
@@ -20281,14 +20833,14 @@ Rédige la réponse.`,
     },
     O = async () => {
       const v = o || localStorage.getItem("bto_apikey") || "";
-      if (!(!v || !z.texte.trim())) {
+      if (z.texte.trim()) {
         f("new");
         try {
           const A = z.selKw || [],
             ie = (
               (
                 await (
-                  await fetch("https://api.anthropic.com/v1/messages", {
+                  await fetch("/api/data/sync?action=ai", {
                     method: "POST",
                     headers: {
                       "content-type": "application/json",
@@ -20409,7 +20961,7 @@ Rédige la réponse.`,
     try {
       const toneInstr = rv.rating >= 4 ? "remerciement sincère, rebondis sur un élément positif précis." : rv.rating === 3 ? "remercie pour l'honnêteté, reste positif." : "empathie sincère, excuses mesurées, propose un contact direct.";
       const sys = `Tu es le gérant de "${e.name}", ${e.category||""} à ${e.city||""}. Réponds personnellement à cet avis client. Salutation + prénom + corps + fermeture chaleureuse. Pas de markdown. ${toneInstr} Signature : ${R || e.name || ""}.`;
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/data/sync?action=ai", {
         method: "POST",
         headers: { "content-type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","x-api-key":apiKeyLocal },
         body: JSON.stringify({ model:"claude-sonnet-4-6", max_tokens:700, system:sys, messages:[{role:"user",content:`Avis de ${rv.author||"un client"} :\n"${rv.text||"(aucun commentaire)"}"\nRédige la réponse.`}] }),
@@ -20630,7 +21182,7 @@ Mon établissement :
 - Site web : ${(e.data?.extracted?.website) || ""}
 - Description : ${estabDesc}`;
             const userMsg = `Avis ${replyNote} étoiles${replyAuthor ? ` de ${replyAuthor}` : ""} :\n"${replyAvisText||"(aucun commentaire)"}"\n\nRédige la réponse à cet avis.`;
-            const res = await fetch("https://api.anthropic.com/v1/messages", {
+            const res = await fetch("/api/data/sync?action=ai", {
               method:"POST", headers:{"content-type":"application/json","anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","x-api-key":apiKeyLocal},
               body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:700,system:sys,messages:[{role:"user",content:userMsg}]}),
             });
@@ -22279,13 +22831,7 @@ function HistoriqueTab({ data: e, client: t, clients: i, upd: r }) {
     manualServices = (t == null ? void 0 : t.manualServices) || [],
     manualProducts = (t == null ? void 0 : t.manualProducts) || [],
     I = (z) => {
-      // Si on met à jour manualZones, on synchronise aussi le score service_area
-      const update = { ...z };
-      if ("manualZones" in z) {
-        const hasZones = (z.manualZones || []).length > 0;
-        update.manualOverrides = { ...(t.manualOverrides || {}), service_area: hasZones };
-      }
-      r(i.map((g) => (g.id === t.id ? { ...g, ...update } : g)));
+      r(i.map((g) => (g.id === t.id ? { ...g, ...z } : g)));
     };
 
   const apiKey = localStorage.getItem("bto_apikey") || "";
@@ -22299,7 +22845,7 @@ function HistoriqueTab({ data: e, client: t, clients: i, upd: r }) {
     setGenZones(true);
     setZoneSuggestions([]);
     try {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("/api/data/sync?action=ai", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -22348,7 +22894,7 @@ Génère pour le ${type} "${name}" de l'établissement "${t.name || ""}" (${o.ca
 - Une description optimisée SEO de ${maxDesc} caractères MAX (naturelle, persuasive, avec mots-clés)
 
 Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
-      const res = await (await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await (await fetch("/api/data/sync?action=ai", {
         method: "POST",
         headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true", "x-api-key": apiKey },
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
@@ -24711,42 +25257,31 @@ L'IA extrait automatiquement toutes les données.`,
               const ext = (e.data && e.data.extracted) || {};
               const sc = deriveGmbScores(e);
               // Pertinence : catégorie, description, mots-clés, services
-              const pertCriteria = [
-                {k:"category_primary",w:4},{k:"category_secondary",w:3},
-                {k:"desc_length",w:2},{k:"desc_keywords",w:3},
-                {k:"services_listed",w:3},{k:"products_listed",w:2},
-                {k:"attributes",w:2},{k:"business_name",w:1},
-              ];
-              // Proximité : adresse, zone, horaires, téléphone
-              const proxCriteria = [
-                {k:"address",w:3},{k:"service_area",w:4},
-                {k:"phone",w:2},{k:"hours_regular",w:3},{k:"hours_special",w:1},
-              ];
-              // Proéminence : avis, photos, posts
-              const promCriteria = [
-                {k:"rating",w:4},{k:"review_count",w:4},{k:"response_rate",w:3},
-                {k:"response_quality",w:2},{k:"recent_reviews",w:2},
-                {k:"photo_count",w:2},{k:"photo_cover",w:1},{k:"photo_logo",w:1},
-                {k:"photo_interior",w:1},{k:"photo_team",w:1},{k:"photo_recent",w:2},
-                {k:"posts_frequency",w:2},{k:"posts_cta",w:1},{k:"posts_offers",w:1},
-              ];
-              const calcPillar = (criteria) => {
-                const total = criteria.reduce((s,c)=>s+c.w,0);
-                const got = criteria.reduce((s,c)=>s+(sc[c.k]?c.w:0),0);
-                return total > 0 ? Math.round(got/total*100) : 0;
+              const _sc3merged = { ...(e.scores||{}), ...(e.manualOverrides||{}) };
+              const calcPillarFromCats = (catIds) => {
+                const criteria = CATS.filter(c=>catIds.includes(c.id)).flatMap(c=>c.criteria).filter(c=>!c.bonus && _sc3merged[c.id] !== null && _sc3merged[c.id] !== void 0);
+                const total = criteria.reduce((s,c)=>s+c.points,0);
+                const got = criteria.filter(c=>_sc3merged[c.id]===true).reduce((s,c)=>s+c.points,0);
+                return total > 0 ? Math.min(100, Math.round(got/total*100)) : 0;
+              };
+              const calcPillarHistFromCats = (catIds, hs) => {
+                const criteria = CATS.filter(c=>catIds.includes(c.id)).flatMap(c=>c.criteria).filter(c=>!c.bonus && hs[c.id] !== null && hs[c.id] !== void 0);
+                const total = criteria.reduce((s,c)=>s+c.points,0);
+                const got = criteria.filter(c=>hs[c.id]===true).reduce((s,c)=>s+c.points,0);
+                return total > 0 ? Math.min(100, Math.round(got/total*100)) : 0;
               };
               const pillars3 = [
                 { id:"pertinence", l:"Pertinence", icon:"🎯", c:"#4F46E5",
-                  score: calcPillar(pertCriteria),
+                  score: calcPillarFromCats(["identity","description"]),
                   desc:"Catégorie, description, mots-clés, services",
                   detail: "Mesure la correspondance de votre fiche avec les recherches des internautes. Basé sur : catégorie principale/secondaires, description, services listés, attributs." },
                 { id:"proximite", l:"Proximité", icon:"📍", c:"#0891b2",
-                  score: calcPillar(proxCriteria),
-                  desc:"Adresse, zone de service, horaires",
-                  detail: "Mesure la précision de votre localisation. Basé sur : adresse complète, zone de service configurée, horaires renseignés, téléphone." },
-                { id:"prominence", l:"Proéminence", icon:"🏆", c:"#C03080",
-                  score: calcPillar(promCriteria),
-                  desc:"Avis, photos, publications GMB",
+                  score: calcPillarFromCats(["contact"]),
+                  desc:"Adresse, coordonnées, horaires, NAP",
+                  detail: "Mesure la précision de votre localisation. Basé sur : adresse, téléphone, site web, horaires, cohérence NAP." },
+                { id:"prominence", l:"Notoriété", icon:"🏆", c:"#C03080",
+                  score: calcPillarFromCats(["reviews","photos","posts"]),
+                  desc:"Avis, photos, publications Google",
                   detail: "Mesure votre autorité et popularité locale. Basé sur : note Google, nombre d'avis, taux de réponse, photos, fréquence des posts." },
               ];
               const hasData = !!(e.name || ext.category || ext.rating || ext.reviewCount);
@@ -24758,8 +25293,7 @@ L'IA extrait automatiquement toutes les données.`,
                 const hist = (e.history || []).slice().sort((a,b)=>(a.date||"").localeCompare(b.date||""));
                 return hist.map(h => {
                   const hs = h.scores || {};
-                  const calc = (crit) => { const tot=crit.reduce((s,c)=>s+c.w,0); const got=crit.reduce((s,c)=>s+(hs[c.k]?c.w:0),0); return tot>0?Math.round(got/tot*100):0; };
-                  return { date: h.date, pert: calc(pertCriteria), prox: calc(proxCriteria), prom: calc(promCriteria) };
+                  return { date: h.date, pert: calcPillarHistFromCats(["identity","description"],hs), prox: calcPillarHistFromCats(["contact"],hs), prom: calcPillarHistFromCats(["reviews","photos","posts"],hs) };
                 }).filter(h => h.pert||h.prox||h.prom);
               })();
 
@@ -24828,7 +25362,7 @@ L'IA extrait automatiquement toutes les données.`,
                     }),
                     /* Légende */
                     n.jsx("div",{style:{display:"flex",gap:14,marginTop:8,justifyContent:"center"},children:
-                      [{c:"#4F46E5",l:"Pertinence"},{c:"#0891b2",l:"Proximité"},{c:"#C03080",l:"Proéminence"}].map(lg=>
+                      [{c:"#4F46E5",l:"Pertinence"},{c:"#0891b2",l:"Proximité"},{c:"#C03080",l:"Notoriété"}].map(lg=>
                         n.jsxs("div",{key:lg.l,style:{display:"flex",alignItems:"center",gap:4},children:[
                           n.jsx("div",{style:{width:10,height:10,borderRadius:2,background:lg.c}}),
                           n.jsx("span",{style:{fontSize:10,color:"#6B7280"},children:lg.l}),
@@ -25417,7 +25951,7 @@ function CalendrierGrid({
             (
               (
                 await (
-                  await fetch("https://api.anthropic.com/v1/messages", {
+                  await fetch("/api/data/sync?action=ai", {
                     method: "POST",
                     headers: {
                       "content-type": "application/json",
@@ -26765,7 +27299,7 @@ ${genKw ? `\nMot-clé à intégrer naturellement dans le texte : ${genKw}` : ""}
 
 Rédige la publication GMB.`;
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch("/api/data/sync?action=ai", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -27180,52 +27714,40 @@ Rédige la publication GMB.`;
                 : n.jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }, children:
                     (P.postIdeas || []).map((idea, Z) => ({ idea, Z })).filter(({idea}) => ideaFilter === "Tous" || idea.type === ideaFilter).map(({idea, Z}) => {
                       const vtEntry = vt.find(v2 => v2.id === idea.type) || vt[0];
-                      const isEditing = editingPost === Z;
-                      const gmbType = idea.type === "Offre" ? "OFFER" : "STANDARD";
                       return n.jsxs("div", {
                         key: Z,
-                        style: { background: "white", borderRadius: 12, border: `1px solid var(--border)`, borderTop: `3px solid ${vtEntry.color||"#6B40D8"}`, overflow: "hidden", transition: "border-color .15s" },
+                        style: { background: "white", borderRadius: 12, border: `1px solid var(--border)`, borderTop: `3px solid ${vtEntry.color||"#6B40D8"}`, overflow: "hidden" },
                         children: [
-                          // Corps (sans barre gauche — couleur en haut via borderTop)
-                          n.jsxs("div", { style: { display: "flex", gap: 0 }, children: [
+                          // Header
+                          n.jsxs("div", { style: { display: "flex", alignItems: "flex-start", gap: 8, padding: "12px 14px 10px", background: vtEntry.bg || "#F9FAFB" }, children: [
+                            n.jsx("span", { style: { fontSize: 16, marginTop: 1 }, children: typeIcons[idea.type] || "📝" }),
                             n.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-                              // Header
-                              n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px 8px", background: vtEntry.bg || "#F9FAFB" }, children: [
-                                n.jsx("span", { style: { fontSize: 15 }, children: typeIcons[idea.type] || "📝" }),
-                                n.jsx("span", { style: { fontSize: 13, fontWeight: 800, color: "#1E1B30", flex: 1 }, children: idea.title }),
-                                idea.week && n.jsxs("span", { style: { background: "#F4F5FA", color: "#6B7280", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700 }, children: ["Semaine ", idea.week] }),
-                                n.jsx("span", { style: { background: vtEntry.color, color: "white", borderRadius: 6, padding: "2px 8px", fontSize: 10, fontWeight: 700 }, children: idea.type }),
+                              n.jsx("div", { style: { fontSize: 13, fontWeight: 800, color: "#1E1B30", lineHeight: 1.4, marginBottom: 4 }, children: idea.title }),
+                              n.jsxs("div", { style: { display: "flex", gap: 5, flexWrap: "wrap" }, children: [
+                                idea.week && n.jsxs("span", { style: { background: "#F4F5FA", color: "#6B7280", borderRadius: 5, padding: "2px 7px", fontSize: 10, fontWeight: 700 }, children: ["Sem. ", idea.week] }),
+                                n.jsx("span", { style: { background: vtEntry.color, color: "white", borderRadius: 5, padding: "2px 7px", fontSize: 10, fontWeight: 700 }, children: idea.type }),
+                                idea.bestDay && n.jsxs("span", { style: { background: "#F0FDF4", color: "#059669", borderRadius: 5, padding: "2px 7px", fontSize: 10, fontWeight: 600 }, children: [idea.bestDay, " ", idea.bestTime] }),
                               ]}),
-                              // Contenu
-                              isEditing
-                                ? n.jsx("textarea", { autoFocus: true, value: editedText, onChange: ev => setEditedText(ev.target.value), style: { width: "100%", padding: "10px 14px", fontSize: 12.5, lineHeight: 1.7, border: "none", borderTop: "1px solid #E5E7EB", resize: "vertical", minHeight: 100, fontFamily: "inherit", outline: "none", boxSizing: "border-box" } })
-                                : n.jsx("div", { style: { padding: "10px 14px" }, children: n.jsx("p", { style: { fontSize: 12.5, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line", margin: 0 }, children: idea.content }) }),
+                              (idea.keywords||[]).length > 0 && n.jsx("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }, children:
+                                (idea.keywords||[]).map((kw,ki) => n.jsxs("span", { key: ki, style: { background: "#EFF6FF", color: "#3B82F6", borderRadius: 4, padding: "1px 6px", fontSize: 10 }, children: ["#", kw] }))
+                              }),
                             ]}),
                           ]}),
-                          // ── Barre d'actions complète ──
-                          n.jsxs("div", { style: { padding: "10px 14px", borderTop: "1px solid #F3F4F6", background: "#F9FAFB", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }, children: [
-                            isEditing
-                              ? n.jsxs(n.Fragment, { children: [
-                                  n.jsx("button", { onClick: () => setEditingPost(null), style: { padding: "7px 16px", borderRadius: 7, border: "none", background: "#059669", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "✅ Valider" }),
-                                  n.jsx("button", { onClick: () => setEditingPost(null), style: { padding: "7px 12px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }, children: "Annuler" }),
-                                ]})
-                              : n.jsxs(n.Fragment, { children: [
-                                  // Modifier
-                                  n.jsx("button", { onClick: () => { setEditingPost(Z); setEditedText(idea.content); }, style: { padding: "7px 14px", borderRadius: 7, border: "1.5px solid #E5E7EB", background: "white", color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display:"flex", alignItems:"center", gap:5 }, children: "✏️ Modifier" }),
-                                  // Ajouter au calendrier éditorial
-                                  n.jsx("button", { onClick: () => { setAddToCalPayload({ text: idea.content, title: idea.title, type: idea.type }); setAddToCalDate(new Date().toISOString().slice(0,10)); setShowAddToCalModal(true); }, style: { padding: "7px 12px", borderRadius: 7, border: "1.5px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }, children: "📅" }),
-                                  // Copier
-                                  n.jsx("button", { onClick: () => navigator.clipboard.writeText(idea.content), style: { padding: "7px 12px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }, children: "📋" }),
-                                  // Supprimer
-                                  n.jsx("button", {
-                                    onClick: () => {
-                                      const updated = { ...P, postIdeas: (P.postIdeas||[]).filter((_,idx2)=>idx2!==Z) };
-                                      i(t.map(cl=>cl.id===e.id?{...cl,data:{...(cl.data||{}),postIdeas:updated.postIdeas}}:cl));
-                                    },
-                                    style: { marginLeft:"auto", padding: "7px 10px", borderRadius: 7, border: "1px solid #FCA5A5", background: "white", color: "#EF4444", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
-                                    children: "🗑",
-                                  }),
-                                ]}),
+                          // Actions
+                          n.jsxs("div", { style: { padding: "8px 12px", borderTop: "1px solid #F3F4F6", background: "#F9FAFB", display: "flex", gap: 6, alignItems: "center" }, children: [
+                            n.jsx("button", {
+                              onClick: () => { setSubTab("generator"); setGenTitle(idea.title); setGenType(idea.type); },
+                              style: { flex: 1, padding: "7px 10px", borderRadius: 7, border: "none", background: vtEntry.color||"#6B40D8", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+                              children: "✍️ Créer ce post",
+                            }),
+                            n.jsx("button", {
+                              onClick: () => {
+                                const updated = (P.postIdeas||[]).filter((_,idx2)=>idx2!==Z);
+                                i(t.map(cl=>cl.id===e.id?{...cl,data:{...(cl.data||{}),postIdeas:updated}}:cl));
+                              },
+                              style: { padding: "7px 10px", borderRadius: 7, border: "1px solid #FCA5A5", background: "white", color: "#EF4444", fontSize: 12, cursor: "pointer", fontFamily: "inherit" },
+                              children: "🗑",
+                            }),
                           ]}),
                         ],
                       });
@@ -28054,20 +28576,23 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
     { label:"Notoriété",  icon:"⭐", cats:["reviews","photos","posts"], desc:"Avis, photos, publications", col:"#d97706", bg:"#fffbeb", b:"#fde68a" },
   ].map(pd => {
     const K = CATS.filter(c => pd.cats.includes(c.id));
-    const tot = K.flatMap(c=>c.criteria).reduce((s,c)=>s+c.points,0);
-    const got = K.flatMap(c=>c.criteria).reduce((s,c)=> _Mscore[c.id]===true ? s+c.points : s, 0);
-    const pct = tot>0 ? Math.round(got/tot*100) : 0;
+    const audited = K.flatMap(c=>c.criteria).filter(c => !c.bonus && _Mscore[c.id] !== null && _Mscore[c.id] !== void 0);
+    const tot = audited.reduce((s,c)=>s+c.points,0);
+    const got = audited.filter(c=>_Mscore[c.id]===true).reduce((s,c)=>s+c.points,0);
+    const pct = tot>0 ? Math.min(100, Math.round(got/tot*100)) : 0;
     const lvl = getLvl(pct);
     const prevSnap = (e.history||[]).length > 0 ? e.history[e.history.length-1] : null;
     const prevPct = prevSnap ? (() => {
       const prevScores = prevSnap.scores || {};
-      const prevGot = K.flatMap(c=>c.criteria).reduce((s,c)=> prevScores[c.id]===true ? s+c.points : s, 0);
-      return tot>0 ? Math.round(prevGot/tot*100) : 0;
+      const prevAudited = K.flatMap(c=>c.criteria).filter(c => !c.bonus && prevScores[c.id] !== null && prevScores[c.id] !== void 0);
+      const prevTot = prevAudited.reduce((s,c)=>s+c.points,0);
+      const prevGot = prevAudited.filter(c=>prevScores[c.id]===true).reduce((s,c)=>s+c.points,0);
+      return prevTot>0 ? Math.min(100, Math.round(prevGot/prevTot*100)) : 0;
     })() : null;
     const delta = prevPct !== null ? pct - prevPct : null;
     return { ...pd, pct, lvl, delta };
   });
-  const toImproveCount = ALL_CRITERIA.filter(c => _Mscore[c.id] === false).length;
+  const toImproveCount = ALL_CRITERIA.filter(c => !c.bonus && _Mscore[c.id] === false).length;
   const geoGrid = e.geoGrid || {};
   const lastSnap = snapshots.length > 0 ? snapshots[snapshots.length-1] : null;
 
@@ -28156,7 +28681,7 @@ Règles :
 - Ton professionnel mais humain
 Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/data/sync?action=ai", {
         method: "POST",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, messages: [{ role: "user", content: prompt }] }),
@@ -28532,15 +29057,18 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
     const evoText = scoreDiff == null ? "Premier bilan" : scoreDiff > 0 ? `↑ +${scoreDiff} pts ce mois` : scoreDiff < 0 ? `↓ ${scoreDiff} pts ce mois` : "→ Stable ce mois";
 
     // 3 pillars for report
-    const _rSc = e.scores || {};
-    const _rCalc = (crit) => { const tot=crit.reduce((s,c)=>s+c.w,0); const got=crit.reduce((s,c)=>s+(_rSc[c.k]?c.w:0),0); return tot>0?Math.round(got/tot*100):0; };
-    const _rPert = [{k:"category_primary",w:4},{k:"category_secondary",w:3},{k:"desc_length",w:2},{k:"desc_keywords",w:3},{k:"services_listed",w:3},{k:"products_listed",w:2},{k:"attributes",w:2},{k:"business_name",w:1}];
-    const _rProx = [{k:"address",w:3},{k:"service_area",w:4},{k:"phone",w:2},{k:"hours_regular",w:3},{k:"hours_special",w:1}];
-    const _rProm = [{k:"rating",w:4},{k:"review_count",w:4},{k:"response_rate",w:3},{k:"response_quality",w:2},{k:"recent_reviews",w:2},{k:"photo_count",w:2},{k:"photo_cover",w:1},{k:"photo_logo",w:1},{k:"photo_interior",w:1},{k:"photo_team",w:1},{k:"photo_recent",w:2},{k:"posts_frequency",w:2},{k:"posts_cta",w:1},{k:"posts_offers",w:1}];
+    const _rSc = { ...(e.scores||{}), ...(e.manualOverrides||{}) };
+    const _rPillarCalc = (catIds) => {
+      const crit = CATS.filter(c=>catIds.includes(c.id)).flatMap(c=>c.criteria)
+        .filter(c=>!c.bonus && _rSc[c.id] !== null && _rSc[c.id] !== void 0);
+      const tot = crit.reduce((s,c)=>s+c.points,0);
+      const got = crit.filter(c=>_rSc[c.id]===true).reduce((s,c)=>s+c.points,0);
+      return tot>0 ? Math.min(100,Math.round(got/tot*100)) : 0;
+    };
     const _rPillars = [
-      { icon:"🎯", l:"Pertinence", s:_rCalc(_rPert), desc:"Catégorie, description, mots-clés, services", c:"#4F46E5" },
-      { icon:"📍", l:"Proximité", s:_rCalc(_rProx), desc:"Adresse, zone, horaires, téléphone", c:"#0891b2" },
-      { icon:"🏆", l:"Proéminence", s:_rCalc(_rProm), desc:"Avis, photos, publications", c:"#C03080" },
+      { icon:"🎯", l:"Pertinence", s:_rPillarCalc(["identity","description"]), desc:"Catégorie, description, mots-clés, services", c:"#4F46E5" },
+      { icon:"📍", l:"Proximité", s:_rPillarCalc(["contact"]), desc:"Coordonnées, horaires, téléphone", c:"#0891b2" },
+      { icon:"🏆", l:"Notoriété", s:_rPillarCalc(["reviews","photos","posts"]), desc:"Avis, photos, publications", c:"#C03080" },
     ];
     const _rCol = s => s>=80?"#059669":s>=65?"#3B5BDB":s>=45?"#d97706":"#dc2626";
     const _rLbl = s => s>=80?"Très bon":s>=65?"Bon":s>=45?"Moyen":"Faible";
@@ -28810,7 +29338,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
             <div class="cover-badge">B</div>
             <div>
               <div class="cover-agency-name">${agencyName}</div>
-              <div class="cover-agency-sub">Agence Google My Business</div>
+              <div class="cover-agency-sub">Agence Google Business Profile</div>
             </div>
           </div>
           <div class="cover-date">Rapport confidentiel<br><strong style="color:#374151;font-size:13px">${monthLabel}</strong></div>
@@ -29005,7 +29533,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
         <div style="font-size:14px;color:#6B7280;line-height:1.6;margin-bottom:36px;max-width:420px">Atteindre le TOP 3 en 90 jours, c'est l'objectif de départ. <strong style="color:#1E1B30">Le garder, c'est le vrai travail.</strong><br>Nous assurons les optimisations hebdomadaires pour que votre fiche reste visible et en tête — chaque mois.</div>
 
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px;max-width:500px;width:100%">
-          ${[["🚀","TOP 3 en 90 jours","Premières positions visibles dès le premier mois"],["♾️","Optimisation continue","Chaque semaine, votre fiche est travaillée pour rester en tête"],["📊","Rapport mensuel","Vos positions, clics, avis — chaque mois"]].map(([icon,title2,desc]) => `<div style="background:white;border:1.5px solid #E9D5FF;border-radius:13px;padding:17px 13px;text-align:center;box-shadow:0 2px 10px rgba(107,64,216,.06)"><div style="font-size:22px;margin-bottom:7px">${icon}</div><div style="font-size:13px;font-weight:700;color:#1E1B30;margin-bottom:4px">${title2}</div><div style="font-size:11px;color:#9CA3AF;line-height:1.4">${desc}</div></div>`).join("")}
+          ${[["🚀","Cible TOP 3","Progression visible dès les premières semaines"],["♾️","Optimisation continue","Chaque semaine, votre fiche est travaillée pour rester en tête"],["📊","Rapport mensuel","Vos positions, clics, avis — chaque mois"]].map(([icon,title2,desc]) => `<div style="background:white;border:1.5px solid #E9D5FF;border-radius:13px;padding:17px 13px;text-align:center;box-shadow:0 2px 10px rgba(107,64,216,.06)"><div style="font-size:22px;margin-bottom:7px">${icon}</div><div style="font-size:13px;font-weight:700;color:#1E1B30;margin-bottom:4px">${title2}</div><div style="font-size:11px;color:#9CA3AF;line-height:1.4">${desc}</div></div>`).join("")}
         </div>
 
         <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
@@ -29022,7 +29550,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
       <div style="padding:16px 44px;border-top:1px solid #F4F5FA;display:flex;justify-content:space-between;align-items:center">
         <div style="display:flex;align-items:center;gap:8px">
           <div style="width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#6B40D8,#C03080);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white">B</div>
-          <span style="font-size:11px;color:#9CA3AF"><strong style="color:#6B7280">${agencyName}</strong> · Agence Google My Business</span>
+          <span style="font-size:11px;color:#9CA3AF"><strong style="color:#6B7280">${agencyName}</strong> · Agence Google Business Profile</span>
         </div>
         <div style="font-size:10px;color:#D1D5DB">Document confidentiel · © ${new Date().getFullYear()} ${agencyName}</div>
       </div>
@@ -29607,6 +30135,15 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                   }),
                 ]}),
                 n.jsxs("div",{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"},children:[
+                  // Bouton Connecter Google (visible si non connecté)
+                  !isGoogleConnected && n.jsx("button",{
+                    onClick: () => {
+                      try { localStorage.setItem("bto_pending_link", String(e.id)); } catch {}
+                      window.location.href = `/api/auth/google?clientId=${e.id}`;
+                    },
+                    style:{background:"linear-gradient(135deg,#4285F4,#34A853)",color:"white",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5},
+                    children:"🔗 Connecter Google"
+                  }),
                   // Bouton sync Google (visible si connecté)
                   isGoogleConnected && n.jsx("button",{
                     onClick: syncGmbStats,
@@ -30372,7 +30909,8 @@ function TemplatesTab({
     }),
     R = (L, $) => {
       const X = { ...m, [L]: $ };
-      (C(X), localStorage.setItem(`report_edits_${e.id}`, JSON.stringify(X)));
+      localStorage.removeItem(`report_html_${e.id}`);
+      (C(X), localStorage.setItem(`report_edits_${e.id}`, JSON.stringify(X)), supaSet(`report_edits_${e.id}`, JSON.stringify(X)));
     },
     N = (L) => B.includes(L),
     E = (L, $) => (m[L] !== void 0 ? m[L] : $),
@@ -30387,14 +30925,15 @@ function TemplatesTab({
     [shareCopied, setShareCopied] = D.useState(false),
     toggleSec = (key) => {
       const ns = { ...sec, [key]: !sec[key] };
-      (setSec(ns), localStorage.setItem(`report_sections_${e.id}`, JSON.stringify(ns)));
+      localStorage.removeItem(`report_html_${e.id}`);
+      (setSec(ns), localStorage.setItem(`report_sections_${e.id}`, JSON.stringify(ns)), supaSet(`report_sections_${e.id}`, JSON.stringify(ns)));
     },
     [mapKwSel, setMapKwSel] = D.useState(() => {
       try { return JSON.parse(localStorage.getItem(`report_mapkws_${e.id}`) || "{}"); } catch { return {}; }
     }),
     setMapKw = (slot, val) => {
       const ns = { ...mapKwSel, [slot]: val || null };
-      (setMapKwSel(ns), localStorage.setItem(`report_mapkws_${e.id}`, JSON.stringify(ns)));
+      (setMapKwSel(ns), localStorage.setItem(`report_mapkws_${e.id}`, JSON.stringify(ns)), supaSet(`report_mapkws_${e.id}`, JSON.stringify(ns)));
     },
     M = ({
       id: L,
@@ -30684,7 +31223,7 @@ function TemplatesTab({
                   onClick: () => {
                     const ct = document.getElementById("rapport-content");
                     if (!ct) return;
-                    localStorage.setItem(`report_html_${e.id}`, ct.innerHTML);
+                    localStorage.setItem(`report_html_${e.id}`, ct.innerHTML); supaSet(`report_html_${e.id}`, ct.innerHTML);
                     const btn = document.getElementById("rapport-save-btn");
                     if (btn) { btn.textContent = "✓ Sauvegardé"; setTimeout(() => { btn.textContent = "💾 Sauvegarder"; }, 2000); }
                   },
@@ -30708,7 +31247,7 @@ function TemplatesTab({
                   ? n.jsxs("div", {
                       style: { display: "flex", alignItems: "center", gap: 6, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "5px 6px 5px 12px" },
                       children: [
-                        n.jsx("span", { style: { fontSize: 11, color: "#059669", fontWeight: 600, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: shareLink }),
+                        n.jsx("span", { style: { fontSize: 11, color: "#059669", fontWeight: 600, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: shareLink }),
                         n.jsx("button", {
                           className: "btn-sm",
                           onClick: () => {
@@ -30811,7 +31350,7 @@ function TemplatesTab({
                   className: "btn-ghost",
                   onClick: p,
                   title: "Fermer",
-                  style: { fontSize: 12, lineHeight: 1, padding: "4px 8px", color: "#9CA3AF" },
+                  style: { fontSize: 12, lineHeight: 1, padding: "4px 8px", color: "#9CA3AF", flexShrink: 0 },
                   children: "✕",
                 }),
               ],
@@ -30956,7 +31495,8 @@ function TemplatesTab({
                   .sort((a,b) => b.appearances - a.appearances)
                   .slice(0, 10);
                 const hasRealComps = realComps.length > 0;
-                const comps = hasRealComps ? realComps : (P.competitors||[]).filter(c=>c.name&&!c.name.toLowerCase().includes("nom réel")).slice(0,10);
+                const _isFakeComp = (c) => { const n=(c.name||"").toLowerCase(); return !c.name||n.includes("nom réel")||n.includes("profil type")||n.includes("concurrent ")||n.includes("établissement")||n.includes("profil concurrent"); };
+                const comps = hasRealComps ? realComps : (P.competitors||[]).filter(c=>!_isFakeComp(c)).slice(0,10);
                 // Indicateurs RÉELS pour la page de couverture (basés sur le scan carte + données de fiche, pas de chiffres fabriqués)
                 const myVisibilityPct = _totalCellsScanned > 0 ? Math.round(_myAppearances / _totalCellsScanned * 100) : null;
                 const leaderComp = hasRealComps ? realComps[0] : null;
@@ -31146,7 +31686,7 @@ function TemplatesTab({
                       <div style="width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;color:white;box-shadow:0 6px 20px rgba(107,64,216,.25)">B</div>
                       <div>
                         <div style="font-size:20px;font-weight:900;color:#1E1B30;letter-spacing:-.02em">${j}</div>
-                        <div style="font-size:11px;color:#9CA3AF">Agence Google My Business</div>
+                        <div style="font-size:11px;color:#9CA3AF">Agence Google Business Profile</div>
                       </div>
                     </div>
                     <div style="text-align:right;font-size:11px;color:#9CA3AF">Rapport confidentiel<br><strong style="color:#374151;font-size:13px">${dateStr}</strong></div>
@@ -31228,6 +31768,11 @@ function TemplatesTab({
 
                     ${!sec.benchmark ? "" : `
                     <div class="rp-section">🏆 Benchmark vs concurrents locaux</div>
+                    ${comps.length === 0 ? `<div style="background:#F0F9FF;border:1.5px dashed #BAE6FD;border-radius:12px;padding:20px 24px;text-align:center;color:#0369A1">
+                      <div style="font-size:22px;margin-bottom:8px">🗺️</div>
+                      <div style="font-weight:700;font-size:13px;margin-bottom:6px">Analyse concurrentielle disponible après scan carte</div>
+                      <div style="font-size:11.5px;color:#0284C7;line-height:1.6">Utilisez la fonctionnalité <strong>Scan de zone</strong> pour identifier les vrais concurrents locaux avec leurs données réelles (visibilité, rang, avis).</div>
+                    </div>` : `
                     ${hasRealComps ? `<div style="font-size:11px;color:#9CA3AF;margin:-6px 0 10px;display:flex;align-items:center;gap:6px">🗺️ Concurrents issus du scan carte — ${_scanCompKw||""}${_scanCompDate?` · ${new Date(_scanCompDate).toLocaleDateString("fr-FR")}`:""} · classés par fréquence d'apparition</div>` : ""}
                     <table class="bench-table">
                       <thead><tr><th>Établissement</th><th>Note</th><th>Avis</th>${hasRealComps?`<th>Visibilité</th><th>Rang moy.</th>`:`<th>Photos</th><th>Posts</th><th>Réponses</th>`}</tr></thead>
@@ -31236,6 +31781,7 @@ function TemplatesTab({
                       </tbody>
                     </table>
                     ${noteBenchmark}`}
+                    `}
 
                     ${(!sec.quickwins || !eQw.length)?"":`<div style="background:linear-gradient(135deg,#EEF2FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:13px;padding:18px 20px;margin-bottom:16px">
                       <div style="font-size:11px;font-weight:800;color:#3B5BDB;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px">⚡ 3 actions rapides — résultats en moins de 30 jours</div>
@@ -31283,16 +31829,11 @@ function TemplatesTab({
 
                     <div style="background:linear-gradient(135deg,#EEF2FF,#F5F3FF);border:1.5px solid #C7D2FE;border-radius:13px;padding:16px 20px;margin-bottom:22px;display:flex;gap:14px;align-items:flex-start">
                       <div style="font-size:26px;flex-shrink:0">🏁</div>
-                      <div><div style="font-size:13px;font-weight:800;color:#3B5BDB;margin-bottom:4px">90 jours pour lancer — pas pour s'arrêter</div>
-                      <div style="font-size:12.5px;color:#374151;line-height:1.6">Les premiers résultats sont visibles sous 90 jours. Mais <strong>Google Maps est un travail continu</strong> : chaque semaine sans action, un concurrent peut vous dépasser. Maintenir le TOP 3 demande des optimisations régulières — posts, avis, photos, mots-clés — tout au long de l'année.</div></div>
+                      <div><div style="font-size:13px;font-weight:800;color:#3B5BDB;margin-bottom:4px">90 jours pour progresser — pas pour s'arrêter</div>
+                      <div style="font-size:12.5px;color:#374151;line-height:1.6">Les premiers résultats de progression sont généralement visibles sous 90 jours. Mais <strong>Google Maps est un travail continu</strong> : chaque semaine sans action, un concurrent peut vous dépasser. Maintenir une position de tête demande des optimisations régulières — posts, avis, photos, mots-clés — tout au long de l'année.</div></div>
                     </div>
 
-                    ${!sec.plan90 ? "" : `
-                    <div class="rp-section">📈 Premiers résultats visibles — 90 jours</div>
-                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px">
-                      ${[["TOP 3","Position cible sur votre mot-clé principal"],["×2.5","Clics sur votre fiche Google"],["75+","Score global fiche (actuellement "+t+")"],["−68%","Écart de visibilité comblé vs leader"]].map(([n2,l2])=>`<div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1px solid #E9D5FF;border-radius:12px;padding:14px;text-align:center"><div style="font-size:26px;font-weight:900;color:#6B40D8;line-height:1">${n2}</div><div style="font-size:11px;color:#6B7280;margin-top:5px;line-height:1.4">${l2}</div></div>`).join("")}
-                    </div>
-                    ${projectionsHtml}`}
+                    ${!sec.plan90 ? "" : projectionsHtml}
 
                     ${!sec.roadmap ? "" : `
                     <div class="rp-section">🗺️ Roadmap mois par mois</div>
@@ -31305,7 +31846,7 @@ function TemplatesTab({
                           <div style="background:rgba(107,64,216,.08);border:1px solid rgba(107,64,216,.2);color:#6B40D8;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px"><span contenteditable="true" data-edit-id="${pfx}_o">${rm.objective||"—"}</span></div>
                         </div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
-                          ${(rm.actions||[]).filter(a=>a&&!a.includes("action")).map((a,i)=>`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div><span contenteditable="true" data-edit-id="${pfx}_a${i}"><strong>${a}</strong></span></div>`).join("")}
+                          ${(rm.actions||[]).slice(0,3).filter(a=>a&&!a.includes("action")).map((a,i)=>`<div style="display:flex;gap:7px;align-items:flex-start;font-size:12px;color:#374151;line-height:1.4"><div style="width:17px;height:17px;border-radius:5px;background:${col};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:white;flex-shrink:0;margin-top:1px">${i+1}</div><span contenteditable="true" data-edit-id="${pfx}_a${i}">${a}</span></div>`).join("")}
                         </div>
                       </div>`).join("")}`}
 
@@ -31328,10 +31869,10 @@ function TemplatesTab({
                   <div style="min-height:900px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 70px;text-align:center;background:linear-gradient(160deg,#F5F3FF 0%,#ffffff 50%,#FDF2F8 100%)">
                     <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:white;margin:0 auto 24px;box-shadow:0 14px 40px rgba(107,64,216,.22)">B</div>
                     <div style="font-size:32px;font-weight:900;color:#1E1B30;line-height:1.15;letter-spacing:-.02em;margin-bottom:12px;max-width:460px">TOP 3 — et<br><span style="background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">y rester durablement.</span></div>
-                    <div style="font-size:14px;color:#6B7280;line-height:1.6;margin-bottom:36px;max-width:420px">Atteindre le TOP 3 en 90 jours, c'est l'objectif de départ. <strong style="color:#1E1B30">Le garder, c'est le vrai travail.</strong><br>Nous assurons les optimisations hebdomadaires pour que votre fiche reste visible et en tête — chaque mois.</div>
+                    <div style="font-size:14px;color:#6B7280;line-height:1.6;margin-bottom:36px;max-width:420px">Progresser vers le TOP 3, c'est la cible des 90 premiers jours. <strong style="color:#1E1B30">Tenir sa position, c'est le vrai travail.</strong><br>Nous assurons les optimisations hebdomadaires pour que votre fiche reste visible et en tête — chaque mois.</div>
 
                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:32px;max-width:500px;width:100%">
-                      ${[["🚀","TOP 3 en 90 jours","Premières positions visibles dès le premier mois"],["♾️","Optimisation continue","Chaque semaine, votre fiche est travaillée pour rester en tête"],["📊","Rapport mensuel","Vos positions, clics, avis — chaque mois"]].map(([icon,title2,desc])=>`<div style="background:white;border:1.5px solid #E9D5FF;border-radius:13px;padding:17px 13px;text-align:center;box-shadow:0 2px 10px rgba(107,64,216,.06)"><div style="font-size:22px;margin-bottom:7px">${icon}</div><div style="font-size:13px;font-weight:700;color:#1E1B30;margin-bottom:4px">${title2}</div><div style="font-size:11px;color:#9CA3AF;line-height:1.4">${desc}</div></div>`).join("")}
+                      ${[["🚀","Cible TOP 3","Progression visible dès les premières semaines"],["♾️","Optimisation continue","Chaque semaine, votre fiche est travaillée pour rester en tête"],["📊","Rapport mensuel","Vos positions, clics, avis — chaque mois"]].map(([icon,title2,desc])=>`<div style="background:white;border:1.5px solid #E9D5FF;border-radius:13px;padding:17px 13px;text-align:center;box-shadow:0 2px 10px rgba(107,64,216,.06)"><div style="font-size:22px;margin-bottom:7px">${icon}</div><div style="font-size:13px;font-weight:700;color:#1E1B30;margin-bottom:4px">${title2}</div><div style="font-size:11px;color:#9CA3AF;line-height:1.4">${desc}</div></div>`).join("")}
                     </div>
 
                     <div style="background:linear-gradient(135deg,#F5F3FF,#FDF2F8);border:1.5px solid #C4B5FD;border-radius:18px;padding:26px 34px;max-width:420px;width:100%;margin-bottom:24px">
@@ -31348,7 +31889,7 @@ function TemplatesTab({
                     </div>
                   </div>
                   <div style="padding:16px 44px;border-top:1px solid #F4F5FA;display:flex;justify-content:space-between;align-items:center">
-                    <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#6B40D8,#C03080);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white">B</div><span style="font-size:11px;color:#9CA3AF"><strong style="color:#6B7280">${j}</strong> · Agence Google My Business</span></div>
+                    <div style="display:flex;align-items:center;gap:8px"><div style="width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#6B40D8,#C03080);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:white">B</div><span style="font-size:11px;color:#9CA3AF"><strong style="color:#6B7280">${j}</strong> · Agence Google Business Profile</span></div>
                     <div style="font-size:10px;color:#D1D5DB">Document confidentiel · © ${new Date().getFullYear()} ${j}</div>
                   </div>
                 </div>`;
@@ -31411,7 +31952,188 @@ function TemplatesTab({
                   </div>
                 </div>`;
 
-                return css + cover + page2 + page3 + (sec.cta ? page4 : "");
+                // ── PAGE ROI (si données roi saisies dans l'onglet ROI de la fiche) ──
+                const _roiData = e.roi || {};
+                const _roiKws = _roiData.keywords || [];
+                const _roiVol = _roiKws.reduce((s, k) => s + (parseFloat(k.vol) || 0), 0);
+                const _roiPos = parseInt(_roiData.position, 10);
+                const _roiMission = parseFloat(_roiData.mission) || 0;
+                const _roiTxCo = (parseFloat(_roiData.txContact) || 5) / 100;
+                const _roiTxCl = (parseFloat(_roiData.txClient) || 20) / 100;
+                const _roiCoef = (parseFloat(_roiData.prudence) || 50) / 100;
+                const _roiGmbImp = parseFloat(_roiData.gmbImpressions) || 0;
+                const _roiGmbApp = parseFloat(_roiData.gmbAppels) || 0;
+                const _roiGmbIti = parseFloat(_roiData.gmbItineraires) || 0;
+                const _roiGmbClic = parseFloat(_roiData.gmbClicsSite) || 0;
+                const _roiHasGMB = _roiGmbImp > 0;
+                const _roiGetCTR = (p) => { if (!p || p <= 0) return NaN; if (p===1) return 17.8; if (p===2) return 13.6; if (p===3) return 10.4; if (p<=6) return 1.0; if (p<=10) return 0.5; if (p<=20) return 0.3; return 0.1; };
+                const _roiCtrGMB = _roiHasGMB && _roiVol > 0 ? (_roiGmbImp / _roiVol) * 100 : NaN;
+                const _roiCtrR1 = _roiGetCTR(_roiPos);
+                const _roiCtr = _roiHasGMB && Number.isFinite(_roiCtrGMB) ? _roiCtrGMB : _roiCtrR1;
+                const _roiHasData = _roiVol > 0 && Number.isFinite(_roiCtr) && _roiCtr > 0;
+                const _roiVisitAct = _roiHasData ? _roiVol * (_roiCtr / 100) : NaN;
+                const _roiTxInter = _roiGmbApp + _roiGmbIti + _roiGmbClic;
+                const _roiTxReel = _roiHasGMB && _roiGmbImp > 0 ? _roiTxInter / _roiGmbImp : NaN;
+                const _roiTxCoEff = (_roiData.useRealRate !== false) && Number.isFinite(_roiTxReel) && _roiTxReel > 0 ? _roiTxReel : _roiTxCo;
+                const _roiTop3 = (() => {
+                  const share = 11;
+                  const visits = _roiHasData ? _roiVol * (share / 100) : NaN;
+                  const mult = Number.isFinite(_roiCtr) && _roiCtr > 0 ? share / _roiCtr : NaN;
+                  const contacts = visits * _roiTxCoEff;
+                  const clients = contacts * _roiTxCl;
+                  const clientsPrud = clients * _roiCoef;
+                  const caReal = clients * _roiMission;
+                  const caPrud = clientsPrud * _roiMission;
+                  return { visits, mult, clientsAnnReal: Math.round(clients*12), clientsAnnPrud: Math.round(clientsPrud*12), caAnnReal: caReal*12, caAnnPrud: caPrud*12 };
+                })();
+                const _roiFmt = (x, d=0) => Number.isFinite(x) ? x.toLocaleString("fr-FR", { minimumFractionDigits:d, maximumFractionDigits:d }) : "–";
+                const _roiEur = (x) => Number.isFinite(x) ? x.toLocaleString("fr-FR", { style:"currency", currency:"EUR", maximumFractionDigits:0 }) : "–";
+                const _roiKwLabels = _roiKws.filter(k => k.kw && k.vol).map(k => `${k.kw} (${k.vol}/mois)`).join(", ");
+                const _showROIPage = _roiHasData && _roiMission > 0;
+
+                // Calcul de tous les scénarios pour le tableau
+                const _roiCalcScen = (share) => {
+                  const visits = _roiHasData ? _roiVol * (share / 100) : NaN;
+                  const mult = Number.isFinite(_roiCtr) && _roiCtr > 0 ? share / _roiCtr : NaN;
+                  const clients = visits * _roiTxCoEff * _roiTxCl;
+                  const clientsPrud = clients * _roiCoef;
+                  return { visits, mult, clientsAnnReal: Math.round(clients*12), clientsAnnPrud: Math.round(clientsPrud*12), caMoisReal: clients*_roiMission, caMoisPrud: clientsPrud*_roiMission, caAnnReal: clients*12*_roiMission, caAnnPrud: clientsPrud*12*_roiMission };
+                };
+                const _roiActuel = (() => {
+                  const clients = _roiVisitAct * _roiTxCoEff * _roiTxCl;
+                  const clientsPrud = clients * _roiCoef;
+                  return { visits: _roiVisitAct, clientsAnnReal: Math.round(clients*12), clientsAnnPrud: Math.round(clientsPrud*12), caMoisReal: clients*_roiMission, caMoisPrud: clientsPrud*_roiMission, caAnnReal: clients*12*_roiMission, caAnnPrud: clientsPrud*12*_roiMission };
+                })();
+                const _roiS3 = _roiCalcScen(14);
+                const _roiS2 = _roiCalcScen(13.6);
+                const _roiS1 = _roiCalcScen(17.8);
+                const _roiClientsLabel = (real, prud) => {
+                  if (real < 1) return "<1 client/an";
+                  return `${prud}–${real} clients/an`;
+                };
+                const _roiPosLabel = _roiHasGMB ? `GMB` : `#${_roiPos}`;
+
+                const pageROI = !_showROIPage ? "" : `<div class="rp-page">
+                  <div class="rp-top-bar"></div>
+                  <div class="rp-inner">
+                    <div class="rp-page-hdr">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:white">B</div>
+                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GMB</span>
+                      </div>
+                      <div style="font-size:11px;color:#9CA3AF;text-align:right">${clientName}<br><strong style="color:#374151">Potentiel de visibilité locale</strong></div>
+                    </div>
+
+                    <div class="rp-section">📊 Potentiel de visibilité locale</div>
+
+                    <!-- Pitch intro -->
+                    <div style="font-size:12.5px;color:#374151;line-height:1.65;margin-bottom:16px">
+                      Sur les principales requêtes liées à votre activité (${_roiKwLabels || "requêtes identifiées"}), nous avons identifié <strong>${_roiFmt(_roiVol)} recherches mensuelles</strong> dans votre zone.
+                      Aujourd'hui, votre fiche capte probablement moins de 1 % de cette demande locale.
+                      Les trois premières positions Google Maps concentrent une part importante des clics — environ 10 à 18 % selon la position.${Number.isFinite(_roiActuel&&_roiS1&&_roiS1.visits/_roiActuel.visits) && _roiActuel.visits > 0 ? ` Un positionnement dans le Top 3 pourrait vous permettre de multiplier votre visibilité par ×${_roiFmt(_roiS1.visits/_roiActuel.visits,0)} et de générer plusieurs dizaines de contacts qualifiés supplémentaires chaque année.` : ""}
+                    </div>
+
+                    <!-- Données actuelles -->
+                    ${_roiHasGMB ? `
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+                      <div style="background:#F5F3FF;border:1.5px solid #E9D5FF;border-radius:12px;padding:14px 16px;text-align:center">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#6B40D8;margin-bottom:8px">Impressions / mois</div>
+                        <div style="font-size:22px;font-weight:900;color:#6B40D8">${_roiFmt(_roiGmbImp,0)}</div>
+                      </div>
+                      <div style="background:#FEF2F8;border:1.5px solid #FBCFE8;border-radius:12px;padding:14px 16px;text-align:center">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#C03080;margin-bottom:8px">Interactions / mois</div>
+                        <div style="font-size:22px;font-weight:900;color:#C03080">${_roiFmt(_roiTxInter,0)}</div>
+                      </div>
+                      <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;padding:14px 16px;text-align:center">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#059669;margin-bottom:8px">Captation actuelle</div>
+                        <div style="font-size:22px;font-weight:900;color:#059669">${_roiFmt(_roiCtrGMB,1)} %</div>
+                      </div>
+                    </div>` : `
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
+                      <div style="background:#F5F3FF;border:1.5px solid #E9D5FF;border-radius:12px;padding:14px 16px;text-align:center">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#6B40D8;margin-bottom:8px">Visites / mois (position actuelle)</div>
+                        <div style="font-size:22px;font-weight:900;color:#6B40D8">~${_roiFmt(_roiVisitAct,0)}</div>
+                      </div>
+                      <div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px 16px;text-align:center">
+                        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#6B7280;margin-bottom:8px">Captation estimée — pos. ${_roiPos}</div>
+                        <div style="font-size:22px;font-weight:900;color:#9CA3AF">${_roiFmt(_roiCtr,1)} %</div>
+                      </div>
+                    </div>`}
+
+                    <!-- CTR Local Pack par position -->
+                    <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:14px 16px;margin-bottom:14px">
+                      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#374151;margin-bottom:10px">Captation par position — Local Pack Google</div>
+                      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+                        ${[["Pos. 1","17,8 %","#6B40D8"],["Pos. 2","13,6 %","#C03080"],["Pos. 3","10,4 %","#E85A30"],["Pos. 4–6","~1 %","#d97706"],["Pos. 7+","< 0,5 %","#9CA3AF"]].map(([pos,ctr,col])=>`
+                        <div style="text-align:center">
+                          <div style="font-size:15px;font-weight:900;color:${col};line-height:1">${ctr}</div>
+                          <div style="font-size:10px;color:#9CA3AF;margin-top:4px">${pos}</div>
+                        </div>`).join("")}
+                      </div>
+                    </div>
+
+                    <!-- Credibility stats -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+                      ${[["93 %","des recherches locales affichent Google Maps","#F5F3FF","#E9D5FF","#6B40D8"],["42 %","des clics se font sur les fiches Google Business Profile","#FEF2F8","#FBCFE8","#C03080"]].map(([v,l,bg,border,col])=>`
+                      <div style="background:${bg};border:1.5px solid ${border};border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+                        <div style="font-size:26px;font-weight:900;color:${col};line-height:1;white-space:nowrap">${v}</div>
+                        <div style="font-size:11px;color:#374151;line-height:1.5">${l}</div>
+                      </div>`).join("")}
+                    </div>
+
+                    <div style="font-size:10px;color:#B0B7C3;line-height:1.5;margin-bottom:20px">
+                      Source : données de référence issues des études BrightLocal et Search Engine Land sur la répartition des clics en Local Pack. Ces taux varient selon la concurrence, la zone géographique et le type d'activité.
+                    </div>
+
+                    <div class="rp-section">💰 Scénarios de visibilité & opportunité commerciale</div>
+
+                    <!-- Tableau scénarios -->
+                    <table class="bench-table" style="margin-bottom:14px">
+                      <thead>
+                        <tr>
+                          <th>Scénario</th>
+                          <th style="text-align:right">Visites / mois</th>
+                          <th style="text-align:right">Clients / an</th>
+                          <th style="text-align:right;color:#d97706">Prudent (${Math.round(_roiCoef*100)} %)</th>
+                          <th style="text-align:right;color:#059669">Réaliste</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${[
+                          { label: `Actuel (${_roiPosLabel})`, s: _roiActuel, dot: "#9CA3AF" },
+                          { label: "Cible Top 3", s: _roiS3, dot: "#E85A30" },
+                          { label: "Cible Top 2", s: _roiS2, dot: "#C03080" },
+                          { label: "Cible Top 1", s: _roiS1, dot: "#6B40D8" },
+                        ].map(({label, s, dot}) => `
+                        <tr>
+                          <td>
+                            <div style="display:flex;align-items:center;gap:7px">
+                              <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;display:inline-block"></span>
+                              <span style="font-weight:700">${label}</span>
+                            </div>
+                          </td>
+                          <td style="text-align:right;font-variant-numeric:tabular-nums">~${_roiFmt(s.visits,0)}</td>
+                          <td style="text-align:right">${_roiClientsLabel(s.clientsAnnReal, s.clientsAnnPrud)}</td>
+                          <td style="text-align:right;font-variant-numeric:tabular-nums">
+                            <div style="font-weight:600;color:#d97706">${_roiEur(s.caMoisPrud)}/mois</div>
+                            <div style="font-size:10px;color:#9CA3AF">${_roiEur(s.caAnnPrud)}/an</div>
+                          </td>
+                          <td style="text-align:right;font-variant-numeric:tabular-nums">
+                            <div style="font-weight:600;color:#059669">${_roiEur(s.caMoisReal)}/mois</div>
+                            <div style="font-size:10px;color:#9CA3AF">${_roiEur(s.caAnnReal)}/an</div>
+                          </td>
+                        </tr>`).join("")}
+                      </tbody>
+                    </table>
+
+                    <!-- Footnote -->
+                    <div style="font-size:10px;color:#9CA3AF;line-height:1.7;padding:10px 14px;border:1px solid #E5E7EB;border-radius:9px;background:#F9FAFB">
+                      Taux de conversion retenus : visiteur → contact ${Math.round(_roiTxCoEff*100)} %, contact → client ${Math.round(_roiTxCl*100)} %. Valeur moyenne par mission : ${_roiEur(_roiMission)}. La fourchette prudent / réaliste s'appuie sur un coefficient de ${Math.round(_roiCoef*100)} %. Ces projections constituent un ordre de grandeur et non une garantie de résultat.
+                    </div>
+                  </div>
+                </div>`;
+
+                return css + cover + page2 + pageROI + page3 + (sec.cta ? page4 : "");
               })()
             }
           })
@@ -33679,7 +34401,6 @@ function CalendrierPage({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) 
           s === "calendrier" &&
             n.jsx(CalendrierView, { clients: e, client: p, setSelClient: d, upd: t }),
           s === "posts" && n.jsx(PostEditTab, { client: p, upd: t, clients: e }),
-          false,
         ],
       }),
     ],

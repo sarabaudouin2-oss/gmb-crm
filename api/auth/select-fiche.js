@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     return response.json();
   };
 
-  let debugInfo = []; // debug désactivé en prod
-  const DEBUG = false;
+  let debugInfo = [];
+  const DEBUG = true;
 
   const tryFetch = async () => {
     try {
@@ -33,24 +33,61 @@ export default async function handler(req, res) {
       const sub = ui.id || ui.sub;
       debugInfo.push(`👤 ${ui.email || "?"} — sub: ${sub || "?"}`);
 
-      // Étape 2 : API accounts (peut échouer pour quota)
+      // Étape 2 : API accounts — essai v1 puis v4 legacy
       let accountNames = [];
+      let accData = null;
+
+      // Tentative v1
       const accRes = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts", {
         headers: { Authorization: `Bearer ${access_token}` },
       });
-      const accData = await accRes.json();
+      accData = await accRes.json();
 
       if (accData.error) {
         isQuota = accData.error.status === "RESOURCE_EXHAUSTED" || (accData.error.message||"").includes("Quota");
-        debugInfo.push(`⚠️ accounts API: ${accData.error.message}`);
-        // Fallback : utiliser le sub comme account ID
-        if (sub) accountNames = [`accounts/${sub}`];
+        debugInfo.push(`⚠️ accounts v1: ${accData.error.message}`);
+
+        // Tentative v4 legacy (quota séparé)
+        const accV4Res = await fetch("https://mybusiness.googleapis.com/v4/accounts", {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        const accV4 = await accV4Res.json();
+        if (accV4.error) {
+          debugInfo.push(`⚠️ accounts v4: ${accV4.error.message}`);
+        } else {
+          accountNames = (accV4.accounts || []).slice(0, 10).map(a => a.name);
+          debugInfo.push(`✅ v4: ${accountNames.length} compte(s): ${accountNames.join(", ")}`);
+          isQuota = false;
+        }
       } else {
         accountNames = (accData.accounts || []).slice(0, 10).map(a => a.name);
         debugInfo.push(`✅ ${accountNames.length} compte(s): ${accountNames.join(", ")}`);
       }
 
-      if (!accountNames.length) throw new Error("Impossible de trouver votre compte Google Business.");
+      // Dernier recours : essayer directement avec le sub comme account ID
+      if (!accountNames.length && sub) {
+        debugInfo.push(`🔁 Tentative directe avec sub: accounts/${sub}`);
+        const directRes = await fetch(
+          `https://mybusinessbusinessinformation.googleapis.com/v1/accounts/${sub}/locations?readMask=name,title,storefrontAddress,phoneNumbers`,
+          { headers: { Authorization: `Bearer ${access_token}` } }
+        );
+        const directData = await directRes.json();
+        if (!directData.error) {
+          const locs = directData.locations || [];
+          debugInfo.push(`✅ Direct: ${locs.length} fiche(s)`);
+          for (const l of locs) {
+            locations.push({
+              name: l.name,
+              title: l.title || l.name.split("/").pop(),
+              address: [l.storefrontAddress?.addressLines?.[0], l.storefrontAddress?.locality].filter(Boolean).join(", "),
+              phone: l.phoneNumbers?.primaryPhone || "",
+            });
+          }
+          isQuota = false;
+        } else {
+          debugInfo.push(`⚠️ Direct: ${directData.error.message}`);
+        }
+      }
 
       // Étape 3 : lister les fiches pour chaque compte
       for (const accName of accountNames) {
@@ -143,6 +180,12 @@ h1{font-size:19px;font-weight:800;color:#1E1B30;margin-bottom:5px}
 .err{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:14px;color:#DC2626;font-size:13px;margin-bottom:14px}
 .back{display:block;text-align:center;margin-top:14px;font-size:12px;color:#9CA3AF;text-decoration:none}
 .back:hover{color:#6B40D8}
+.manual{background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;padding:18px;margin-top:16px}
+.manual-t{font-size:13px;font-weight:700;color:#0369A1;margin-bottom:6px}
+.manual-s{font-size:12px;color:#0284C7;margin-bottom:12px}
+.manual input{width:100%;border:1.5px solid #BAE6FD;border-radius:8px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box}
+.manual input:focus{border-color:#0369A1}
+.manual .btn{margin-top:10px;display:block;width:100%;text-align:center;background:#0369A1}
 </style></head><body>
 <div class="box">
   <div class="logo"><div class="logo-i">BTO</div><div class="logo-t">Be The One</div></div>
@@ -169,6 +212,31 @@ h1{font-size:19px;font-weight:800;color:#1E1B30;margin-bottom:5px}
 
   ${cards}
 
+  ${isQuota ? `
+  <div class="manual">
+    <div class="manual-t">📝 Saisie manuelle de la fiche</div>
+    <div class="manual-s">Quota Google atteint. Colle le nom de ta fiche (format : <code>accounts/XXXX/locations/YYYY</code>).<br>Tu le trouves dans l'URL de <a href="https://business.google.com" target="_blank">business.google.com</a>.</div>
+    <div class="manual" style="background:none;border:none;padding:0">
+      <input type="text" id="loc-input" placeholder="accounts/123456789/locations/987654321" />
+      <a class="btn" id="loc-btn" href="#">🔗 Lier cette fiche</a>
+    </div>
+  </div>
+  <script>
+  document.getElementById('loc-btn').addEventListener('click', function(e){
+    e.preventDefault();
+    var v = document.getElementById('loc-input').value.trim();
+    if(!v || !v.startsWith('accounts/')) { alert('Format invalide. Ex: accounts/123/locations/456'); return; }
+    var p = new URLSearchParams(${JSON.stringify(Object.fromEntries(qp))});
+    p.set('location_name', v);
+    window.location.href = '${base}/#gmb-auth-complete?' + p.toString();
+  });
+  </script>
+  ` : ""}
+
+  ${DEBUG ? `<details style="margin-top:16px;font-size:11px;color:#6B7280;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:12px">
+    <summary style="cursor:pointer;font-weight:600;color:#374151">🔍 Debug (${debugInfo.length} étapes)</summary>
+    <pre style="margin-top:8px;white-space:pre-wrap;word-break:break-all;font-family:monospace;font-size:10px">${esc(debugInfo.join("\n"))}</pre>
+  </details>` : ""}
 
   <a href="${base}/" class="back">← Retour sans lier</a>
 </div>

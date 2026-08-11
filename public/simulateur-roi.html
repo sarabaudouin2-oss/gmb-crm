@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%234B4DD9'/%3E%3Cstop offset='40%25' stop-color='%238449D6'/%3E%3Cstop offset='70%25' stop-color='%23C2469E'/%3E%3Cstop offset='100%25' stop-color='%23E0524A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='32' y='43' font-family='DM Sans, sans-serif' font-weight='700' font-size='34' fill='white' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E">
+<title>Simulateur Local SEO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --indigo:#4B4DD9;
+    --purple:#8449D6;
+    --magenta:#C2469E;
+    --coral:#E0524A;
+    --grad: linear-gradient(115deg, var(--indigo) 0%, var(--purple) 40%, var(--magenta) 70%, var(--coral) 100%);
+    --ink:#161730;
+    --ink-soft:#64607D;
+    --paper:#FAFAFD;
+    --card:#FFFFFF;
+    --line:#E7E5F2;
+    --pill-gray-bg:#F1F0F8;
+    --pill-gray-ink:#5B5876;
+    --good:#16A34A;
+    --good-bg:#F0FDF4;
+    --mid:#D97706;
+    --mid-bg:#FFFBEB;
+    --bad:#DC2626;
+    --bad-bg:#FEF2F2;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'DM Sans',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:28px 20px 80px;}
+  h1,h2,h3{font-family:'DM Sans',sans-serif;margin:0;color:var(--ink);}
+  .eyebrow{
+    display:inline-flex;
+    font-family:'DM Sans',sans-serif;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--pill-gray-ink);
+    background:var(--pill-gray-bg);
+    padding:4px 11px;
+    border-radius:999px;
+    margin-bottom:10px;
+  }
+  header.top{margin-bottom:24px;}
+  .logo-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .logo-mark{
+    width:28px;height:28px;border-radius:8px;background:var(--grad);
+    display:flex;align-items:center;justify-content:center;flex:none;
+    font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;color:#fff;
+  }
+  .logo-word{font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;letter-spacing:-0.005em;color:var(--ink);}
+  .logo-sep{width:1px;height:14px;background:var(--line);}
+  .logo-tool{font-size:12.5px;color:var(--ink-soft);font-weight:500;}
+  header.top .brandline{
+    height:4px;width:56px;border-radius:2px;background:var(--grad);margin-bottom:16px;
+  }
+  header.top h1{font-size:27px;font-weight:800;letter-spacing:-0.01em;color:var(--ink);}
+  header.top p{margin:8px 0 0;color:var(--ink-soft);font-size:14.5px;max-width:62ch;line-height:1.55;font-family:'DM Sans',sans-serif;}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:22px 24px;
+    margin-bottom:16px;
+    box-shadow:0 1px 2px rgba(22,23,48,.04);
+  }
+  .card h2{font-size:16.5px;font-weight:800;color:var(--ink);}
+  .card h2 .num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:23px;height:23px;border-radius:7px;
+    background:var(--grad);color:#fff;font-size:11.5px;font-weight:700;
+    margin-right:9px;vertical-align:middle;font-family:'DM Sans',sans-serif;
+  }
+
+  /* form */
+  .form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 16px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.span2{grid-column:span 2;}
+  .field.span3{grid-column:span 3;}
+  label{font-size:12.5px;font-weight:600;color:var(--ink-soft);}
+  input,select{
+    font-family:'DM Sans',sans-serif;
+    font-size:14px;
+    padding:8px 11px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink);
+    outline:none;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  input:focus,select:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(132,73,214,.14);}
+  .hint{font-size:11.5px;color:#9C98B4;margin-top:2px;}
+  @media (max-width:680px){
+    .form-grid{grid-template-columns:repeat(2,1fr);}
+    .field.span2{grid-column:span 2;}
+    .field.span3{grid-column:span 2;}
+  }
+
+  /* results */
+  .kpi-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;}
+  .kpi{
+    flex:1 1 140px;
+    background:#F6F5FC;
+    border-radius:10px;
+    padding:14px 16px;
+  }
+  .kpi .v{font-family:'DM Sans',sans-serif;font-size:21px;font-weight:700;color:var(--ink);}
+  .kpi .l{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .tag{
+    display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;
+    margin-top:8px;background:var(--pill-gray-bg);color:var(--pill-gray-ink);
+  }
+  .tag.good{background:var(--good-bg);color:var(--good);}
+  .tag.mid{background:var(--mid-bg);color:var(--mid);}
+  .tag.bad{background:var(--bad-bg);color:var(--bad);}
+
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13.5px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:600;}
+  td.num, th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr.highlight td{background:#F6F5FC;font-weight:600;}
+
+  p.note{font-size:13px;color:var(--ink-soft);line-height:1.55;margin:10px 0 0;}
+  p.lede{font-size:14px;color:var(--ink-soft);line-height:1.6;margin:4px 0 0;}
+
+  /* podium — signature element */
+  .podium-wrap{margin-top:14px;}
+  .podium{display:flex;align-items:flex-end;gap:8px;height:190px;padding-top:20px;}
+  .podium .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+  .podium .bar{
+    width:100%;
+    border-radius:7px 7px 0 0;
+    background:#F0EFFA;
+    position:relative;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding-top:6px;
+    transition:height .4s ease;
+  }
+  .podium .bar.current{background:var(--grad);}
+  .podium .bar .pct{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;color:var(--ink);}
+  .podium .bar.current .pct{color:#fff;}
+  .podium .lbl{margin-top:8px;font-size:11.5px;color:var(--ink-soft);text-align:center;}
+  .podium .lbl b{display:block;color:var(--ink);font-size:12.5px;}
+
+  .projections-card{
+    background:var(--grad);
+    border:none;
+    color:#fff;
+    padding:26px 24px 24px;
+  }
+  .projections-card h2.proj-title{font-size:20px;font-weight:700;color:#fff;margin-top:2px;}
+  .projections-card h2.proj-title .num{background:rgba(255,255,255,.25);}
+  .projections-card .eyebrow{background:rgba(255,255,255,.2);color:#fff;}
+  .projections-card p.proj-lede{color:rgba(255,255,255,.88);max-width:70ch;}
+  .scenario-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px;}
+  .scenario-card{
+    background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.32);
+    border-radius:12px;
+    padding:16px 16px 18px;
+  }
+  .scenario-card .s-label{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.9;}
+  .scenario-card .s-ca{font-family:'DM Sans',sans-serif;font-size:25px;font-weight:700;margin-top:8px;}
+  .scenario-card .s-ca-label{font-size:11.5px;opacity:.85;margin-top:2px;}
+  .scenario-card .s-sub{margin-top:12px;font-size:13px;opacity:.95;line-height:1.5;}
+  .proj-detail{margin-top:20px;background:rgba(255,255,255,.09);border-radius:10px;overflow:hidden;}
+  .proj-detail th{color:rgba(255,255,255,.72);}
+  .proj-detail td, .proj-detail th{border-bottom:1px solid rgba(255,255,255,.16);}
+  .proj-detail td{color:#fff;}
+  @media (max-width:680px){ .scenario-grid{grid-template-columns:1fr;} }
+
+  .synth-block{margin-top:8px;}
+  .synth-block h3{font-size:13px;font-weight:700;color:var(--purple);margin-bottom:4px;font-family:'DM Sans',sans-serif;}
+  .synth-block p{margin:0 0 14px;font-size:14px;line-height:1.6;color:var(--ink);}
+
+  footer.disclaimer{
+    margin-top:18px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;
+    background:#fff;
+    font-size:12px;color:var(--ink-soft);line-height:1.6;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo-row">
+      <div class="logo-mark">B</div>
+      <span class="logo-word">Be The One</span>
+      <span class="logo-sep"></span>
+      <span class="logo-tool">Outil interne</span>
+    </div>
+    <div class="brandline"></div>
+    <h1>Simulateur Local SEO &amp; Google Business Profile</h1>
+    <p>Renseigne les chiffres de la fiche Google d'un prospect. Le simulateur montre combien de clients et de chiffre d'affaires il laisse passer en n'étant pas dans les 3 premiers résultats sur Google (le "Local Pack").</p>
+  </header>
+
+  <!-- INPUT FORM -->
+  <div class="card">
+    <h2>Données du prospect</h2>
+    <div class="form-grid" style="margin-top:14px;">
+      <div class="field"><label>Métier</label><input id="metier" placeholder="ex : Couvreur"></div>
+      <div class="field"><label>Ville</label><input id="ville" placeholder="ex : Vannes"></div>
+      <div class="field"><label>Panier moyen (€)</label><input id="panier" type="number" placeholder="ex : 1200"></div>
+
+      <div class="field"><label>Nouveaux clients / mois (actuel)</label><input id="clientsActuels" type="number" placeholder="ex : 3"></div>
+      <div class="field"><label>Vues de fiche</label><input id="vues" type="number" placeholder="ex : 850"></div>
+      <div class="field"><label>Recherches ayant affiché la fiche</label><input id="recherches" type="number" placeholder="ex : 620"></div>
+      <div class="field"><label>Interactions totales</label><input id="interactions" type="number" placeholder="ex : 45"></div>
+
+      <div class="field"><label>Appels</label><input id="appels" type="number" placeholder="ex : 20"></div>
+      <div class="field"><label>Demandes d'itinéraire</label><input id="itineraires" type="number" placeholder="ex : 15"></div>
+      <div class="field"><label>Clics vers le site</label><input id="clicsSite" type="number" placeholder="ex : 10"></div>
+
+      <div class="field"><label>Réservations</label><input id="reservations" type="number" placeholder="ex : 0"></div>
+      <div class="field span2"><label>Position moyenne actuelle sur les recherches stratégiques</label>
+        <select id="position">
+          <option value="" selected>Choisir une position</option>
+          <option value="1">Position 1</option>
+          <option value="2">Position 2</option>
+          <option value="3">Position 3</option>
+          <option value="4">Position 4</option>
+          <option value="5">Position 5</option>
+          <option value="6">Position 6 et au-delà</option>
+        </select>
+      </div>
+
+      <div class="field span2"><label>Requêtes principales (indicatif)</label><input id="requetes" placeholder="ex : couvreur vannes, poêle à bois vannes"></div>
+      <div class="field"><label>Recherches de marque (nom / variantes)</label><input id="rechMarque" type="number" placeholder="optionnel"><span class="hint">optionnel — sur le total recherches</span></div>
+      <div class="field"><label>Recherches de découverte (mots-clés métier)</label><input id="rechDecouverte" type="number" placeholder="optionnel"><span class="hint">optionnel</span></div>
+    </div>
+  </div>
+
+  <!-- 1. ANALYSE ACTUELLE -->
+  <div class="card">
+    <h2><span class="num">1</span>Où en est la fiche aujourd'hui</h2>
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="v" id="tauxInteraction">–</div>
+        <div class="l">Taux d'interaction — sur 100 personnes qui voient la fiche, combien agissent</div>
+        <span class="tag" id="tauxTag">–</span>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Sur ces interactions, qui fait quoi</th><th class="num">Volume</th><th class="num">% des interactions</th></tr></thead>
+      <tbody>
+        <tr><td>Appels</td><td class="num" id="tAppelsV"></td><td class="num" id="tAppelsP"></td></tr>
+        <tr><td>Demandes d'itinéraire</td><td class="num" id="tItinV"></td><td class="num" id="tItinP"></td></tr>
+        <tr><td>Clics vers le site</td><td class="num" id="tSiteV"></td><td class="num" id="tSiteP"></td></tr>
+        <tr><td>Réservations</td><td class="num" id="tResaV"></td><td class="num" id="tResaP"></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2. TRAFIC DE MARQUE -->
+  <div class="card">
+    <h2><span class="num">2</span>Est-ce qu'on la trouve seulement parce qu'on la connaît déjà ?</h2>
+    <div class="kpi-row">
+      <div class="kpi"><div class="v" id="pctMarque">–</div><div class="l">Trafic marque (nom de l'entreprise)</div></div>
+      <div class="kpi"><div class="v" id="pctDecouverte">–</div><div class="l">Trafic découverte (mots-clés métier)</div></div>
+    </div>
+    <p class="note" id="marqueNote"></p>
+  </div>
+
+  <!-- 3. MANQUE À GAGNER + PODIUM -->
+  <div class="card">
+    <h2><span class="num">3</span>Ce que Google donne aux 3 premiers</h2>
+    <p class="lede">Sur Google, quand quelqu'un cherche un professionnel près de chez lui, seuls les 3 premiers résultats (le "Local Pack") sont vraiment vus. Voici la part des clics que capte chaque position, et où se situe la fiche du prospect aujourd'hui.</p>
+    <div class="podium-wrap">
+      <div class="podium" id="podium"></div>
+    </div>
+    <table>
+      <thead><tr><th>Objectif</th><th class="num">Part de clics captée</th><th class="num">Ce que ça représente vs. aujourd'hui</th></tr></thead>
+      <tbody id="manqueTable"></tbody>
+    </table>
+  </div>
+
+  <!-- 4. PROJECTIONS — SECTION PRINCIPALE -->
+  <div class="card projections-card">
+    <span class="eyebrow" style="color:#fff;opacity:.85;">Le plus important</span>
+    <h2 class="proj-title"><span class="num">4</span>Ce que ça change concrètement pour le prospect</h2>
+    <p class="lede proj-lede">Si sa fiche grimpait dans le classement, voici, mois par mois, le nombre de contacts en plus, de clients en plus, et le chiffre d'affaires en plus. Base de calcul simple : sur 10 personnes qui contactent la fiche, 1 devient un prospect (lead) ; sur 5 prospects, 1 devient client.</p>
+
+    <div class="scenario-grid" id="scenarioCards"></div>
+
+    <table class="proj-detail">
+      <thead>
+        <tr>
+          <th>Détail</th>
+          <th class="num">Aujourd'hui</th>
+          <th class="num">Top 3</th>
+          <th class="num">Top 2</th>
+          <th class="num">Top 1</th>
+        </tr>
+      </thead>
+      <tbody id="projTable"></tbody>
+    </table>
+  </div>
+
+  <!-- 5. SYNTHÈSE -->
+  <div class="card">
+    <h2><span class="num">5</span>En résumé</h2>
+    <div class="synth-block" id="synthese"></div>
+  </div>
+
+  <footer class="disclaimer">
+    Ces résultats sont des projections basées sur les données transmises, les statistiques moyennes du Local Pack Google et les comportements observés des utilisateurs. Ils ne constituent en aucun cas une garantie de résultat.
+  </footer>
+
+</div>
+
+<script>
+const fmt = (n, d=0) => Number.isFinite(n) ? n.toLocaleString('fr-FR', {minimumFractionDigits:d, maximumFractionDigits:d}) : '–';
+const eur = (n) => Number.isFinite(n) ? n.toLocaleString('fr-FR', {style:'currency', currency:'EUR', maximumFractionDigits:0}) : '–';
+
+const shareMap = {1:42, 2:22, 3:11, 4:4, 5:2, 6:1.5};
+const shareLabel = {1:'Position 1', 2:'Position 2', 3:'Position 3', 4:'Position 4', 5:'Position 5', 6:'Position 6+'};
+
+function val(id){ return parseFloat(document.getElementById(id).value) || 0; }
+function hasVal(id){ return document.getElementById(id).value.trim() !== ''; }
+function txt(id){ return document.getElementById(id).value.trim(); }
+
+function setTag(el, level){
+  el.className = 'tag ' + level;
+}
+
+function update(){
+  const panier = val('panier');
+  const clientsActuels = val('clientsActuels');
+  const vues = val('vues');
+  const recherches = val('recherches');
+  const interactions = val('interactions');
+  const appels = val('appels');
+  const itineraires = val('itineraires');
+  const clicsSite = val('clicsSite');
+  const reservations = val('reservations');
+  const position = parseInt(document.getElementById('position').value, 10);
+  const rechMarque = val('rechMarque');
+  const rechDecouverte = val('rechDecouverte');
+
+  // 1. Taux d'interaction
+  const hasTauxData = hasVal('vues') && hasVal('interactions');
+  const taux = vues > 0 ? (interactions / vues) * 100 : 0;
+  document.getElementById('tauxInteraction').textContent = hasTauxData ? fmt(taux,1) + ' %' : '–';
+  const tauxTagEl = document.getElementById('tauxTag');
+  if (!hasTauxData){ tauxTagEl.textContent='–'; tauxTagEl.className='tag'; }
+  else if (taux < 5){ tauxTagEl.textContent='Faible'; setTag(tauxTagEl,'bad'); }
+  else if (taux < 10){ tauxTagEl.textContent='Moyen'; setTag(tauxTagEl,'mid'); }
+  else if (taux < 15){ tauxTagEl.textContent='Bon'; setTag(tauxTagEl,'good'); }
+  else { tauxTagEl.textContent='Excellent'; setTag(tauxTagEl,'good'); }
+
+  // Répartition interactions
+  const rows = [
+    ['tAppelsV','tAppelsP', appels],
+    ['tItinV','tItinP', itineraires],
+    ['tSiteV','tSiteP', clicsSite],
+    ['tResaV','tResaP', reservations],
+  ];
+  rows.forEach(([vId,pId,v])=>{
+    document.getElementById(vId).textContent = fmt(v);
+    document.getElementById(pId).textContent = interactions>0 ? fmt((v/interactions)*100,1)+' %' : '–';
+  });
+
+  // 2. Trafic marque / découverte
+  const totalReq = rechMarque + rechDecouverte;
+  const pctMarque = totalReq>0 ? (rechMarque/totalReq)*100 : null;
+  const pctDecouverte = totalReq>0 ? (rechDecouverte/totalReq)*100 : null;
+  document.getElementById('pctMarque').textContent = pctMarque!==null ? fmt(pctMarque,1)+' %' : '–';
+  document.getElementById('pctDecouverte').textContent = pctDecouverte!==null ? fmt(pctDecouverte,1)+' %' : '–';
+  document.getElementById('marqueNote').textContent = totalReq>0
+    ? (pctMarque > pctDecouverte
+        ? `La fiche dépend surtout de sa notoriété existante (${fmt(pctMarque,0)} % de trafic marque) : elle est encore peu trouvée par de nouveaux prospects qui ne connaissent pas déjà l'entreprise.`
+        : `La fiche capte déjà une majorité de trafic de découverte (${fmt(pctDecouverte,0)} %) : elle attire des prospects qui ne connaissaient pas l'entreprise, signe d'un bon positionnement sur les mots-clés métier.`)
+    : 'Renseigne les recherches de marque et de découverte pour estimer la dépendance à la notoriété.';
+
+  // 3. Manque à gagner
+  const partActuelle = shareMap[position];
+  const positionChosen = Number.isFinite(partActuelle);
+  const scenarios = [
+    {key:'top3', label:'Top 3', share:11},
+    {key:'top2', label:'Top 2', share:22},
+    {key:'top1', label:'Top 1', share:42},
+  ];
+  scenarios.forEach(s => s.mult = positionChosen && partActuelle>0 ? s.share/partActuelle : NaN);
+
+  document.getElementById('manqueTable').innerHTML = positionChosen
+    ? scenarios.map(s => `
+        <tr><td>${s.label}</td><td class="num">${fmt(s.share,0)} %</td><td class="num">${s.mult>=1 ? fmt(s.mult,1)+'x plus de clics' : fmt(s.mult,1)+'x (déjà mieux placée)'}</td></tr>
+      `).join('')
+    : `<tr><td colspan="3" style="color:var(--ink-soft);">Choisis une position actuelle ci-dessus pour voir le potentiel.</td></tr>`;
+
+  // Podium (positions 1..6)
+  const maxShare = 42;
+  const podiumEl = document.getElementById('podium');
+  podiumEl.innerHTML = [1,2,3,4,5,6].map(p=>{
+    const share = shareMap[p];
+    const h = Math.max(10, (share/maxShare)*150);
+    const isCurrent = p === position;
+    return `<div class="col">
+      <div class="bar ${isCurrent?'current':''}" style="height:${h}px;"><span class="pct">${fmt(share,1)}%</span></div>
+      <div class="lbl"><b>${shareLabel[p]}</b>${isCurrent?'actuel':''}</div>
+    </div>`;
+  }).join('');
+
+  // 4. Projections (visibilité, interactions, leads, clients, CA)
+  const leadsActuels = interactions * 0.10;
+  const clientsCalcActuels = leadsActuels * 0.20;
+
+  const projRows = [{
+    label:'Actuel', visibility:partActuelle, interactions:interactions,
+    leads:leadsActuels, clients:clientsCalcActuels, caMensuel:0, caAnnuel:0, highlight:false
+  }];
+
+  scenarios.forEach(s=>{
+    const projInteractions = interactions * s.mult;
+    const projLeads = projInteractions * 0.10;
+    const projClients = projLeads * 0.20;
+    const clientsSupp = Math.max(0, projClients - clientsCalcActuels);
+    const caMensuel = clientsSupp * panier;
+    const caAnnuel = caMensuel * 12;
+    s.caMensuel = caMensuel; s.caAnnuel = caAnnuel;
+    projRows.push({
+      label:s.label, visibility:s.share, interactions:projInteractions,
+      leads:projLeads, clients:projClients, caMensuel, caAnnuel, highlight:true
+    });
+  });
+
+  // Grandes cartes scénario (Top 3 / Top 2 / Top 1) — la partie la plus visible
+  document.getElementById('scenarioCards').innerHTML = scenarios.map(s=>{
+    const projInteractions = interactions * s.mult;
+    const projClients = projInteractions * 0.10 * 0.20;
+    const clientsSupp = Math.max(0, projClients - clientsCalcActuels);
+    return `<div class="scenario-card">
+      <div class="s-label">${s.label}</div>
+      <div class="s-ca">${eur(s.caMensuel)}</div>
+      <div class="s-ca-label">de chiffre d'affaires en plus, par mois</div>
+      <div class="s-sub">+${fmt(clientsSupp,1)} client${clientsSupp>=2?'s':''} / mois &middot; soit ${eur(s.caAnnuel)} par an</div>
+    </div>`;
+  }).join('');
+
+  // Tableau détaillé, une ligne par indicateur, une colonne par scénario
+  const detailRows = [
+    {label:'Interactions / mois', get:r=>fmt(r.interactions,1)},
+    {label:'Prospects (leads) / mois', get:r=>fmt(r.leads,1)},
+    {label:'Clients / mois', get:r=>fmt(r.clients,1)},
+    {label:'CA supplémentaire / mois', get:r=>r.caMensuel ? eur(r.caMensuel) : '—'},
+    {label:'CA supplémentaire / an', get:r=>r.caAnnuel ? eur(r.caAnnuel) : '—'},
+  ];
+  document.getElementById('projTable').innerHTML = detailRows.map(d => `
+    <tr>
+      <td>${d.label}</td>
+      ${projRows.map(r=>`<td class="num">${d.get(r)}</td>`).join('')}
+    </tr>
+  `).join('');
+
+  // 6. Synthèse dirigeant
+  const metier = txt('metier') || 'l\'entreprise';
+  const ville = txt('ville') || '';
+  const top3 = scenarios[0], top2 = scenarios[1], top1 = scenarios[2];
+
+  document.getElementById('synthese').innerHTML = !positionChosen
+    ? `<div class="synth-block"><p class="note" style="margin-top:0;">Renseigne la position actuelle du prospect pour générer le résumé.</p></div>`
+    : `
+    <div class="synth-block">
+      <h3>Aujourd'hui</h3>
+      <p>${metier}${ville ? ' à ' + ville : ''} obtient environ ${fmt(clientsActuels)} nouveaux clients par mois grâce à sa fiche Google. Elle apparaît en ${shareLabel[position].toLowerCase()} sur ses recherches principales, ce qui lui laisse environ ${fmt(partActuelle,1)} % des clics disponibles sur ces recherches.</p>
+
+      <h3>Ce qui lui échappe</h3>
+      <p>${fmt(100-partActuelle,1)} % des clics sur ces mêmes recherches partent aujourd'hui chez des concurrents mieux placés.</p>
+
+      <h3>Si elle passait dans le Top 3</h3>
+      <p>Environ ${fmt(Math.max(0,(interactions*top3.mult*0.1*0.2) - clientsCalcActuels),1)} client(s) de plus par mois, soit ${eur(top3.caMensuel)} de chiffre d'affaires en plus chaque mois (${eur(top3.caAnnuel)} sur un an).</p>
+
+      <h3>Si elle passait dans le Top 2</h3>
+      <p>${eur(top2.caMensuel)} de chiffre d'affaires en plus par mois, soit ${eur(top2.caAnnuel)} sur un an.</p>
+
+      <h3>Si elle passait en position 1</h3>
+      <p>${eur(top1.caMensuel)} de chiffre d'affaires en plus par mois, soit ${eur(top1.caAnnuel)} sur un an.</p>
+
+      <h3>À retenir</h3>
+      <p>Ce sont des estimations, pas des promesses : elles s'appuient sur les chiffres actuels de la fiche et sur le comportement moyen des internautes face au Local Pack Google. Elles donnent un ordre de grandeur du potentiel, pas une garantie de résultat.</p>
+    </div>
+  `;
+}
+
+document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', update));
+update();
+</script>
+</body>
+</html>

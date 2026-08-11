@@ -15,10 +15,11 @@ export default async function handler(req, res) {
     const accountsData = await accountsRes.json();
 
     if (accountsData.error) {
-      return res.status(400).json({ error: accountsData.error.message || "Erreur Google API" });
+      return res.status(400).json({ error: accountsData.error.message || "Erreur Google API", raw: accountsData });
     }
 
     const accounts = accountsData.accounts || [];
+    const debug = { accountCount: accounts.length, accounts: accounts.map(a => a.name), locationErrors: [] };
 
     // 2. Pour chaque compte, récupère les fiches
     const allLocations = [];
@@ -26,14 +27,18 @@ export default async function handler(req, res) {
       accounts.map(async (account) => {
         try {
           const locRes = await fetch(
-            `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title,storefrontAddress,websiteUri,primaryPhone`,
+            `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title,storefrontAddress,websiteUri,phoneNumbers`,
             { headers: { Authorization: `Bearer ${access_token}` } }
           );
           const locData = await locRes.json();
+          if (locData.error) {
+            debug.locationErrors.push({ account: account.name, error: locData.error.message });
+            return;
+          }
           const locations = locData.locations || [];
           locations.forEach((loc) => {
             allLocations.push({
-              name: loc.name, // "locations/123456789"
+              name: loc.name,
               title: loc.title || "Sans nom",
               address: loc.storefrontAddress
                 ? [
@@ -44,17 +49,19 @@ export default async function handler(req, res) {
                     .filter(Boolean)
                     .join(", ")
                 : "",
-              phone: loc.primaryPhone || "",
+              phone: loc.phoneNumbers?.primaryPhone || "",
               website: loc.websiteUri || "",
               accountName: account.name,
               accountTitle: account.accountName || account.name,
             });
           });
-        } catch (_) {}
+        } catch (e) {
+          debug.locationErrors.push({ account: account.name, error: e.message });
+        }
       })
     );
 
-    res.json({ locations: allLocations });
+    res.json({ locations: allLocations, debug });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

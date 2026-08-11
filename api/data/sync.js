@@ -227,6 +227,31 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── PROXY ANTHROPIC AI ──
+  if (req.query.action === "ai" && req.method === "POST") {
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return res.status(500).json({ error: "Clé API Anthropic non configurée" });
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const bodyStr = Buffer.concat(chunks).toString();
+      const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "anthropic-version": "2023-06-01",
+          "x-api-key": apiKey,
+        },
+        body: bodyStr,
+      });
+      const data = await upstream.json();
+      res.status(upstream.status).json(data);
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+    return;
+  }
+
   const auth = req.headers["x-bto-token"] || req.query.token;
   if (!auth || auth !== process.env.BTO_DATA_TOKEN) {
     return res.status(401).json({ error: "Non autorisé" });
