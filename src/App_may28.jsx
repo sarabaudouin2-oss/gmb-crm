@@ -1408,7 +1408,7 @@ Entrée libre — venez nombreux.
       return rows && rows.length > 0 ? rows[0].value : null;
     } catch { return null; }
   };
-async function callAI(e, t, i = 0, maxTokens = 2000) {
+async function callAI(e, t, i = 0, maxTokens = 3000) {
   var p;
   const r = t;
   let o;
