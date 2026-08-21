@@ -227,6 +227,21 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── TEST ANTHROPIC KEY ──
+  if (req.query.action === "ai-test" && req.method === "GET") {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.json({ ok: false, error: "ANTHROPIC_API_KEY manquante" });
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "anthropic-version": "2023-06-01", "x-api-key": apiKey },
+        body: JSON.stringify({ model: req.query.m || "claude-sonnet-4-6", max_tokens: 10, messages: [{ role: "user", content: "hi" }] }),
+      });
+      const txt = await r.text();
+      return res.json({ ok: r.ok, status: r.status, body: txt.slice(0, 300) });
+    } catch (e) { return res.json({ ok: false, error: e.message }); }
+  }
+
   // ── PROXY ANTHROPIC AI ──
   if (req.query.action === "ai" && req.method === "POST") {
     try {
@@ -244,10 +259,16 @@ export default async function handler(req, res) {
         },
         body: bodyStr,
       });
-      const data = await upstream.json();
+      const rawText = await upstream.text();
+      console.log("Anthropic status:", upstream.status, "body:", rawText.slice(0, 300));
+      let data;
+      try { data = JSON.parse(rawText); } catch { data = { error: { message: rawText } }; }
+      // Garder la connexion active pendant la lecture
+      res.setHeader("X-Accel-Buffering", "no");
       res.status(upstream.status).json(data);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      console.error("AI proxy error:", e.message);
+      res.status(500).json({ error: { message: e.message } });
     }
     return;
   }

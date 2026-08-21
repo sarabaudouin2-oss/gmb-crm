@@ -1423,7 +1423,7 @@ async function callAI(e, t, i = 0) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 12000,
+        max_tokens: 5000,
         system:
           "Tu es un expert SEO local Google Business Profile. Retourne UNIQUEMENT du JSON valide, sans aucun texte avant ni après, sans backticks, sans markdown. Commence directement par { et termine par }. AUCUN emoji dans les posts, Q&R, services ni produits.",
         messages: [
@@ -1448,9 +1448,9 @@ async function callAI(e, t, i = 0) {
       ? new Error("Clé API invalide — vérifiez votre clé Anthropic.")
       : o.status === 429
         ? new Error(
-            "Limite de requêtes atteinte — patientez quelques secondes et réessayez.",
+            "Quota Anthropic atteint — réessayez dans quelques minutes.",
           )
-        : new Error(x);
+        : new Error(`[HTTP ${o.status}] ${x}`);
   }
   const d = ((await o.json()).content || [])
       .map((b) => b.text || "")
@@ -18415,6 +18415,23 @@ const dg = [
   Ea = (e) => !dg.some((t) => (e || "").toLowerCase().includes(t));
 function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
   var x, j, I, z, g, h, f, c, u, m, C, B;
+  const CM_rdm = new Date().toISOString().slice(0,7);
+  const roadmapDone = (t.data || {}).roadmapDone || {};
+  const toggleDone = (monthKey, actionIdx, actionText) => {
+    const key = `${monthKey}_${actionIdx}`;
+    const nowDone = !roadmapDone[key];
+    const today = new Date().toISOString().slice(0,10);
+    const rdmTag = `__rdm__${key}`;
+    const curUpdates = t.profileUpdates || [];
+    const updatedUpdates = nowDone
+      ? [...curUpdates, { id: rdmTag, date: today, field: "Roadmap", change: actionText, note: "" }]
+      : curUpdates.filter(u2 => u2.id !== rdmTag);
+    r(i.map(cl => cl.id === t.id ? {
+      ...cl,
+      data: { ...(cl.data||{}), roadmapDone: { ...(roadmapDone), [key]: nowDone } },
+      profileUpdates: updatedUpdates,
+    } : cl));
+  };
   const o = {
       month1: {
         title: ((x = e.month1) == null ? void 0 : x.title) || "",
@@ -18733,7 +18750,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                                 alignItems: "flex-start",
                               },
                               children: [
-                                n.jsx("span", {
+                                s && n.jsx("span", {
                                   style: {
                                     color: E,
                                     fontWeight: 700,
@@ -18800,14 +18817,19 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                                       ],
                                     })
                                   : (() => {
+                                      const doneKey = `${k}_${G}`;
+                                      const isDone = !!roadmapDone[doneKey];
                                       const colonIdx = V.indexOf(":");
-                                      if (colonIdx > 0 && colonIdx < 80) {
-                                        return n.jsxs("span", { style:{ fontSize:12.5, color:"var(--ink2)", lineHeight:1.5 }, children:[
-                                          n.jsx("strong", { children: V.slice(0, colonIdx) }),
-                                          V.slice(colonIdx),
-                                        ]});
-                                      }
-                                      return n.jsx("span", { style:{ fontSize:12.5, color:"var(--ink2)", lineHeight:1.5 }, children: V });
+                                      const textEl = colonIdx > 0 && colonIdx < 80
+                                        ? n.jsxs("span", { style:{ fontSize:12.5, color: isDone ? "#9CA3AF" : "var(--ink2)", lineHeight:1.5, textDecoration: isDone ? "line-through" : "none" }, children:[
+                                            n.jsx("strong", { children: V.slice(0, colonIdx) }),
+                                            V.slice(colonIdx),
+                                          ]})
+                                        : n.jsx("span", { style:{ fontSize:12.5, color: isDone ? "#9CA3AF" : "var(--ink2)", lineHeight:1.5, textDecoration: isDone ? "line-through" : "none" }, children: V });
+                                      return n.jsxs("div", { style:{ display:"flex", alignItems:"flex-start", gap:6, flex:1 }, children:[
+                                        n.jsx("input", { type:"checkbox", checked: isDone, onChange:()=>toggleDone(k, G, V), style:{ marginTop:3, cursor:"pointer", accentColor: E, flexShrink:0 } }),
+                                        textEl,
+                                      ]});
                                     })(),
                               ],
                             },
