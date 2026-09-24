@@ -36,7 +36,7 @@ const CATS = [
           id: "social_links",
           label: "Réseaux sociaux liés (FB, Insta...)",
           points: 2,
-          action: "Lier Facebook, Instagram, YouTube depuis la fiche GMB",
+          action: "Lier Facebook, Instagram, YouTube depuis la fiche Google Business Profile",
           static: !0,
         },
       ],
@@ -86,7 +86,7 @@ const CATS = [
           id: "nap_consistency",
           label: "Coordonnées cohérentes (NAP)",
           points: 3,
-          action: "Vérifier la cohérence Nom / Adresse / Téléphone entre la fiche GMB, le site web et les annuaires",
+          action: "Vérifier la cohérence Nom / Adresse / Téléphone entre la fiche Google Business Profile, le site web et les annuaires",
           static: !0,
         },
         {
@@ -393,7 +393,7 @@ const CATS = [
   deriveGmbScores = (e) => {
     const ext = (e.data && e.data.extracted) || {};
     const perf = e.perf || {};
-    const reviewNb = parseInt(ext.reviewCount)||parseInt(perf.avisGoogleNb)||0;
+    const _rExt = parseInt(ext.reviewCount); const reviewNb = Number.isFinite(_rExt) ? _rExt : (parseInt(perf.avisGoogleNb) || 0);
     const photoNb  = parseInt(ext.photoCount)||parseInt(ext.photos)||0;
     const postsNb  = parseInt(ext.postsCount)||0;
     const derived = {
@@ -423,15 +423,15 @@ const CATS = [
       menu_listed:        null, // sector-dependent, left for audit AI
       booking_link:       null, // sector-dependent, left for audit AI
       // photos
-      photo_interior:     !!(photoNb >= 10),
-      photo_team:         !!(photoNb >= 15),
+      photo_interior:     null, // cannot distinguish category from total count — left for audit AI
+      photo_team:         null, // cannot distinguish category from total count — left for audit AI
       photo_recent:       null, // cannot derive date of last photo from count alone
       photo_renamed:      null,
       photo_count:        !!(photoNb >= 20),
       // reviews
       rating:             !!((parseFloat(ext.rating)||0) >= 4.0),
       response_rate:      !!((parseFloat(perf.tauxReponse)||0) >= 80),
-      response_quality:   !!(perf.tauxReponse),
+      response_quality:   null, // cannot verify response personalization from a rate alone — left for audit AI
       response_keywords:  null,
       recent_reviews:     null, // cannot derive from total count alone
       review_count_20:    !!(reviewNb >= 20),
@@ -904,7 +904,7 @@ Entrée libre — venez nombreux.
         },
         {
           priority: "🟡 IMPORTANT",
-          action: "WhatsApp pour devis rapide (numéro dans la fiche GMB)",
+          action: "WhatsApp pour devis rapide (numéro dans la fiche Google Business Profile)",
           detail:
             "67% préfèrent un message à un appel — réduire la friction contact = +X% de leads qualifiés",
         },
@@ -962,7 +962,7 @@ Entrée libre — venez nombreux.
       top3Tips: [
         "Bouton Réserver en ligne = facteur n°1 — sans ça vous perdez les clients mobiles pressés",
         "Photos before/after des prestations = déclencheur de réservation n°1 dans ce secteur",
-        "Offre nouveaux clients en post GMB = acquisition gratuite + visibilité hebdomadaire",
+        "Offre nouveaux clients en post GBP = acquisition gratuite + visibilité hebdomadaire",
       ],
       mustDo: [
         {
@@ -987,7 +987,7 @@ Entrée libre — venez nombreux.
         {
           priority: "🟠 URGENT",
           action:
-            "Offre nouveaux clients -X% ou prestation découverte en post GMB",
+            "Offre nouveaux clients -X% ou prestation découverte en post GBP",
           detail:
             "48% reviendront pour une offre spéciale — acquérir de nouveaux clients via Google gratuitement",
         },
@@ -1388,17 +1388,26 @@ Entrée libre — venez nombreux.
     }
   },
   saveClients = (e) => {
-    // 1. Sauvegarde locale immédiate
+    // 1. Sauvegarde locale immédiate + timestamp
     localStorage.setItem(STORAGE_KEY, JSON.stringify(e));
+    localStorage.setItem(STORAGE_KEY + "_savedAt", Date.now().toString());
     // 2. Sync Supabase en arrière-plan
     supaSet(STORAGE_KEY, JSON.stringify(e));
   },
-  supaSet = (key, value) => {
-    fetch(`${SUPA_URL}/rest/v1/app_storage`, {
-      method: "POST",
-      headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
-    }).catch(() => {});
+  supaSet = async (key, value) => {
+    try {
+      const r = await fetch(`${SUPA_URL}/rest/v1/app_storage`, {
+        method: "POST",
+        headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify({ key, value }),
+      });
+      if (r.ok && key === STORAGE_KEY) {
+        const rows = await r.json().catch(() => null);
+        if (rows && rows.length > 0 && rows[0].updated_at) {
+          localStorage.setItem(STORAGE_KEY + "_savedAt", new Date(rows[0].updated_at).getTime().toString());
+        }
+      }
+    } catch {}
   },
   supaGet = async (key) => {
     try {
@@ -1412,9 +1421,12 @@ async function callAI(e, t, i = 0, maxTokens = 3500) {
   var p;
   const r = t;
   let o;
+  const _ctrl = new AbortController();
+  const _timeoutId = setTimeout(() => _ctrl.abort(), 90000);
   try {
     o = await fetch("/api/data/sync?action=ai", {
       method: "POST",
+      signal: _ctrl.signal,
       headers: {
         "content-type": "application/json",
         "anthropic-version": "2023-06-01",
@@ -1431,8 +1443,11 @@ async function callAI(e, t, i = 0, maxTokens = 3500) {
         ],
       }),
     });
-  } catch {
-    if (i < 2) return callAI(e, t, i + 1);
+    clearTimeout(_timeoutId);
+  } catch (err) {
+    clearTimeout(_timeoutId);
+    if (err.name === "AbortError") throw new Error("L'analyse a pris trop longtemps (>90s) — réessayez.");
+    if (i < 2) return callAI(e, t, i + 1, maxTokens);
     throw new Error(
       "Impossible de contacter l'API Anthropic. Vérifiez votre connexion.",
     );
@@ -1565,7 +1580,7 @@ OBJECTIF TOP 3 GOOGLE MAPS — RÈGLES TRANSVERSALES :
 - Chaque insight doit indiquer concrètement comment passer en TOP 3 pour le secteur identifié
 - Les "quickWins" doivent être 3 actions réalisables en moins d'une semaine qui boostent le plus le positionnement
 - Le "rankingOpportunity" doit mentionner les 2-3 actions prioritaires pour dépasser les concurrents TOP 3 actuels
-- Dans la roadmap, "month1.objective" doit être "Bases TOP 10", "month2.objective" = "TOP 5", "month3.objective" = "TOP 3"
+- Dans la roadmap, adapte les objectifs à la position estimée actuelle : si la fiche est déjà TOP 10 → vise TOP 5 puis TOP 3 puis TOP 1 ; si elle est hors TOP 20 → vise d'abord TOP 20, puis TOP 10, puis TOP 5 ; si elle est déjà TOP 3 → vise TOP 1 puis consolidation
 
 RÈGLES ABSOLUES POUR LA ROADMAP (PRIORITÉ CRITIQUE) :
 La roadmap couvre TOUS les critères en échec (false) identifiés dans les scores — chaque critère false doit générer au minimum une action dans la roadmap. Ne rien oublier.
@@ -1578,7 +1593,7 @@ ORTHOGRAPHE — RÈGLE CRITIQUE : toutes les actions DOIVENT être écrites avec
 Caractères obligatoires : é è ê ë à â ù û î ô ç œ — apostrophe : l' d' n' c' j' qu' s'
 Ne jamais écrire : "e" à la place de "é", "a" à la place de "à", "c" à la place de "ç", ni aucune lettre sans accent quand l'accent est requis en français.
 Nombre d'actions : autant que nécessaire pour couvrir tous les critères en échec — minimum 4, maximum 6 par mois (priorise les plus impactantes).
-Actions AUTORISÉES : optimiser description, catégories, attributs, photos, posts GMB, répondre aux avis, collecte d'avis, zone de service, services/produits GBP, réseaux sociaux liés, lien réservation, messagerie GBP, horaires.
+Actions AUTORISÉES : optimiser description, catégories, attributs, photos, posts GBP, répondre aux avis, collecte d'avis, zone de service, services/produits GBP, réseaux sociaux liés, lien réservation, messagerie GBP, horaires.
 Actions INTERDITES : backlinks, annuaires externes, SEO site web, blog, Google Ads, toute action hors GBP.
 
 CRITÈRES À ÉVALUER — RÈGLES PRÉCISES PAR ID :
@@ -1680,7 +1695,7 @@ PARTIE 1/3 — Retourne UNIQUEMENT ce JSON (scores, extracted, competitorRanking
     callAI(`${CTX}
 
 PARTIE 2/3 — Retourne UNIQUEMENT ce JSON (keywords, competitors, competitorSummary, competitorOpportunities) :
-{"keywords":{"primary":[{"kw":"MÉTIER VRAIE-VILLE","volume":"500-1k","position":6,"positionLabel":"TOP 6","evolution":"+2","evolutionDir":"up","competition":"Forte","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"VILLE Centre","rank":6,"label":"Bonne visib."},{"zone":"COMMUNE 1","rank":9,"label":"À optimiser"},{"zone":"COMMUNE 2","rank":13,"label":"À travailler"}],"zoneRecos":[{"zone":"VILLE Centre","rank":6,"reco":"Post mentionnant la zone + 2 avis ciblés"}]},{"kw":"SERVICE VRAIE-VILLE","volume":"200-500","position":8,"positionLabel":"TOP 8","evolution":"+1","evolutionDir":"up","competition":"Moyenne","priority":"TOP","action":"Post dédié + description","trend":"↑","zoneRankings":[{"zone":"VILLE Centre","rank":8,"label":"À optimiser"},{"zone":"COMMUNE 1","rank":12,"label":"À travailler"}],"zoneRecos":[{"zone":"VILLE Centre","rank":8,"reco":"Intégrer dans description et posts"}]},{"kw":"MÉTIER COMMUNE-PROCHE","volume":"<50","position":3,"positionLabel":"🏆 TOP 3","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Maintenir","action":"Posts + avis réguliers","trend":"→","zoneRankings":[{"zone":"COMMUNE CIBLE","rank":3,"label":"🏆 TOP 3"},{"zone":"VILLE PRINCIPALE","rank":7,"label":"Bonne visib."}],"zoneRecos":[{"zone":"COMMUNE CIBLE","rank":3,"reco":"2 posts/mois mentionnant cette zone"}]}],"secondary":[{"kw":"SERVICE-2 VRAIE-VILLE","volume":"50-200","position":15,"positionLabel":"TOP 15","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"Post dédié + service GBP","trend":"↑","zoneRankings":[{"zone":"VILLE Centre","rank":15,"label":"À travailler"}],"zoneRecos":[{"zone":"VILLE Centre","rank":15,"reco":"Un post suffirait à passer TOP 10"}]},{"kw":"SERVICE-3 VRAIE-VILLE","volume":"50-100","position":11,"positionLabel":"TOP 11","evolution":"0","evolutionDir":"stable","competition":"Faible","priority":"Rapide","action":"Service GBP + 1 post","trend":"→","zoneRankings":[{"zone":"COMMUNE CIBLE","rank":11,"label":"À optimiser"}],"zoneRecos":[{"zone":"COMMUNE CIBLE","rank":11,"reco":"Ajouter ce service dans la fiche"}]},{"kw":"SERVICE-4 VRAIE-VILLE","volume":"100-200","position":19,"positionLabel":"TOP 19","evolution":"-1","evolutionDir":"down","competition":"Moyenne","priority":"Urgent","action":"Optimiser description + contenu dédié","trend":"↓","zoneRankings":[{"zone":"VILLE PRINCIPALE","rank":19,"label":"Non visible"}],"zoneRecos":[{"zone":"VILLE PRINCIPALE","rank":19,"reco":"Mot-clé en description + 2 posts urgents"}]}],"longTail":["requête longue 1 ville","requête longue 2 ville","requête longue 3 ville","requête longue 4 ville","requête longue 5 ville"],"geoZones":["VILLE","COMMUNE 1","COMMUNE 2","COMMUNE 3","COMMUNE 4"]},"competitors":[],"competitorSummary":"Concurrents non identifiables depuis la fiche seule — utiliser le scan carte pour obtenir les vrais concurrents locaux.","competitorOpportunities":["opportunité concrète 1","opportunité concrète 2","opportunité concrète 3"]}`, i),
+{"keywords":{"primary":[{"kw":"MÉTIER VRAIE-VILLE","volume":"500-1k","position":6,"positionLabel":"TOP 6","evolution":"+2","evolutionDir":"up","competition":"Forte","priority":"TOP","action":"Optimiser description + répondre aux avis","trend":"↑","zoneRankings":[{"zone":"VILLE Centre","rank":6,"label":"Bonne visib."},{"zone":"COMMUNE 1","rank":9,"label":"À optimiser"},{"zone":"COMMUNE 2","rank":13,"label":"À travailler"}],"zoneRecos":[{"zone":"VILLE Centre","rank":6,"reco":"Post mentionnant la zone + 2 avis ciblés"}]},{"kw":"SERVICE VRAIE-VILLE","volume":"200-500","position":8,"positionLabel":"TOP 8","evolution":"+1","evolutionDir":"up","competition":"Moyenne","priority":"TOP","action":"Post dédié + description","trend":"↑","zoneRankings":[{"zone":"VILLE Centre","rank":8,"label":"À optimiser"},{"zone":"COMMUNE 1","rank":12,"label":"À travailler"}],"zoneRecos":[{"zone":"VILLE Centre","rank":8,"reco":"Intégrer dans description et posts"}]},{"kw":"MÉTIER COMMUNE-PROCHE","volume":"<50","position":3,"positionLabel":"🏆 TOP 3","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Maintenir","action":"Posts + avis réguliers","trend":"→","zoneRankings":[{"zone":"COMMUNE CIBLE","rank":3,"label":"🏆 TOP 3"},{"zone":"VILLE PRINCIPALE","rank":7,"label":"Bonne visib."}],"zoneRecos":[{"zone":"COMMUNE CIBLE","rank":3,"reco":"2 posts/mois mentionnant cette zone"}]}],"secondary":[{"kw":"SERVICE-2 VRAIE-VILLE","volume":"50-200","position":15,"positionLabel":"TOP 15","evolution":"+1","evolutionDir":"up","competition":"Faible","priority":"Rapide","action":"Post dédié + service GBP","trend":"↑","zoneRankings":[{"zone":"VILLE Centre","rank":15,"label":"À travailler"}],"zoneRecos":[{"zone":"VILLE Centre","rank":15,"reco":"Un post suffirait à passer TOP 10"}]},{"kw":"SERVICE-3 VRAIE-VILLE","volume":"50-100","position":11,"positionLabel":"TOP 11","evolution":"0","evolutionDir":"stable","competition":"Faible","priority":"Rapide","action":"Service GBP + 1 post","trend":"→","zoneRankings":[{"zone":"COMMUNE CIBLE","rank":11,"label":"À optimiser"}],"zoneRecos":[{"zone":"COMMUNE CIBLE","rank":11,"reco":"Ajouter ce service dans la fiche"}]},{"kw":"SERVICE-4 VRAIE-VILLE","volume":"100-200","position":19,"positionLabel":"TOP 19","evolution":"-1","evolutionDir":"down","competition":"Moyenne","priority":"Urgent","action":"Optimiser description + contenu dédié","trend":"↓","zoneRankings":[{"zone":"VILLE PRINCIPALE","rank":19,"label":"Non visible"}],"zoneRecos":[{"zone":"VILLE PRINCIPALE","rank":19,"reco":"Mot-clé en description + 2 posts urgents"}]}],"longTail":["requête longue 1 ville","requête longue 2 ville","requête longue 3 ville","requête longue 4 ville","requête longue 5 ville"],"geoZones":["VILLE","COMMUNE 1","COMMUNE 2","COMMUNE 3","COMMUNE 4"]},"competitors":[],"competitorSummary":"Concurrents non identifiables depuis la fiche seule — utiliser le scan carte pour obtenir les vrais concurrents locaux.","competitorOpportunities":["opportunité sectorielle concrète 1 (ex: segment peu couvert dans la zone)","opportunité sectorielle 2 (ex: type de service absent des concurrents visibles)","opportunité sectorielle 3 (ex: créneau horaire, spécialité locale)"]}`, i),
   ]);
   // Appel 3 séquentiel (roadmap + avis) — fenêtre de 1 min partiellement libérée
   const p3 = await callAI(`${CTX}
@@ -2138,7 +2153,7 @@ Véhicule reparti comme neuf ! La courroie de distribution, c'est la pièce maî
 
 Une climatisation efficace, c'est aussi un moteur moins sollicité et moins de consommation.
 
-Offer valable jusqu'au [DATE]. Réservez votre créneau au [TEL] — Garage [NOM], [VILLE].`,
+Offre valable jusqu'au [DATE]. Réservez votre créneau au [TEL] — Garage [NOM], [VILLE].`,
         keywords: [
           "rechargement clim [VILLE]",
           "garage automobile",
@@ -2185,7 +2200,7 @@ Votre projet ? Contactez [NOM] pour en discuter.`,
   rn = [
     {
       id: "prospect",
-      label: "À contacter",
+      label: "Prospection",
       color: "#6B40D8",
       bg: "#ffffff",
       b: "#FBCFE8",
@@ -2253,6 +2268,7 @@ function SimulateurROI({ client, clients, upd }) {
   const [gmbItineraires, setGmbItineraires] = D.useState(roi0.gmbItineraires || "");
   const [gmbClicsSite,   setGmbClicsSite]   = D.useState(roi0.gmbClicsSite   || "");
   const nextId = D.useRef(Math.max(4, ...( (roi0.keywords||[]).map(k=>k.id||0) )) + 1);
+  const [pitchCopied, setPitchCopied] = D.useState(false);
 
   /* ── persistance par client ── */
   const saveROI = D.useCallback((patch) => {
@@ -2262,10 +2278,13 @@ function SimulateurROI({ client, clients, upd }) {
     upd(updated);
   }, [client, clients, upd]);
 
-  /* auto-save sur changement (seulement si mode client) */
+  /* auto-save sur changement (seulement si mode client) — debounce 400ms */
   D.useEffect(() => {
     if (!client) return;
-    saveROI({ keywords, position, mission, txContact, txClient, prudence, useRealRate, gmbImpressions, gmbAppels, gmbItineraires, gmbClicsSite });
+    const _t = setTimeout(() => {
+      saveROI({ keywords, position, mission, txContact, txClient, prudence, useRealRate, gmbImpressions, gmbAppels, gmbItineraires, gmbClicsSite });
+    }, 400);
+    return () => clearTimeout(_t);
   }, [keywords, position, mission, txContact, txClient, prudence, useRealRate, gmbImpressions, gmbAppels, gmbItineraires, gmbClicsSite]); // eslint-disable-line
 
   const addKeyword = () => {
@@ -2280,7 +2299,7 @@ function SimulateurROI({ client, clients, upd }) {
   const eur = (x) => Number.isFinite(x) ? x.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }) : "–";
 
   const totalVol  = keywords.reduce((s, k) => s + (parseFloat(k.vol) || 0), 0);
-  const pos       = parseInt(position, 10);
+  const pos       = Math.max(1, Math.min(100, parseInt(position, 10) || 1));
   const missionV  = parseFloat(mission)    || 0;
   const txCo      = (parseFloat(txContact) || 0) / 100;
   const txCl      = (parseFloat(txClient)  || 0) / 100;
@@ -2309,7 +2328,7 @@ function SimulateurROI({ client, clients, upd }) {
   };
 
   /* CTR actuel : GMB (impressions réelles / volume mots-clés) si dispo, sinon table position */
-  const ctrActuelGMB = hasGMB && totalVol > 0 ? (gmbImp / totalVol) * 100 : NaN;
+  const ctrActuelGMB = hasGMB && totalVol > 0 ? Math.min(100, (gmbImp / totalVol) * 100) : NaN;
   const ctrActuelR1  = getCTR(pos);
   const ctrActuel    = hasGMB && Number.isFinite(ctrActuelGMB) ? ctrActuelGMB : ctrActuelR1;
 
@@ -2323,7 +2342,7 @@ function SimulateurROI({ client, clients, upd }) {
   const txCoEffectif = hasReel && useRealRate ? txReel : txCo;
 
   const scenarios = [
-    { label: "Top 3", share: 14, color: "#E85A30" },
+    { label: "Top 3", share: 10.4, color: "#E85A30" },
     { label: "Top 2", share: 13.6, color: "#C03080" },
     { label: "Top 1", share: 17.8, color: "#6B40D8" },
   ].map(s => {
@@ -2360,8 +2379,8 @@ function SimulateurROI({ client, clients, upd }) {
   const pitchLines = hasData ? [
     `Sur les principales requêtes liées à votre activité, nous avons identifié ${fmt(totalVol)} recherches mensuelles.`,
     hasGMB
-      ? `Votre fiche GMB génère actuellement ${fmt(gmbImp, 0)} impressions par mois sur ces requêtes, soit une captation estimée de ${fmt(ctrActuelGMB, 2)} % du volume de recherches identifié — ${fmt(visitActuel, 0)} visites/mois.`
-      : `Votre fiche apparaît actuellement autour de la ${pos}${pos === 1 ? "ère" : "ème"} position, ce qui correspond à une captation estimée d'environ ${fmt(ctrActuelR1, 1)} % du volume de recherches identifié, soit ~${fmt(visitActuel, 0)} visites/mois.`,
+      ? `Votre fiche Google Business Profile génère actuellement ${fmt(gmbImp, 0)} impressions par mois sur ces requêtes, soit une captation estimée de ${fmt(ctrActuelGMB, 2)} % du volume de recherches identifié — ${fmt(visitActuel, 0)} interactions fiche/mois.`
+      : `Votre fiche apparaît actuellement autour de la ${pos}${pos === 1 ? "ère" : "ème"} position, ce qui correspond à une captation estimée d'environ ${fmt(ctrActuelR1, 1)} % du volume de recherches identifié, soit ~${fmt(visitActuel, 0)} interactions fiche/mois.`,
     `Aujourd'hui, votre fiche capte probablement moins de 1 % de la demande locale identifiée. Les trois premières positions Google Maps concentrent une part importante des clics — environ 14 % en moyenne selon les données de référence du Local Pack.`,
     Number.isFinite(imgl.mult) ? `Un positionnement dans ce Top 3 pourrait vous permettre de multiplier votre visibilité par plus de ×${fmt(imgl.mult, 0)} et de générer plusieurs dizaines de contacts qualifiés supplémentaires chaque année.` : "",
     missionV > 0 ? `Sur la base d'une valeur moyenne de ${eur(missionV)} par client, cela représente un potentiel estimé de ${imgl.clientsAnnPrud} à ${imgl.clientsAnnReal} nouveaux clients par an, soit environ ${eur(imgl.caAnnPrud)} à ${eur(imgl.caAnnReal)} de chiffre d'affaires supplémentaire.\n\nCes projections constituent un ordre de grandeur et non une garantie de résultat. Elles reposent sur des hypothèses de captation et de conversion qui peuvent varier selon la requête, la concurrence, la zone géographique et l'activité.` : "",
@@ -2486,7 +2505,7 @@ function SimulateurROI({ client, clients, upd }) {
               n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
                 n.jsx("span", { style: { fontSize: 18 }, children: "📊" }),
                 n.jsxs("div", { children: [
-                  n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "#065F46" }, children: "Données GMB réelles" }),
+                  n.jsx("div", { style: { fontWeight: 700, fontSize: 13.5, color: "#065F46" }, children: "Données GBP réelles" }),
                   n.jsx("div", { style: { fontSize: 11.5, color: "#6B7280", marginTop: 1 }, children: hasGMB ? `✓ Enrichi · ${fmt(gmbImp, 0)} impressions/mois` : "Optionnel · à renseigner en rendez-vous" }),
                 ]}),
               ]}),
@@ -2498,7 +2517,7 @@ function SimulateurROI({ client, clients, upd }) {
           }),
 
           showGMB && n.jsxs("div", { style: { marginTop: 16, paddingTop: 16, borderTop: "1px solid #D1FAE5" }, children: [
-            n.jsx("p", { style: { margin: "0 0 14px", fontSize: 13, color: "#374151", lineHeight: 1.6 }, children: "Renseigne les données de la fiche GMB du prospect (panel \"Voir les statistiques\" sur Google). Le simulateur utilisera ces chiffres réels à la place des estimations." }),
+            n.jsx("p", { style: { margin: "0 0 14px", fontSize: 13, color: "#374151", lineHeight: 1.6 }, children: "Renseigne les données de la fiche Google Business Profile du prospect (section \"Voir les statistiques\" sur Google). Le simulateur utilisera ces chiffres réels à la place des estimations." }),
             n.jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "12px 16px" }, children: [
               n.jsxs("div", { style: { display: "flex", flexDirection: "column", gap: 4, gridColumn: "span 2" }, children: [
                 n.jsx("label", { style: { fontSize: 11.5, fontWeight: 600, color: "var(--ink3)" }, children: "Impressions / mois (\"Recherches affichant votre fiche\")" }),
@@ -2519,8 +2538,8 @@ function SimulateurROI({ client, clients, upd }) {
               ]}),
             ]}),
 
-            hasGMB && totalVol > 0 && n.jsxs("div", { style: { marginTop: 14, padding: "12px 14px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 10, fontSize: 12.5, color: "#065F46", lineHeight: 1.6 }, children: [
-              n.jsxs("div", { style: { fontWeight: 700, marginBottom: 4 }, children: ["Données GMB calculées"] }),
+            hasGMB && totalVol > 0 && ctrActuelGMB > 0 && n.jsxs("div", { style: { marginTop: 14, padding: "12px 14px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 10, fontSize: 12.5, color: "#065F46", lineHeight: 1.6 }, children: [
+              n.jsxs("div", { style: { fontWeight: 700, marginBottom: 4 }, children: ["Données GBP calculées"] }),
               n.jsxs("div", { children: [`CTR réel : ${fmt(ctrActuelGMB, 2)} % · Interactions totales : ${fmt(gmbApp + gmbIti + gmbClic, 0)} · Taux d'interaction : ${fmt(((gmbApp + gmbIti + gmbClic) / gmbImp) * 100, 1)} %`] }),
               totalInteractions > 0 && n.jsxs("div", { style: { marginTop: 2 }, children: [`Appels ${fmt((gmbApp / totalInteractions) * 100, 0)}% · Itinéraires ${fmt((gmbIti / totalInteractions) * 100, 0)}% · Clics site ${fmt((gmbClic / totalInteractions) * 100, 0)}%`] }),
             ]}),
@@ -2536,7 +2555,7 @@ function SimulateurROI({ client, clients, upd }) {
               n.jsxs("div", { style: { background: "rgba(255,255,255,.12)", borderRadius: 12, padding: "14px 16px" }, children: [
                 n.jsx("div", { style: { fontSize: 11, fontWeight: 700, opacity: .75, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }, children: hasGMB ? "Impressions actuelles" : "Position actuelle" }),
                 n.jsx("div", { style: { fontSize: 28, fontWeight: 900, letterSpacing: "-.02em", lineHeight: 1 }, children: hasGMB ? fmt(gmbImp, 0) : `#${pos}` }),
-                n.jsx("div", { style: { fontSize: 12, opacity: .8, marginTop: 4 }, children: hasGMB ? `Captation estimée : ${fmt(ctrActuelGMB, 2)} % · ${fmt(visitActuel, 0)} visites/mois` : `Captation estimée : ~${fmt(ctrActuel, 1)} % · ~${fmt(visitActuel, 0)} visites/mois` }),
+                n.jsx("div", { style: { fontSize: 12, opacity: .8, marginTop: 4 }, children: hasGMB ? `Captation estimée : ${fmt(ctrActuelGMB, 2)} % · ${fmt(visitActuel, 0)} interactions fiche/mois` : `Captation estimée : ~${fmt(ctrActuel, 1)} % · ~${fmt(visitActuel, 0)} interactions fiche/mois` }),
               ]}),
               n.jsxs("div", { style: { background: "rgba(255,255,255,.12)", borderRadius: 12, padding: "14px 16px" }, children: [
                 n.jsx("div", { style: { fontSize: 11, fontWeight: 700, opacity: .75, textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }, children: "Top 3 estimé" }),
@@ -2552,7 +2571,7 @@ function SimulateurROI({ client, clients, upd }) {
             n.jsx("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" }, children:
               scenarios.map(s => n.jsxs("div", { style: { background: "rgba(255,255,255,.12)", borderRadius: 10, padding: "8px 14px", fontSize: 12.5 }, children: [
                 n.jsx("span", { style: { fontWeight: 700 }, children: `${s.label} : ` }),
-                n.jsx("span", { style: { opacity: .85 }, children: `~${fmt(s.visits, 0)} visites/mois · ×${fmt(s.mult, 1)}` }),
+                n.jsx("span", { style: { opacity: .85 }, children: `~${fmt(s.visits, 0)} interactions fiche/mois · ×${fmt(s.mult, 1)}` }),
               ]}, s.label))
             }),
           ],
@@ -2569,7 +2588,7 @@ function SimulateurROI({ client, clients, upd }) {
               style: { display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `2px solid ${useRealRate ? "#E85A30" : "var(--border)"}`, background: useRealRate ? "#FFF7ED" : "white", cursor: "pointer", fontSize: 12.5, fontWeight: useRealRate ? 700 : 500, color: useRealRate ? "#92400E" : "var(--ink3)", fontFamily: "inherit" },
               children: [
                 n.jsx("span", { children: useRealRate ? "☑" : "☐" }),
-                n.jsxs("span", { children: [`Taux réel GMB : ${fmt(txReel * 100, 1)} %`, n.jsx("span", { style: { fontWeight: 400, marginLeft: 4 }, children: `(${fmt(totalInteractions, 0)} interactions / ${fmt(gmbImp, 0)} vues)` })] }),
+                n.jsxs("span", { children: [`Taux réel GBP : ${fmt(txReel * 100, 1)} %`, n.jsx("span", { style: { fontWeight: 400, marginLeft: 4 }, children: `(${fmt(totalInteractions, 0)} interactions / ${fmt(gmbImp, 0)} vues)` })] }),
               ],
             }),
             n.jsxs("button", {
@@ -2584,11 +2603,11 @@ function SimulateurROI({ client, clients, upd }) {
 
           /* Chaîne de conversion — scénario Top 3 */
           n.jsxs("div", { style: { background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 12, padding: "16px 18px", marginBottom: 16 }, children: [
-            n.jsx("div", { style: { fontSize: 11.5, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }, children: `Scénario Top 3 · ${fmt(imgl.visits, 0)} visites/mois` }),
+            n.jsx("div", { style: { fontSize: 11.5, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }, children: `Scénario Top 3 · ${fmt(imgl.visits, 0)} interactions fiche/mois` }),
             n.jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13.5 }, children: [
               n.jsxs("div", { style: { background: "white", borderRadius: 8, padding: "8px 14px", border: "1px solid #FED7AA", textAlign: "center" }, children: [
                 n.jsx("div", { style: { fontWeight: 900, fontSize: 22, color: "#6B40D8" }, children: fmt(imgl.visits, 0) }),
-                n.jsx("div", { style: { fontSize: 11, color: "#6B7280", marginTop: 2 }, children: "visites/mois" }),
+                n.jsx("div", { style: { fontSize: 11, color: "#6B7280", marginTop: 2 }, children: "interactions fiche/mois" }),
               ]}),
               n.jsx("div", { style: { color: "#9CA3AF", fontWeight: 700 }, children: `× ${txContact}%` }),
               n.jsxs("div", { style: { background: "white", borderRadius: 8, padding: "8px 14px", border: "1px solid #FED7AA", textAlign: "center" }, children: [
@@ -2618,7 +2637,7 @@ function SimulateurROI({ client, clients, upd }) {
           n.jsxs("table", { style: { width: "100%", borderCollapse: "collapse", marginBottom: 12 }, children: [
             n.jsx("thead", { children: n.jsxs("tr", { children: [
               n.jsx("th", { style: thS, children: "Scénario" }),
-              n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Visites/mois" }),
+              n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Interactions fiche/mois" }),
               n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Clients/an" }),
               n.jsx("th", { style: { ...thS, textAlign: "right" }, children: `Prudent (${prudence}%) — mois / an` }),
               n.jsx("th", { style: { ...thS, textAlign: "right" }, children: "Réaliste — mois / an" }),
@@ -2632,7 +2651,7 @@ function SimulateurROI({ client, clients, upd }) {
                 const caActuelPrud = clientsAnnActuelPrud * missionV;
                 const clientsLabel = clientsAnnActuel < 1 ? "<1 client/an" : `${Math.round(clientsAnnActuelPrud)}–${Math.round(clientsAnnActuel)} clients/an`;
                 return n.jsxs("tr", { children: [
-                  n.jsx("td", { style: { ...tdS, fontWeight: 700, color: "var(--ink3)" }, children: hasGMB ? "Actuel (GMB)" : `Actuel (#${pos})` }),
+                  n.jsx("td", { style: { ...tdS, fontWeight: 700, color: "var(--ink3)" }, children: hasGMB ? "Actuel (GBP)" : `Actuel (#${pos})` }),
                   n.jsx("td", { style: { ...tdN, color: "var(--ink3)" }, children: fmt(visitActuel, 0) }),
                   n.jsx("td", { style: { ...tdN, color: "var(--ink3)" }, children: clientsLabel }),
                   n.jsxs("td", { style: { ...tdN, color: "var(--ink3)" }, children: [eur(caActuelPrud / 12), n.jsx("div", { style: { fontSize: 11, color: "var(--ink4)" }, children: eur(caActuelPrud) + "/an" })] }),
@@ -2656,7 +2675,7 @@ function SimulateurROI({ client, clients, upd }) {
 
           n.jsxs("p", { style: { margin: 0, fontSize: 11.5, color: "var(--ink4)", lineHeight: 1.55 }, children: [
             hasGMB && totalInteractions > 0
-              ? `Taux d'interaction GMB réel : ${fmt((totalInteractions / gmbImp) * 100, 1)} % · contact → client ${txClient}%. `
+              ? `Taux d'interaction GBP réel : ${fmt((totalInteractions / gmbImp) * 100, 1)} % · contact → client ${txClient}%. `
               : `Taux de conversion : visiteur → contact ${txContact}%, contact → client ${txClient}%. `,
             `La fourchette prudent/réaliste s'appuie sur un coefficient de ${prudence}%. Référentiel de captation : Google Maps / Local Pack — les taux utilisés sont des hypothèses de modélisation issues des données de référence du Local Pack.`,
           ]}),
@@ -2666,12 +2685,12 @@ function SimulateurROI({ client, clients, upd }) {
         pitchLines && n.jsxs("div", { style: cardAccent("#059669"), children: [
           n.jsxs("div", { style: secTitle, children: [n.jsx("span", { style: { fontSize: 18 } }, "💬"), "💬 Pitch prospect — prêt à copier"] }),
           n.jsx("div", {
-            style: { background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "14px 16px", fontSize: 13.5, color: "#1E1B30", lineHeight: 1.7, whiteSpace: "pre-wrap", cursor: "pointer" },
+            style: { background: pitchCopied ? "#D1FAE5" : "#F0FDF4", border: `1px solid ${pitchCopied ? "#6EE7B7" : "#BBF7D0"}`, borderRadius: 10, padding: "14px 16px", fontSize: 13.5, color: "#1E1B30", lineHeight: 1.7, whiteSpace: "pre-wrap", cursor: "pointer", transition: "background .2s" },
             title: "Cliquer pour copier",
-            onClick: () => { try { navigator.clipboard.writeText(pitchLines); } catch(_){} },
+            onClick: () => { try { navigator.clipboard.writeText(pitchLines); setPitchCopied(true); setTimeout(() => setPitchCopied(false), 2000); } catch(_){} },
             children: pitchLines,
           }),
-          n.jsx("p", { style: { margin: "8px 0 0", fontSize: 11, color: "var(--ink4)" }, children: "Cliquer sur le texte pour copier" }),
+          n.jsx("p", { style: { margin: "8px 0 0", fontSize: 11, color: pitchCopied ? "#059669" : "var(--ink4)", fontWeight: pitchCopied ? 700 : 400 }, children: pitchCopied ? "✓ Copié dans le presse-papiers !" : "Cliquer sur le texte pour copier" }),
         ]}),
 
         /* ── Disclaimer ── */
@@ -2719,8 +2738,23 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
     [placesLoading, setPlacesLoading] = D.useState(false),
     [placesSelected, setPlacesSelected] = D.useState(new Set()),
     [placesError, setPlacesError] = D.useState(""),
-    [placesAdded, setPlacesAdded] = D.useState(0),
-    G = (v, A) => {
+    [placesAdded, setPlacesAdded] = D.useState(0);
+  D.useEffect(() => {
+    supaGet(PROSPECTS_KEY).then(val => {
+      if (!val) return;
+      try {
+        const remote = JSON.parse(val);
+        if (remote.length >= s.length) {
+          localStorage.setItem(PROSPECTS_KEY, val);
+          l(remote);
+        }
+      } catch {}
+    }).catch(() => {
+      const fresh = Uc();
+      if (JSON.stringify(fresh) !== JSON.stringify(s)) l(fresh);
+    });
+  }, []);
+  const G = (v, A) => {
       (_(A), (v.dataTransfer.effectAllowed = "move"));
     },
     y = (v, A) => {
@@ -2788,6 +2822,8 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
           phone: "",
           email: "",
           website: "",
+          address: "",
+          type: "",
           note: "",
           reviewCount: "",
         }),
@@ -2803,7 +2839,7 @@ function ProspectionPage({ apiKey: e, hasEnvKey: t, go: i, upd: r, clients: o })
         )
         .filter((q) => q.trim());
       if (!v.length) {
-        m("Aucune donnée détectée");
+        m("Aucune donnée détectée. Format attendu : une ligne par prospect, colonnes séparées par tabulation, virgule ou point-virgule (Nom, Ville, Catégorie, Téléphone, Email, Site, Avis).");
         return;
       }
       const A = [];
@@ -3431,7 +3467,7 @@ Restaurant Le Port	Auray	Restaurant	02 97 XX XX XX		4.8	142`,
                     minWidth: 0,
                   },
                   children: rn.map((v) => {
-                    const A = Y.filter((q) => q.status === v.id);
+                    const A = Y.filter((q) => v.id === "prospect" ? (!q.status || q.status === "prospect") : q.status === v.id);
                     return n.jsxs(
                       "div",
                       {
@@ -4755,7 +4791,7 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                               fontSize: 13,
                               color: "#1E1B30",
                             },
-                            children: "Score GMB",
+                            children: "Score GBP",
                           }),
                           n.jsx("div", {
                             style: {
@@ -5808,7 +5844,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                         color: "var(--ink4)",
                         marginBottom: 14,
                       },
-                      children: "Sources de trafic vers les fiches GMB",
+                      children: "Sources de trafic vers les fiches GBP",
                     }),
                     n.jsx("div", {
                       style: { display: "grid", gap: 10 },
@@ -7352,7 +7388,10 @@ function NotificationBell() {
                     n.jsx('div', { style:{fontSize:12.5, fontWeight:700, color:'#1E1B30', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}, children: notif.client }),
                     n.jsx('div', { style:{fontSize:11.5, color:'#6B7280', marginTop:2}, children: notif.type === 'signature' ? `Contrat signé · ${notif.label}` : `Onboarding rempli · ${notif.label}` }),
                   ]}),
-                  n.jsx('div', { style:{fontSize:10.5, color:'#9CA3AF', flexShrink:0, marginTop:2}, children: formatDate(notif.at) }),
+                  n.jsxs('div', { style:{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4, flexShrink:0}, children:[
+                    n.jsx('div', { style:{fontSize:10.5, color:'#9CA3AF'}, children: formatDate(notif.at) }),
+                    n.jsx('button', { onClick:()=>setNotifs(prev=>prev.filter(x=>x.id!==notif.id)), style:{background:'none',border:'none',cursor:'pointer',fontSize:13,color:'#D1D5DB',lineHeight:1,padding:'2px 4px',borderRadius:4}, title:'Supprimer', children:'✕' }),
+                  ]}),
                 ],
               }, notif.id)
             ),
@@ -7568,6 +7607,18 @@ function OnboardingPanel({ clientId, onSigLoaded, getContract, upd }) {
       setOb(data || 'none');
       setSig(sigData || null);
       if (onSigLoaded) onSigLoaded(clientId, sigData || null);
+      // Auto-remplir dateSignature dans bto_contracts si contrat signé
+      if (sigData && sigData.signed_at && sigData.signed_at !== 'null') {
+        try {
+          const c = JSON.parse(localStorage.getItem("bto_contracts") || "{}");
+          if (!c[clientId]?.dateSignature) {
+            const isoDate = new Date(sigData.signed_at).toISOString().slice(0, 10);
+            c[clientId] = { ...(c[clientId] || {}), dateSignature: isoDate };
+            localStorage.setItem("bto_contracts", JSON.stringify(c));
+            supaSet("bto_contracts", JSON.stringify(c));
+          }
+        } catch {}
+      }
     } catch { setOb('error'); }
     setLoading(false);
   };
@@ -7687,7 +7738,7 @@ const SITE_PWD = "bto2026";
 const CAT_OPTIONS = [
   { value: "strategie", label: "Stratégie", color: "#6B40D8" },
   { value: "reputation", label: "Réputation", color: "#E85A30" },
-  { value: "fiche",      label: "Fiche GMB",  color: "#C03080" },
+  { value: "fiche",      label: "Fiche GBP",  color: "#C03080" },
   { value: "guide",      label: "Guide",      color: "#059669" },
   { value: "ia",         label: "IA",         color: "#0EA5E9" },
 ];
@@ -7756,7 +7807,7 @@ const CONTENU_SECTIONS = [
   { id:"micro",      icon:"📊", label:"Tableau micro-contenus" },
   { id:"linkedin",   icon:"💼", label:"LinkedIn (4 posts)" },
   { id:"facebook",   icon:"👥", label:"Facebook (2 publications)" },
-  { id:"gbp",        icon:"📍", label:"GBP (3 publications)" },
+  { id:"gbp",        icon:"📍", label:"GBP (4 publications)" },
   { id:"carrousel",  icon:"🎠", label:"Carrousels Instagram" },
   { id:"reel",       icon:"🎬", label:"Scripts Reels" },
   { id:"stories",    icon:"✨", label:"Stories Instagram" },
@@ -7776,7 +7827,7 @@ const PLATFORMS = [
 // Semaine 1 = lundi 5 jan. Lun=Blog, Mer=IG/FB, Jeu=LinkedIn, Ven=GBP, Sam=Story
 const PLANNING_48_SEMAINES = [
   // Q1 — Fondamentaux & Acquisition
-  { blog:"Pourquoi votre fiche Google Business Profile est votre meilleur commercial en 2026", ig:"5 raisons d'optimiser votre fiche GMB dès maintenant", linkedin:"GMB : l'arme secrète des TPE/PME bretonnes", gbp:"Bienvenue sur notre fiche ! Découvrez nos services GMB", story:"Coulisses : notre équipe au travail" },
+  { blog:"Pourquoi votre fiche Google Business Profile est votre meilleur commercial en 2026", ig:"5 raisons d'optimiser votre fiche Google Business Profile dès maintenant", linkedin:"GBP : l'arme secrète des TPE/PME bretonnes", gbp:"Bienvenue sur notre fiche ! Découvrez nos services Google Business Profile", story:"Coulisses : notre équipe au travail" },
   { blog:"Comment configurer Google Business Profile de A à Z (guide complet)", ig:"Checklist : est-ce que votre fiche est complète ?", linkedin:"Retour client : +40 % de visibilité en 3 mois à Vannes", gbp:"Nouveau service : audit gratuit de votre fiche GBP", story:"Avant / Après : optimisation de fiche client" },
   { blog:"Les photos Google Business Profile : tout ce qu'il faut savoir pour se démarquer", ig:"Photo de qualité = +35 % de clics sur votre fiche", linkedin:"Pourquoi les photos sont cruciales pour votre image locale", gbp:"Partagez vos meilleurs moments avec vos clients !", story:"Story quiz : devinez le secteur d'activité" },
   { blog:"Gestion des avis Google : stratégie pour obtenir 5 étoiles", ig:"Comment répondre à un avis négatif sans perdre de clients", linkedin:"Avis clients : levier numéro 1 de confiance en B2B local", gbp:"Merci à nos clients pour leurs avis ⭐", story:"Poll : vous répondez à vos avis ?"},
@@ -7788,7 +7839,7 @@ const PLANNING_48_SEMAINES = [
   // Q1 — Mars
   { blog:"Questions & réponses sur GBP : comment les utiliser pour convertir", ig:"La section Q&R GBP : souvent oubliée, toujours efficace", linkedin:"Q&R sur votre fiche = réduction des appels répétitifs", gbp:"Vous avez des questions ? Posez-les directement ici !", story:"Répondez à notre question en story !" },
   { blog:"Google Business Profile : analyser ses statistiques pour progresser", ig:"Stats GBP : ce que les chiffres vous disent sur vos clients", linkedin:"Comment lire et interpréter vos KPIs GBP", gbp:"Ce mois-ci, +X recherches ont affiché notre fiche ✅", story:"Capture stat du mois : on dépasse les 500 vues !" },
-  { blog:"Fiche GMB : les 10 erreurs qui plombent votre visibilité", ig:"Erreur n°1 : horaires non mis à jour sur Google", linkedin:"Audit GBP : les 10 points à contrôler absolument", gbp:"Audit gratuit offert ce mois-ci — contactez-nous !", story:"Avez-vous fait votre check-up GMB ce trimestre ?" },
+  { blog:"Fiche GBP : les 10 erreurs qui plombent votre visibilité", ig:"Erreur n°1 : horaires non mis à jour sur Google", linkedin:"Audit GBP : les 10 points à contrôler absolument", gbp:"Audit gratuit offert ce mois-ci — contactez-nous !", story:"Avez-vous fait votre check-up GBP ce trimestre ?" },
   { blog:"Comment gérer plusieurs fiches GBP pour une enseigne multi-sites", ig:"Multi-sites : garder une cohérence de marque sur GBP", linkedin:"Stratégie multi-établissements sur Google Business Profile", gbp:"Nous gérons des portefeuilles multi-fiches pour nos clients", story:"Tip : dupliquer sans copier — les bonnes pratiques" },
   { blog:"Bilan Q1 : nos apprentissages sur le SEO local en Bretagne", ig:"Q1 en chiffres : nos clients ont progressé de X % en moyenne", linkedin:"Rétrospective Q1 : tendances SEO local observées", gbp:"Merci pour votre confiance ce 1er trimestre !", story:"Vote : quel sujet vous a le plus aidé ce trimestre ?" },
   // Q2 — Croissance & Optimisation — Avril
@@ -7864,7 +7915,7 @@ function CalendrierContenu() {
   const [modal, setModal] = D.useState(null); // { dateKey, post? }
   const [form, setForm] = D.useState({ platform:"blog", titre:"", note:"", done:false });
 
-  const save = (newPosts) => { setPosts(newPosts); localStorage.setItem(storageKey, JSON.stringify(newPosts)); };
+  const save = (newPosts) => { setPosts(newPosts); localStorage.setItem(storageKey, JSON.stringify(newPosts)); supaSet(storageKey, JSON.stringify(newPosts)); };
 
   const year = currentDate.getFullYear(), month = currentDate.getMonth();
   const firstDow = (new Date(year, month, 1).getDay()+6)%7; // lundi=0
@@ -8177,6 +8228,7 @@ Canaux : LinkedIn / Facebook / Instagram / GBP
       stored[key].push({ id: Date.now()+Math.random(), platform, titre, note, done:false });
     });
     localStorage.setItem(CAL_KEY, JSON.stringify(stored));
+    supaSet(CAL_KEY, JSON.stringify(stored));
     setCalAdded(true);
   };
 
@@ -8416,7 +8468,7 @@ function SiteWebTab() {
     img.src = url;
   };
 
-  const saveIdees = (list) => { setIdees(list); localStorage.setItem("bto_article_idees", JSON.stringify(list)); };
+  const saveIdees = (list) => { setIdees(list); localStorage.setItem("bto_article_idees", JSON.stringify(list)); supaSet("bto_article_idees", JSON.stringify(list)); };
   const addIdee = () => { const t = newIdee.trim(); if (!t) return; saveIdees([...idees, t]); setNewIdee(""); };
   const removeIdee = (i) => saveIdees(idees.filter((_,j)=>j!==i));
   const useIdee = (titre) => { setForm(f=>({...f, titre})); removeIdee(idees.indexOf(titre)); window.scrollTo({top:0,behavior:"smooth"}); };
@@ -8460,8 +8512,8 @@ Format de réponse — UNIQUEMENT ce JSON, sans markdown, sans explication :
 Contraintes :
 - Titres accrocheurs, orientés résultats concrets
 - Inclure des variations : question, liste, guide, erreurs, comparaison
-- Axés sur la visibilité locale, les avis Google, Google Maps, les fiches GMB
-- Pas de répétition des sujets déjà traités : apparaître Google Maps, avis négatifs, posts Google, erreurs GMB, délais visibilité, obtenir avis
+- Axés sur la visibilité locale, les avis Google, Google Maps, les fiches Google Business Profile
+- Pas de répétition des sujets déjà traités : apparaître Google Maps, avis négatifs, posts Google, erreurs GBP, délais visibilité, obtenir avis
 
 Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","titre 5","titre 6"]` }] })
       });
@@ -8814,7 +8866,7 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
         /* Titre */
         n.jsxs("div", { style:{ marginBottom:12 }, children:[
           lbl("Titre H1 *"),
-          n.jsx("input", { style:inp, value:form.titre, onChange:e=>{ const v=e.target.value; setForm(f=>({...f,titre:v,...(!f.slug&&{slug:slugify(v)}),...(!f.metaTitle&&{metaTitle:v.slice(0,60)})})); }, placeholder:"Comment optimiser sa fiche Google My Business à Vannes ?" }),
+          n.jsx("input", { style:inp, value:form.titre, onChange:e=>{ const v=e.target.value; setForm(f=>({...f,titre:v,...(!f.slug&&{slug:slugify(v)}),...(!f.metaTitle&&{metaTitle:v.slice(0,60)})})); }, placeholder:"Comment optimiser sa fiche Google Business Profile à Vannes ?" }),
         ]}),
 
         /* Catégorie + Date + Durée */
@@ -9214,7 +9266,7 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
         agBic       = localStorage.getItem("ag_bic")       || "",
         agTitulaire = localStorage.getItem("ag_titulaire") || "",
         contractLabels = { setup: "Setup Local", leader: "Leader Local — 6 mois", leader_annuel: "Leader Local — Annuel" },
-        contractLabel = contractLabels[j.typeContrat] || "Prestation GMB",
+        contractLabel = contractLabels[j.typeContrat] || "Prestation GBP",
         isSetupInvoice = j.typeContrat === "setup",
         defaultAmount = isSetupInvoice ? 299 : j.typeContrat === "leader_annuel" ? 119 : 139,
         baseAmount = Math.round(parseFloat(j.montant || defaultAmount)),
@@ -9679,7 +9731,7 @@ function FactureTab({ clients: e, getContract: t }) {
       const d = localStorage.getItem("ag_name") || "Agence Be the one",
         agEmail2 = localStorage.getItem("ag_email") || "contact@agence-betheone.fr",
         contractTypeLbls = { setup:"⚡ Setup Local", leader:"Leader Local — 6 mois", leader_annuel:"Leader Local — Annuel" },
-        ctLabel = contractTypeLbls[s.typeContrat] || "Accompagnement GMB",
+        ctLabel = contractTypeLbls[s.typeContrat] || "Accompagnement GBP",
         hasAvis = s.typeContrat === "leader" || s.typeContrat === "leader_annuel",
         p = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Onboarding ${o.name}</title>
     <style>*{box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#F4F5FA;padding:0;margin:0}
@@ -9875,21 +9927,18 @@ function FactureTab({ clients: e, getContract: t }) {
   });
 }
 function ProspectDetailModal({ client: e, clients: t, upd: i }) {
-  const r = `bto_temps_${e.id}`,
-    [o, s] = D.useState(() => {
-      try {
-        return JSON.parse(localStorage.getItem(r) || "[]");
-      } catch {
-        return [];
-      }
-    }),
+  const _tempsKey = `bto_temps_${e.id}`;
+  const [o, s] = D.useState(() => {
+    const fromClient = e.sessions || [];
+    try { const fromLocal = JSON.parse(localStorage.getItem(_tempsKey) || "[]"); return fromClient.length >= fromLocal.length ? fromClient : fromLocal; } catch { return fromClient; }
+  }),
     [l, a] = D.useState(""),
     [d, p] = D.useState(""),
     [b, x] = D.useState(null),
     [j, I] = D.useState(0),
     [z, g] = D.useState(null),
     h = (P) => {
-      (s(P), localStorage.setItem(r, JSON.stringify(P)));
+      (s(P), localStorage.setItem(_tempsKey, JSON.stringify(P)), i(t.map(c => c.id === e.id ? { ...c, sessions: P } : c)));
     },
     f = () => {
       !d ||
@@ -10559,19 +10608,26 @@ function App() {
     const syncFromSupabase = async () => {
       setSyncStatus("syncing");
       try {
-        // Charger les clients
-        const clientsVal = await supaGet(STORAGE_KEY);
-        if (clientsVal) {
-          const remoteClients = JSON.parse(clientsVal);
-          if (remoteClients.length > 0) {
-            localStorage.setItem(STORAGE_KEY, clientsVal);
+        // Charger les clients — comparer timestamps pour éviter de restaurer des suppressions
+        const clientsRow = await fetch(`${SUPA_URL}/rest/v1/app_storage?key=eq.${STORAGE_KEY}&limit=1`,
+          { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } })
+          .then(r => r.json()).then(rows => rows && rows.length > 0 ? rows[0] : null).catch(() => null);
+        if (clientsRow && clientsRow.value) {
+          const remoteClients = JSON.parse(clientsRow.value);
+          const localSavedAt = parseInt(localStorage.getItem(STORAGE_KEY + "_savedAt") || "0", 10);
+          const remoteSavedAt = clientsRow.updated_at ? new Date(clientsRow.updated_at).getTime() : 0;
+          // Supabase gagne seulement s'il est plus récent que le localStorage local
+          // (évite de restaurer des fiches supprimées localement)
+          if (remoteSavedAt > localSavedAt) {
+            localStorage.setItem(STORAGE_KEY, clientsRow.value);
+            localStorage.setItem(STORAGE_KEY + "_savedAt", remoteSavedAt.toString());
             x(remoteClients);
           }
         }
         // Charger les contracts
         const KEYS_TO_SYNC = ["bto_contracts","bto_paiements","gmb_monthly_obj",
           "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","ag_titulaire","ag_titulaire","bto_apikey","bto_sara_notes",
-          "betheone_prospects_v1"];
+          "betheone_prospects_v1","bto_cal_contenu","bto_article_idees"];
         for (const key of KEYS_TO_SYNC) {
           const val = await supaGet(key);
           if (val !== null && val !== undefined) localStorage.setItem(key, val);
@@ -10585,7 +10641,7 @@ function App() {
 
   // ── Sync settings quand clients changent ──
   D.useEffect(() => {
-    ["bto_contracts","bto_paiements","betheone_prospects_v1"].forEach(key => {
+    ["bto_contracts","bto_paiements"].forEach(key => {
       const val = localStorage.getItem(key);
       if (val) supaSet(key, val);
     });
@@ -10747,28 +10803,41 @@ function App() {
     return () => { clearTimeout(timer); clearInterval(interval); };
   }, []);
 
-  // Sync cloud au login : le cloud est la source de vérité
+  // Sync cloud au login : Supabase est la source de vérité, Blob est le backup secondaire
   D.useEffect(() => {
     if (!e) return; // Pas encore connecté
+    // On utilise les clients déjà chargés depuis Supabase (b) pour mettre à jour le Blob
+    // Le Blob ne doit PAS écraser Supabase — il reçoit les données de Supabase
     fetch("/api/data/sync", { headers: { "x-bto-token": BTO_TOKEN } })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
+        const currentClients = loadClients(); // données Supabase déjà chargées
         if (!data || !data.exists) {
-          // Rien dans le cloud → uploader les données locales
-          const localClients = loadClients();
-          if (localClients.length > 0) {
+          // Rien dans le Blob → uploader les données Supabase
+          if (currentClients.length > 0) {
             fetch("/api/data/sync", {
               method: "POST",
               headers: { "Content-Type": "application/json", "x-bto-token": BTO_TOKEN },
-              body: JSON.stringify(localClients),
+              body: JSON.stringify(currentClients),
             }).catch(() => {});
           }
           return;
         }
-        const cloudClients = data.clients || [];
-        // Le cloud est la source de vérité → toujours utiliser ses données
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudClients));
-        x(cloudClients);
+        const blobClients = data.clients || [];
+        // Supabase est TOUJOURS la source de vérité — on met à jour le Blob avec Supabase
+        // Le Blob n'écrase jamais Supabase (évite de restaurer des fiches supprimées)
+        if (currentClients.length > 0) {
+          fetch("/api/data/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-bto-token": BTO_TOKEN },
+            body: JSON.stringify(currentClients),
+          }).catch(() => {});
+        } else if (blobClients.length > 0 && currentClients.length === 0) {
+          // Supabase vide mais Blob a des données → cas de premier chargement seulement
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(blobClients));
+          x(blobClients);
+          supaSet(STORAGE_KEY, JSON.stringify(blobClients));
+        }
       })
       .catch(() => {}); // Silencieux si offline ou erreur
   }, [e]); // Se déclenche au login (e passe de false à true)
@@ -11044,7 +11113,7 @@ function ChatBot({
     [d, p] = D.useState([
       {
         role: "assistant",
-        text: "Bonjour Sara 👋 Je suis votre assistant Agence Be the one. Posez-moi n'importe quelle question sur vos clients, vos scores, votre stratégie GMB ou la plateforme.",
+        text: "Bonjour Sara 👋 Je suis votre assistant Agence Be the one. Posez-moi n'importe quelle question sur vos clients, vos scores, votre stratégie GBP ou la plateforme.",
       },
     ]),
     [b, x] = D.useState(""),
@@ -11088,7 +11157,7 @@ function ChatBot({
         R = `
 
 === FICHE ACTIVE : ${r.name} ===
-- Score GMB : ${_}/100 (${U.label})
+- Score GBP : ${_}/100 (${U.label})
 - Ville : ${r.city || "—"} · Catégorie : ${r.category || "—"}
 - Critères échoués : ${V}
 - Avis sans réponse : ${G}
@@ -11097,7 +11166,7 @@ function ChatBot({
 ${(P = y.insights) != null && P.summary ? `- Synthèse IA : ${y.insights.summary.slice(0, 200)}…` : ""}
 ${(((T = y.insights) == null ? void 0 : T.quickWins) || []).length ? `- Quick wins : ${y.insights.quickWins.slice(0, 3).join(" · ")}` : ""}`;
       }
-      return `Tu es l'assistant expert de Sara Baudouin, fondatrice de l'agence Agence Be the one (Vannes), spécialisée en optimisation Google Business Profile (GMB).
+      return `Tu es l'assistant expert de Sara Baudouin, fondatrice de l'agence Agence Be the one (Vannes), spécialisée en optimisation Google Business Profile (GBP).
 
 === CONTEXTE AGENCE ===
 - ${u} client(s) en portefeuille
@@ -11109,7 +11178,7 @@ ${R}
 
 === TES CAPACITÉS ===
 Tu peux aider Sara à :
-- Analyser une fiche GMB et prioriser les actions
+- Analyser une fiche Google Business Profile et prioriser les actions
 - Rédiger des réponses aux avis, des posts Google, des emails de prospection
 - Expliquer les algorithmes Google Maps et le SEO local
 - Suggérer des stratégies d'optimisation par secteur
@@ -11160,7 +11229,7 @@ Réponds en français, de façon concise et actionnable. Si Sara parle d'un clie
           ...B,
           {
             role: "assistant",
-            text: "Désolée, une erreur est survenue. Vérifiez votre clé API dans Mon Espace.",
+            text: "Désolé, une erreur est survenue. Vérifiez votre clé API dans Mon espace.",
           },
         ]);
       }
@@ -11769,7 +11838,7 @@ function LoginPage({ code: e, setCode: t, err: i, login: r }) {
               fontSize: 11.5,
               color: "#94A3B8",
             },
-            children: "Agence Be the one · Expert Google My Business · Vannes",
+            children: "Agence Be the one · Expert Google Business Profile · Vannes",
           }),
         ],
       }),
@@ -11792,12 +11861,10 @@ function Sidebar({
   const x = [
       { id: "dashboard", label: "Dashboard", icon: "◈" },
       { id: "audit", label: "Nouvel audit", icon: "◎" },
-      { id: "clients", label: "Clients", icon: "◫" },
+      { id: "clients", label: "Fiches", icon: "◫" },
       { id: "marche", label: "Marché local", icon: "◬" },
       { id: "prospection", label: "Prospection", icon: "◉" },
       { id: "calendrier", label: "Calendrier", icon: "◷" },
-      { id: "notifications", label: "Rappels", icon: "◆" },
-      { id: "simulateur", label: "Simulateur ROI", icon: "◑" },
     ],
     [j, I] = D.useState(() => {
       try {
@@ -11833,7 +11900,7 @@ function Sidebar({
     },
     [k, R] = D.useState(null),
     [N, E] = D.useState(null),
-    M = i.slice(-8).reverse(),
+    M = i.filter(cl => cl.favorite),
     P = (G, y) => {
       (R(y), (G.dataTransfer.effectAllowed = "move"));
     },
@@ -12138,7 +12205,7 @@ function Sidebar({
         ],
       }),
       p &&
-        i.length > 0 &&
+        M.length > 0 &&
         n.jsxs("div", {
           style: {
             flex: 1,
@@ -12162,7 +12229,7 @@ function Sidebar({
                 alignItems: "center",
               },
               children: [
-                "Récents",
+                "Favoris",
                 n.jsx("span", {
                   style: {
                     fontSize: 8,
@@ -13211,7 +13278,7 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                                   !H && false && n.jsx("button",{
                                     onClick:()=>{
                                       const ag=localStorage.getItem("ag_name")||"Agence Be the one",agA=localStorage.getItem("ag_address")||"6 Keryvarho, 56450 Le Hézo",agS=localStorage.getItem("ag_siret")||"105 096 291 00015",agE=localStorage.getItem("ag_email")||"contact@agence-betheone.fr",agP=localStorage.getItem("ag_phone")||"06 51 17 69 10";
-                                      const cd={setup:{label:"⚡ Setup Local",price:"299€",type:"Paiement unique",desc:"Configuration complète de la fiche GBP, optimisation SEO locale, audit concurrentiel, 2 posts de lancement et 5 photos.",eng:"Prestation ponctuelle sans abonnement."},leader:{label:"Leader Local — 6 mois",price:"139€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 6 mois minimum. Résiliation avec 30j de préavis par email ou lettre recommandée."},leader_annuel:{label:"Leader Local — Annuel",price:"119€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 12 mois. Résiliation avec 30j de préavis par email ou lettre recommandée."}}[O.typeContrat]||{label:"Prestation GMB",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation",desc:"Accompagnement Google Business Profile.",eng:"Selon devis."};
+                                      const cd={setup:{label:"⚡ Setup Local",price:"299€",type:"Paiement unique",desc:"Configuration complète de la fiche GBP, optimisation SEO locale, audit concurrentiel, 2 posts de lancement et 5 photos.",eng:"Prestation ponctuelle sans abonnement."},leader:{label:"Leader Local — 6 mois",price:"139€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 6 mois minimum. Résiliation avec 30j de préavis par email ou lettre recommandée."},leader_annuel:{label:"Leader Local — Annuel",price:"119€/mois",type:"Abonnement mensuel",desc:"Optimisation initiale incluse, 4 posts/mois, 10 photos/mois, réponse aux avis sous 24h + anciens avis, optimisation continue, veille concurrentielle, positionnement mots-clés, rapport mensuel PDF complet, WhatsApp prioritaire sous 3h.",eng:"Engagement 12 mois. Résiliation avec 30j de préavis par email ou lettre recommandée."}}[O.typeContrat]||{label:"Prestation GBP",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation",desc:"Accompagnement Google Business Profile.",eng:"Selon devis."};
                                       const today=new Date().toLocaleDateString("fr-FR");
                                       const agIban       = localStorage.getItem("ag_iban")      || "";
                                       const agBic        = localStorage.getItem("ag_bic")       || "";
@@ -13356,11 +13423,11 @@ ${agIban ? `<div class="rib-block"><p><strong>Coordonnées bancaires (virement)<
 
 <!-- ART 9 -->
 <h2>Article 9 — Durée du contrat</h2>
-${isAbo ? `<p>Le présent contrat est conclu pour une <strong>durée initiale de ${O.typeContrat === "leader_annuel" ? "12 mois" : "6 mois"}</strong> à compter du ${startDate}, puis se renouvelle tacitement par périodes d'un mois.</p>` : `<p>Prestation ponctuelle. Le contrat prend fin à la livraison de la prestation, estimée sous 5 à 10 jours ouvrés à compter de la réception des accès et informations nécessaires.</p>`}
+${isAbo ? `<p>Le présent contrat est conclu pour une <strong>durée ferme de ${O.typeContrat === "leader_annuel" ? "douze (12) mois" : "six (6) mois"}</strong> à compter du ${startDate}.</p><p>Il prendra automatiquement fin à son échéance, sans formalité particulière et sans reconduction tacite.</p>` : `<p>Prestation ponctuelle. Le contrat prend fin à la livraison de la prestation, estimée sous 5 à 10 jours ouvrés à compter de la réception des accès et informations nécessaires.</p>`}
 
 <!-- ART 10 -->
 <h2>Article 10 — Résiliation</h2>
-${isAbo ? `<p>Passé la période initiale de ${O.typeContrat === "leader_annuel" ? "12 mois" : "6 mois"}, chaque partie peut résilier le contrat avec un <strong>préavis de 30 jours</strong>, notifié par <strong>email ou lettre recommandée avec accusé de réception</strong>. Toute période mensuelle commencée est due dans son intégralité. Le Prestataire peut résilier sans préavis en cas de manquement grave (défaut de paiement répété, comportement abusif, informations fausses).</p>` : `<p>La prestation étant ponctuelle, la résiliation n'est pas applicable après démarrage des travaux.</p>`}
+${isAbo ? `<p>Le contrat ne peut être résilié avant son terme, sauf accord écrit des parties ou en cas de manquement grave de l'une des parties à ses obligations contractuelles.</p><p>Le Prestataire pourra notamment mettre fin au contrat de plein droit, sans indemnité, en cas de défaut de paiement, de comportement abusif ou de transmission d'informations manifestement fausses par le Client.</p><p>En cas de résiliation anticipée imputable au Client, l'ensemble des sommes dues jusqu'au terme du contrat restent exigibles.</p>` : `<p>La prestation étant ponctuelle, la résiliation n'est pas applicable après démarrage des travaux.</p>`}
 
 <!-- ART 11 -->
 <h2>Article 11 — Confidentialité</h2>
@@ -13476,7 +13543,7 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                                       const agS2=localStorage.getItem("ag_siret")||"105 096 291 00015";
                                       const agE2=localStorage.getItem("ag_email")||"contact@agence-betheone.fr";
                                       const cdMap={setup:{label:"⚡ Setup Local",price:"299€",type:"Paiement unique"},leader:{label:"Leader Local — 6 mois",price:"139€/mois",type:"Abonnement mensuel"},leader_annuel:{label:"Leader Local — Annuel",price:"119€/mois",type:"Abonnement mensuel"}};
-                                      const cd2=cdMap[O.typeContrat]||{label:"Prestation GMB",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation"};
+                                      const cd2=cdMap[O.typeContrat]||{label:"Prestation GBP",price:`${O.montant||(O.typeContrat==="leader_annuel"?119:139)}€`,type:"Prestation"};
                                       const token=Math.random().toString(36).slice(2,10)+Date.now().toString(36);
                                       // Si déjà signé → ouvrir le contrat
                                       if (clientSigs[y.id]) { if(clientSigs[y.id].contract_url) window.open(clientSigs[y.id].contract_url,"_blank"); return; }
@@ -13491,14 +13558,31 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                                       // Copier + afficher dans une modale custom (pas alert)
                                       const modal=document.createElement("div");
                                       modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px";
-                                      modal.innerHTML=`<div style="background:white;border-radius:18px;padding:28px 28px 22px;max-width:480px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.2)"><div style="font-size:22px;margin-bottom:8px">📨</div><div style="font-weight:800;font-size:16px;color:#1E1B30;margin-bottom:4px">Lien de signature généré</div><div style="font-size:13px;color:#6B7280;margin-bottom:16px">Envoyez ce lien à <strong>${y.name}</strong> par email ou WhatsApp.</div><div style="background:#F4F5FA;border-radius:10px;padding:10px 14px;font-size:12px;color:#374151;word-break:break-all;margin-bottom:16px;border:1px solid #E5E7EB">${link}</div><div style="display:flex;gap:8px"><button id="copy-link-btn" style="flex:1;padding:11px;border-radius:10px;border:none;background:#6B40D8;color:white;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">📋 Copier le lien</button><button onclick="this.closest('div[style*=fixed]').remove()" style="padding:11px 16px;border-radius:10px;border:1px solid #E5E7EB;background:white;color:#374151;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">Fermer</button></div></div>`;
+                                      const clientPrenom=(O.interlocuteur||y.name).split(' ')[0];
+                                      const GRAD2='linear-gradient(135deg,#3B5BDB 0%,#6B40D8 35%,#C03080 70%,#E85A30 100%)';
+                                      const FONT2="'DM Sans','Segoe UI',system-ui,sans-serif";
+                                      const MUSEO2="'MuseoModerno','Arial Black',Arial,sans-serif";
+                                      const emailSubject=`📄 Votre contrat ${cd2.label} est prêt à signer — Agence Be The One`;
+                                      const emailHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;900&family=MuseoModerno:wght@900&display=swap" rel="stylesheet"></head><body style="margin:0;padding:0;background:#F4F5FA;font-family:${FONT2}"><table width="100%" cellpadding="0" cellspacing="0" style="background:#F4F5FA;padding:24px 16px"><tr><td align="center"><table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%"><tr><td style="background:${GRAD2};border-radius:14px 14px 0 0;padding:28px 32px;text-align:center"><div style="height:3px;background:rgba(255,255,255,.25);border-radius:2px;margin-bottom:18px"></div><div style="font-family:${MUSEO2};font-size:24px;font-weight:900;color:white;letter-spacing:4px">BE THE ONE</div><div style="font-size:10px;color:rgba(255,255,255,.75);margin-top:3px;letter-spacing:2.5px;text-transform:uppercase;font-family:${FONT2}">Google Business Profile · Visibilité locale</div><div style="margin-top:16px;background:rgba(255,255,255,.18);border-radius:50px;display:inline-block;padding:8px 20px;font-size:13.5px;font-weight:700;color:white;font-family:${FONT2}">📄 Votre contrat est prêt</div></td></tr><tr><td style="background:white;padding:28px 32px"><p style="font-size:14.5px;color:#1E1B30;font-weight:700;margin:0 0 5px;font-family:${FONT2}">Bonjour ${clientPrenom},</p><p style="font-size:13.5px;color:#374151;line-height:1.65;margin:0 0 22px;font-family:${FONT2}">Suite à notre échange, je vous adresse votre contrat afin de lancer l'optimisation de votre fiche Google Business Profile et renforcer votre visibilité locale.<br><br>La signature est entièrement en ligne et prend moins d'une minute.</p><table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F3FF;border-radius:12px;border:1.5px solid #DDD6FE;margin-bottom:22px"><tr><td style="padding:18px 22px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:#6B7280;margin-bottom:8px;font-family:${FONT2}">Récapitulatif du contrat</div><div style="font-family:${MUSEO2};font-size:16px;font-weight:900;background:${GRAD2};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:5px">${cd2.label}</div><div style="font-size:28px;font-weight:900;color:#1E1B30;line-height:1;font-family:${FONT2}">${cd2.price}</div><div style="font-size:12px;color:#6B7280;margin-top:4px;font-family:${FONT2}">${cd2.type}</div></td></tr></table><table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px"><tr><td align="center"><a href="${link}" style="display:inline-block;background:${GRAD2};color:white;font-weight:800;font-size:15px;padding:16px 40px;border-radius:12px;text-decoration:none;font-family:${FONT2}">✍️ Signer mon contrat</a></td></tr></table><div style="background:#F0FDF4;border-radius:10px;padding:14px 18px;border:1px solid #BBF7D0;margin-bottom:22px"><div style="font-size:12px;font-weight:700;color:#065F46;margin-bottom:6px;font-family:${FONT2}">✅ Après la signature</div><div style="font-size:12.5px;color:#065F46;line-height:1.6;font-family:${FONT2}">Un récapitulatif vous sera envoyé automatiquement par email avec le <strong>formulaire de démarrage</strong> — il me permet de préparer votre accompagnement.</div></div><div style="border-radius:10px;padding:14px 18px;text-align:center;border:1px solid #E5E7EB"><div style="font-size:12px;color:#6B7280;margin-bottom:7px;font-family:${FONT2}">Une question ? Je suis disponible :</div><a href="mailto:${agE2}" style="color:#6B40D8;font-weight:700;font-size:13px;text-decoration:none;font-family:${FONT2}">${agE2}</a><span style="color:#D1D5DB;margin:0 10px">·</span><a href="tel:${agP2.replace(/\s/g,'')}" style="color:#6B40D8;font-weight:700;font-size:13px;text-decoration:none;font-family:${FONT2}">${agP2}</a></div></td></tr><tr><td style="padding:14px 32px;text-align:center;border-top:1px solid #E5E7EB;background:#FAFAFA;border-radius:0 0 14px 14px"><div style="font-family:${MUSEO2};font-size:12px;font-weight:900;letter-spacing:2.5px;background:${GRAD2};-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">BE THE ONE</div><div style="font-size:11px;color:#9CA3AF;margin-top:3px;font-family:${FONT2}">Sara Baudouin · Entreprise individuelle · SIRET ${agS2||''}</div><div style="font-size:11px;color:#9CA3AF;margin-top:2px;font-family:${FONT2}">agence-betheone.fr · ${agE2}</div></td></tr></table></td></tr></table></body></html>`;
+                                      const hasEmail = !!(O.email && O.email.trim());
+                                      modal.innerHTML=`<div style="background:white;border-radius:18px;padding:28px 28px 22px;max-width:480px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.2)"><div style="font-size:22px;margin-bottom:8px">📨</div><div style="font-weight:800;font-size:16px;color:#1E1B30;margin-bottom:4px">Lien de signature généré</div><div style="font-size:13px;color:#6B7280;margin-bottom:16px">Envoyez ce lien à <strong>${y.name}</strong> par email ou WhatsApp.</div><div style="background:#F4F5FA;border-radius:10px;padding:10px 14px;font-size:12px;color:#374151;word-break:break-all;margin-bottom:16px;border:1px solid #E5E7EB">${link}</div>${!hasEmail ? `<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:9px 12px;font-size:12px;color:#92400E;margin-bottom:12px">⚠️ Aucun email renseigné pour ce client — ajoutez-le sur sa fiche pour envoyer par email.</div>` : ''}<div id="send-status" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="send-email-btn" ${!hasEmail ? 'disabled' : ''} style="flex:1;min-width:140px;padding:11px;border-radius:10px;border:none;background:${hasEmail ? 'linear-gradient(135deg,#3B5BDB,#6B40D8,#C03080,#E85A30)' : '#E5E7EB'};color:${hasEmail ? 'white' : '#9CA3AF'};font-weight:700;font-size:13px;cursor:${hasEmail ? 'pointer' : 'not-allowed'};font-family:inherit">📧 Envoyer le contrat</button><button id="copy-link-btn" style="flex:1;min-width:120px;padding:11px;border-radius:10px;border:1px solid #E5E7EB;background:white;color:#6B40D8;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">📋 Copier le lien</button><button onclick="this.closest('div[style*=fixed]').remove()" style="padding:11px 16px;border-radius:10px;border:1px solid #E5E7EB;background:white;color:#374151;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">Fermer</button></div></div>`;
                                       document.body.appendChild(modal);
+                                      modal.querySelector("#send-email-btn").onclick=async()=>{
+                                        const btn=modal.querySelector("#send-email-btn");
+                                        const status=modal.querySelector("#send-status");
+                                        btn.textContent="⏳ Envoi en cours…";btn.disabled=true;
+                                        try{
+                                          const r=await fetch("https://app.agence-betheone.fr/api/data/sync?action=send-email",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to:O.email,subject:emailSubject,html:emailHtml})});
+                                          if(r.ok){status.style.display="block";status.style.background="#F0FDF4";status.style.color="#065F46";status.style.border="1px solid #BBF7D0";status.textContent="✅ Email envoyé à "+O.email;btn.textContent="✅ Envoyé";}
+                                          else{throw new Error("Erreur serveur");}
+                                        }catch(e){status.style.display="block";status.style.background="#FEF2F2";status.style.color="#991B1B";status.style.border="1px solid #FECACA";status.textContent="❌ Erreur : "+e.message;btn.textContent="📧 Réessayer";btn.disabled=false;}
+                                      };
                                       modal.querySelector("#copy-link-btn").onclick=()=>{navigator.clipboard.writeText(link).then(()=>{modal.querySelector("#copy-link-btn").textContent="✅ Copié !";}).catch(()=>{});};
                                       modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
                                     },
                                     title: clientSigs[y.id] ? "Voir le contrat signé" : "Le lien généré contient les données actuelles du contrat.",
                                     style:{padding:"6px 12px",borderRadius:8,border:`1px solid ${clientSigs[y.id]?"#059669":"#6B40D8"}`,background:"white",color:clientSigs[y.id]?"#059669":"#6B40D8",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600},
-                                    children: clientSigs[y.id] ? "👁️ Contrat signé" : "Partager",
+                                    children: clientSigs[y.id] ? "👁️ Contrat signé" : "📨 Envoyer le contrat ",
                                   }),
                                   /* Contre-signer si client a signé mais pas encore Sara */
                                   clientSigs[y.id] && (() => {
@@ -14218,14 +14302,13 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
         ],
       }),
       n.jsx("div", {
-        style: { display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 8, marginBottom: 14 },
+        style: { display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 8, marginBottom: 14 },
         children: (() => {
           const progCount = e.filter(B => { const sc = (B.history||[]).map(h=>h&&h.scores?o(h.scores||{}):0).filter(s2=>s2>0); return sc.length>0 && o({...(B.scores||{}), ...(B.manualOverrides||{})}) > sc[0]; }).length;
           return [
-            { icon: "👥", label: "Clients actifs", value: e.length, sub: "fiches gérées", c: "#6B40D8" },
+            { icon: "👥", label: "Fiches gérées", value: e.length, sub: "audits réalisés", c: "#6B40D8" },
             { icon: "📊", label: "Score moyen", value: e.length && l ? `${l}/100` : "—", sub: e.length ? ((a && a.label) || "—") : "—", c: e.length ? ((a && a.color) || "#6B7280") : "#9CA3AF" },
-            { icon: "📈", label: "En progression", value: progCount, sub: "clients qui progressent", c: "#059669" },
-            { icon: "💬", label: "Avis sans réponse", value: u.length, sub: u.length ? "À traiter" : "Tout à jour ✓", c: u.length ? "#E85A30" : "#059669" },
+            { icon: "📈", label: "En progression", value: progCount, sub: "fiches qui progressent", c: "#059669" },
             { icon: "🎯", label: "Audits ce mois", value: x, sub: `objectif : ${j}`, c: "#C03080" },
           ].map(B => n.jsxs("div", {
             style: { background: "white", borderRadius: 12, padding: "12px 14px", border: "1px solid #E5E7EB", borderLeft: `3px solid ${B.c}`, display: "flex", alignItems: "center", gap: 10, minWidth: 0 },
@@ -14274,48 +14357,69 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
           });
         } catch { return null; }
       })(),
-      /* === PROCHAINS RDV DU MOIS === */
+      /* === PROCHAINS RDV === */
       (() => {
         try {
           const now = new Date();
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-          const monthEnd = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
           const todayStr = now.toISOString().slice(0,10);
+          const in60 = new Date(now); in60.setDate(now.getDate()+60);
+          const limitStr = in60.toISOString().slice(0,10);
           const rdvs = [];
+          // RDV depuis les fiches (clients + toutes fiches)
           e.forEach(cl => {
-            if (cl.statutAudit !== "client") return;
             try {
-              const list = JSON.parse(localStorage.getItem(`rdv_${cl.id}`) || "[]");
+              const fromClient = cl.rdvList || [];
+              const fromLocal = JSON.parse(localStorage.getItem(`rdv_${cl.id}`) || "[]");
+              const list = fromClient.length >= fromLocal.length ? fromClient : fromLocal;
               list.forEach(r => {
-                if (r.date >= todayStr && r.date <= monthEnd) {
-                  rdvs.push({ ...r, clientName: cl.name, clientId: cl.id });
+                if (r.date >= todayStr) {
+                  rdvs.push({ ...r, clientName: cl.name, clientId: cl.id, isProspect: cl.statutAudit !== "client" });
                 }
               });
             } catch {}
           });
+          // RDV depuis les prospects (partie commerciale)
+          try {
+            const prospects = JSON.parse(localStorage.getItem("betheone_prospects_v1") || "[]");
+            prospects.forEach(p => {
+              // éviter les doublons si le prospect est aussi dans e
+              if (e.find(cl => String(cl.id) === String(p.id))) return;
+              try {
+                const fromClient = p.rdvList || [];
+                const fromLocal = JSON.parse(localStorage.getItem(`rdv_${p.id}`) || "[]");
+                const list = fromClient.length >= fromLocal.length ? fromClient : fromLocal;
+                list.forEach(r => {
+                  if (r.date >= todayStr) {
+                    rdvs.push({ ...r, clientName: p.name, clientId: p.id, isProspect: true });
+                  }
+                });
+              } catch {}
+            });
+          } catch {}
           rdvs.sort((a,b) => a.date.localeCompare(b.date));
-          if (rdvs.length === 0) return null;
+          const upcoming = rdvs.slice(0, 10);
           return n.jsxs("div", {
             style:{ background:"white", border:"1px solid #E5E7EB", borderTop:"3px solid #6B40D8", borderRadius:14, padding:"16px 20px", marginBottom:14 },
             children:[
-              n.jsxs("div", { style:{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }, children:[
-                n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8 }, children:[
-                  n.jsx("span", { style:{ fontSize:18 }, children:"📅" }),
-                  n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children:`${rdvs.length} RDV à venir ce mois` }),
-                ]}),
+              n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }, children:[
+                n.jsx("span", { style:{ fontSize:18 }, children:"📅" }),
+                n.jsx("div", { style:{ fontWeight:700, fontSize:13, color:"#1E1B30" }, children: upcoming.length ? `${upcoming.length} RDV à venir` : "Prochains RDV" }),
               ]}),
-              n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:
-                rdvs.map((r,idx) => n.jsxs("div", {
-                  key:idx,
-                  style:{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background:"#F5F3FF", borderRadius:9, borderLeft:"3px solid #6B40D8" },
-                  children:[
-                    n.jsx("div", { style:{ fontSize:12, fontWeight:700, color:"#6B40D8", flexShrink:0, minWidth:90 }, children: new Date(r.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}) }),
-                    r.type && n.jsx("span", { style:{ background:"#6B40D8", color:"white", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700, flexShrink:0 }, children:r.type }),
-                    n.jsx("div", { style:{ fontSize:13, color:"#1E1B30", fontWeight:600, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children:r.clientName }),
-                    r.notes && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:200 }, children:r.notes }),
-                  ],
-                }))
-              }),
+              upcoming.length === 0
+                ? n.jsx("div", { style:{ fontSize:13, color:"#9CA3AF", textAlign:"center", padding:"16px 0" }, children:"Aucun RDV planifié — ajoutez-en depuis une fiche client ou prospect" })
+                : n.jsx("div", { style:{ display:"flex", flexDirection:"column", gap:6 }, children:
+                  upcoming.map((r,idx) => n.jsxs("div", {
+                    key:idx,
+                    style:{ display:"flex", alignItems:"center", gap:12, padding:"8px 12px", background: r.date === todayStr ? "#EDE9FE" : "#F5F3FF", borderRadius:9, borderLeft:`3px solid ${r.date === todayStr ? "#C03080" : "#6B40D8"}` },
+                    children:[
+                      n.jsx("div", { style:{ fontSize:12, fontWeight:700, color: r.date === todayStr ? "#C03080" : "#6B40D8", flexShrink:0, minWidth:95 }, children: new Date(r.date+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"}) }),
+                      r.type && n.jsx("span", { style:{ background:"#6B40D8", color:"white", borderRadius:20, padding:"1px 8px", fontSize:11, fontWeight:700, flexShrink:0 }, children:r.type }),
+                      n.jsx("div", { style:{ fontSize:13, color:"#1E1B30", fontWeight:600, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }, children:r.clientName }),
+                      r.isProspect && n.jsx("span", { style:{ background:"#FEF3C7", color:"#92400E", borderRadius:20, padding:"1px 8px", fontSize:10, fontWeight:700, flexShrink:0 }, children:"Prospect" }),
+                      r.notes && n.jsx("div", { style:{ fontSize:11, color:"#9CA3AF", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:180 }, children:r.notes }),
+                    ],
+                  }))
+                }),
             ],
           });
         } catch { return null; }
@@ -14651,7 +14755,7 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
               ],
             });
           })(),
-          n.jsxs("div", {
+          false && n.jsxs("div", {
             style: {
               background: "white",
               borderRadius: 14,
@@ -15050,14 +15154,16 @@ const ng = [
     "#1d4ed8",
   ];
 const STEPS = [
-  "Lecture de la fiche Google…",
+  "Lecture de la fiche Google Business Profile…",
   "Extraction des données clés…",
-  "Analyse des 27 critères GMB…",
+  "Analyse des 27 critères GBP…",
   "Calcul du score de visibilité…",
   "Recherche des concurrents locaux…",
-  "Analyse des mots-clés et zones…",
+  "Analyse des mots-clés et zones géographiques…",
   "Génération du plan d'action…",
   "Création de la roadmap 3 mois…",
+  "Finalisation de l'audit complet…",
+  "Presque terminé…",
 ];
 function AuditForm({
   clients: e,
@@ -15105,7 +15211,7 @@ function AuditForm({
   D.useEffect(() => {
     if (C !== "loading") return;
     const w = setInterval(
-      () => R((W) => Math.min(W + 1, STEPS.length - 1)),
+      () => R((W) => (W + 1) % STEPS.length),
       1200,
     );
     return () => clearInterval(w);
@@ -15195,6 +15301,7 @@ function AuditForm({
             dateAdded: (se == null ? void 0 : se.dateAdded) || q,
             dateLastContact: (se == null ? void 0 : se.dateLastContact) || null,
             clientRef: ie.id,
+            icon: (se == null ? void 0 : se.icon) || ie.icon || "🏢",
           },
           Ee = Uc(),
           hn =
@@ -15211,7 +15318,7 @@ function AuditForm({
       }
     } catch (ee) {
       (console.error("Audit error:", ee),
-        E(ee.message || "Erreur — vérifiez votre clé API dans Mon Espace."),
+        E(ee.message || "Erreur — vérifiez votre clé API dans Mon espace."),
         B("form"));
     }
   };
@@ -15741,7 +15848,7 @@ function AuditForm({
                     },
                     children: [
                       "Score 27 critères",
-                      "5 piliers GMB",
+                      "5 piliers GBP",
                       "Mots-clés + zones",
                       "5 vrais concurrents",
                       "12 posts SEO",
@@ -15976,7 +16083,7 @@ Horaires : Mar–Dim 10h–22h…`,
                     n.jsx("span", { style: { flexShrink: 0 }, children: "💡" }),
                     n.jsx("span", {
                       children:
-                        "L'audit complet sera généré. Le prospect sera ajouté au pipeline avec le vrai score GMB et tu pourras générer l'email de prospection depuis sa fiche.",
+                        "L'audit complet sera généré. Le prospect sera ajouté au pipeline avec le vrai score GBP et tu pourras générer l'email de prospection depuis sa fiche.",
                     }),
                   ],
                 }),
@@ -16517,7 +16624,7 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                                   const reqs = JSON.parse(localStorage.getItem("bto_sign_reqs")||"{}");
                                   tok = reqs[E.id]?.token || null;
                                 }
-                                if (!tok) { alert("Aucun lien de signature envoyé pour ce client. Allez dans Mon Espace → Contrats pour envoyer le lien."); return; }
+                                if (!tok) { alert("Aucun lien de signature envoyé pour ce client. Allez dans Mon espace → Contrats pour envoyer le lien."); return; }
                                 // Récupérer les données onboarding depuis Supabase
                                 try {
                                   const r2 = await fetch(`${SUPA_URL}/rest/v1/onboarding?token=eq.${tok}&order=submitted_at.desc&limit=1`,
@@ -16540,6 +16647,16 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                               },
                               style:{padding:"5px 11px",borderRadius:8,border:"1px solid #6B40D8",background:"white",color:"#6B40D8",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"},
                               children:"📋 Onboarding",
+                            }),
+                          }),
+                          n.jsx("td", {
+                            style: { padding: "14px 10px" },
+                            onClick: (S) => S.stopPropagation(),
+                            children: n.jsx("button", {
+                              onClick: () => t(e.map(cl => cl.id === E.id ? { ...cl, favorite: !cl.favorite } : cl)),
+                              title: E.favorite ? "Retirer des favoris" : "Ajouter aux favoris",
+                              style: { fontSize: 17, background: "none", border: "none", cursor: "pointer", padding: "4px 6px", opacity: E.favorite ? 1 : 0.25, transition: "opacity .15s" },
+                              children: "⭐",
                             }),
                           }),
                           n.jsx("td", {
@@ -16908,8 +17025,17 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     W.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"; W.onload = () => c(!0); document.head.appendChild(W);
   }, []),
 
-  /* Réinitialiser l'index de scan quand le mot-clé change */
-  D.useEffect(() => { setSelScanIdx(null); }, [a]),
+  /* Réinitialiser l'index de scan et auto-ajuster la config grille quand le mot-clé change */
+  D.useEffect(() => {
+    setSelScanIdx(null);
+    const kwScans = (l[a] || {}).scans || [];
+    if (!kwScans.length) return;
+    const lastScanWithCfg = [...kwScans].reverse().find(s => s.gridSize);
+    if (lastScanWithCfg) {
+      if (lastScanWithCfg.gridSize !== p) b(lastScanWithCfg.gridSize);
+      if (lastScanWithCfg.rayon !== rayon) setRayon(lastScanWithCfg.rayon);
+    }
+  }, [a]),
 
   /* Auto-géocoder l'adresse si aucun centre n'est défini */
   D.useEffect(() => {
@@ -17037,18 +17163,22 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     return clean.split(/\s+/).filter(k => k.length > 2 && !_LEGAL_FORMS.has(k));
   };
   const scoreMatch = (nm, addr, nameTokens, cityLow, postalCode) => {
+    if (!nameTokens.length) return 0;
     const n = nm.toLowerCase(), a = addr.toLowerCase();
-    const nameScore = nameTokens.filter(k => n.includes(k)).length / Math.max(nameTokens.length, 1);
+    // Tous les tokens doivent être présents — "Morvan Peinture" exige "morvan" ET "peinture"
+    const allMatch = nameTokens.every(k => n.includes(k));
+    if (!allMatch) return 0;
+    const nameScore = 1; // tous les tokens matchent
     const cityOk = cityLow ? a.includes(cityLow) : true;
     const postalOk = postalCode ? a.includes(postalCode) : false;
     return nameScore * (cityOk || postalOk ? 2 : 0.5);
   };
 
-  /* ── Scan via SerpAPI (backend) ── */
+  /* ── Scan via Google Places API (backend) ── */
   const O = async (lat, lng, query, myName, attempt = 0) => {
     try {
       const q = encodeURIComponent(query);
-      const resp = await fetch(`/api/data/sync?action=serp-scan&query=${q}&lat=${lat}&lng=${lng}`);
+      const resp = await fetch(`/api/data/sync?action=scan&query=${q}&lat=${lat}&lng=${lng}`);
 
       if (resp.status === 429) {
         if (attempt < 3) { await new Promise(r => setTimeout(r, 1500 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1); }
@@ -17061,7 +17191,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         if ((msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) && attempt < 3) {
           await new Promise(r => setTimeout(r, 2000 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1);
         }
-        throw new Error(`API Google : ${msg}`);
+        throw new Error(msg.includes("quota") ? "Quota SerpAPI dépassé — réessayez demain ou vérifiez votre plan SerpAPI." : `Erreur SerpAPI : ${msg}`);
       }
 
       const places = json.places || [];
@@ -17123,19 +17253,16 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         points.push({ idx, lat: W + oe, lng: L + he });
       }
 
-    // Traitement par lots de 5 en parallèle
-    const BATCH = 5;
+    // Traitement séquentiel avec délai pour éviter le quota Google Places
     let done = 0;
-    for (let i = 0; i < points.length; i += BATCH) {
-      const batch = points.slice(i, i + BATCH);
-      await Promise.all(batch.map(async ({ idx, lat, lng }) => {
-        const result = await O(lat, lng, a, myName);
-        cells[idx] = result ? result.rank : null;
-        cellData[idx] = result || { rank: null, top10: [] };
-        done++;
-        h(Math.round((done / M) * 100));
-      }));
-      if (i + BATCH < points.length) await new Promise(res => setTimeout(res, 100));
+    for (let i = 0; i < points.length; i++) {
+      const { idx, lat, lng } = points[i];
+      const result = await O(lat, lng, a, myName);
+      cells[idx] = result ? result.rank : null;
+      cellData[idx] = result || { rank: null, top10: [] };
+      done++;
+      h(Math.round((done / M) * 100));
+      if (i < points.length - 1) await new Promise(res => setTimeout(res, 300));
     }
     const scanRecord = { date: new Date().toISOString().slice(0, 10), cells, cellData, gridSize: p, rayon },
       // Garder TOUS les anciens scans (sans config) + 5 derniers par config active
@@ -17266,7 +17393,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
       n.jsxs("div",{children:[
         n.jsx("div",{style:{fontWeight:700,fontSize:13,color:"#dc2626",marginBottom:3},children:"Erreur lors du scan"}),
         n.jsx("div",{style:{fontSize:12,color:"#7f1d1d",lineHeight:1.5},children:scanError}),
-        n.jsx("div",{style:{fontSize:11.5,color:"#9CA3AF",marginTop:6},children:"Vérifiez : (1) Places API activée dans Google Cloud, (2) pas de restriction de domaine bloquante, (3) facturation active sur votre projet Google Cloud."}),
+        n.jsx("div",{style:{fontSize:11.5,color:"#9CA3AF",marginTop:6},children:"Si quota SerpAPI dépassé : vérifiez votre plan sur serpapi.com. Si erreur réseau : réessayez dans quelques instants."}),
       ]}),
     ]}),
 
@@ -17546,10 +17673,9 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
 }
 
 function KeywordsTab({ kw: e, city: t, client: i, clients: r, upd: o }) {
-  const msKey = `bto_monthly_stats_${i?.id}`;
-  const [msData, setMsData] = D.useState(() => { try { return JSON.parse(localStorage.getItem(msKey)||"[]"); } catch { return []; } });
+  const [msData, setMsData] = D.useState(() => i?.monthlyStats || []);
   const [msForm, setMsForm] = D.useState({ mois:new Date().toISOString().slice(0,7), note:"", nbAvis:"", appels:"", vues:"", clics:"", tauxReponse:"" });
-  const saveMsData = (updated) => { setMsData(updated); localStorage.setItem(msKey, JSON.stringify(updated)); };
+  const saveMsData = (updated) => { setMsData(updated); o(r.map(c => c.id === i?.id ? { ...c, monthlyStats: updated } : c)); };
   const addMsEntry = () => {
     if (!msForm.mois) return;
     const idx = msData.findIndex(s=>s.mois===msForm.mois);
@@ -18550,7 +18676,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                   }),
                   n.jsx("div", {
                     style: { fontSize: 12.5, color: "var(--ink4)" },
-                    children: "Plan d'action GMB pour atteindre le TOP 3",
+                    children: "Plan d'action GBP pour atteindre le TOP 3",
                   }),
                 ],
               }),
@@ -18749,7 +18875,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                             textTransform: "uppercase",
                             marginBottom: 6,
                           },
-                          children: "Actions GMB",
+                          children: "Actions GBP",
                         }),
                         _.map((V, G) =>
                           n.jsxs(
@@ -18856,7 +18982,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                               fontStyle: "italic",
                               paddingLeft: 14,
                             },
-                            children: [U, " action(s) hors GMB masquée(s)"],
+                            children: [U, " action(s) hors GBP masquée(s)"],
                           }),
                         s &&
                           n.jsx("button", {
@@ -18867,7 +18993,7 @@ function RoadmapTab({ roadmap: e, client: t, clients: i, upd: r }) {
                                   ...V[k],
                                   actions: [
                                     ...V[k].actions,
-                                    "Nouvelle action GMB...",
+                                    "Nouvelle action GBP...",
                                   ],
                                 },
                               })),
@@ -19153,6 +19279,50 @@ function ClientDetail({
     }, 16);
     return () => clearInterval(Z);
   }, [_]);
+  const [regenLoading, setRegenLoading] = D.useState(false);
+  const regenAuditText = async () => {
+    setRegenLoading(true);
+    try {
+      const apiKey2 = localStorage.getItem("bto_apikey") || a || "";
+      const ext = P.extracted || {};
+      const scoresSummary = Object.entries(M)
+        .filter(([, v]) => v !== null)
+        .map(([k2, v]) => `${k2}: ${v === true ? "true" : "false"}`)
+        .join(", ");
+      const prompt = `Tu es un expert SEO local francophone. Toutes tes réponses sont rédigées en français correct avec tous les accents et apostrophes. AUCUN emoji dans les textes.
+
+Voici les scores CERTIFIÉS (vérifiés et corrigés manuellement) d'une fiche Google Business Profile pour "${e.name}" (${e.category || "activité"}, ${e.city || "France"}).
+Ces scores sont la VÉRITÉ — génère un texte COHÉRENT avec eux.
+INTERDIT : recommander une action pour un critère à true. Si un score est true → ne pas l'inclure dans les faiblesses ni la roadmap.
+
+SCORES CERTIFIÉS :
+${scoresSummary}
+
+DONNÉES EXTRAITES :
+- Note Google : ${ext.rating || "?"}/5 · ${ext.reviewCount || "?"} avis
+- Photos : ${ext.photoCount || "?"}
+- Posts : ${ext.postsCount || "?"}
+- Site web : ${ext.website || "absent"}
+- Catégorie : ${ext.category || e.category || "?"}
+- Ville : ${ext.city || e.city || "?"}
+- Secteur : ${ext.sector || "?"}
+
+Retourne UNIQUEMENT ce JSON valide (pas de texte avant ni après) :
+{"insights":{"summary":"Synthèse 2-3 phrases concrètes basée sur les vrais scores","strengths":["force réelle 1","force réelle 2","force réelle 3"],"weaknesses":["faiblesse réelle 1","faiblesse réelle 2","faiblesse réelle 3"],"quickWins":["action prioritaire 1","action prioritaire 2","action prioritaire 3"]},"roadmap":{"month1":{"title":"Fondations","objective":"Objectif adapté à la position estimée","actions":["action 1","action 2","action 3","action 4","action 5"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month2":{"title":"Notoriété","objective":"Progresser en visibilité","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"month3":{"title":"TOP 3","objective":"Atteindre le TOP 3","actions":["action 1","action 2","action 3","action 4"],"kpis":["KPI 1","KPI 2","KPI 3"]},"beyond":{"title":"Consolidation","actions":["stratégie 1","stratégie 2","stratégie 3"],"expectedResults":{"visibilité":"+300%","appels":"+200%","position":"TOP 1-3"}}}}`;
+      const result = await callAI(prompt, apiKey2, 0, 3500);
+      if (result && (result.insights || result.roadmap)) {
+        const newData = { ...P };
+        if (result.insights) newData.insights = result.insights;
+        if (result.roadmap) newData.roadmap = result.roadmap;
+        i(t.map(cl => cl.id === e.id ? { ...cl, data: newData } : cl));
+      }
+    } catch (err) {
+      alert("Erreur lors de la régénération : " + (err.message || "Réessayez"));
+    } finally {
+      setRegenLoading(false);
+    }
+  };
+
   const toggleOptional = (id) => {
       const next = enabledOptional.includes(id) ? enabledOptional.filter(x => x !== id) : [...enabledOptional, id];
       setEnabledOptional(next);
@@ -19171,7 +19341,7 @@ function ClientDetail({
     },
     te = [
       { id: "overview", label: "Résumé" },
-      { id: "tasks", label: `Tâches (${y}/${V.length})` },
+      { id: "tasks", label: `Tâches (${y}/${_auditFalse.length})` },
       { id: "fiche", label: "Fiche & Services" },
       { id: "posts", label: "Publications" },
       { id: "avis", label: "Avis" },
@@ -19222,11 +19392,25 @@ function ClientDetail({
                 n.jsx("span", { style:{ fontSize:11,color:U.color,fontWeight:700,opacity:.8 }, children: U.label }),
                 $ !== null && $ !== 0 && n.jsxs("span", { style:{ fontSize:10,fontWeight:700,color:$>0?"#059669":"#dc2626",background:$>0?"#F0FDF4":"#FEF2F2",borderRadius:20,padding:"1px 6px",marginLeft:2 }, children:[$>0?"↑ +":"↓ ",$," pts"] }),
               ]}),
+              // Favori
+              n.jsx("button", {
+                onClick: () => i(t.map(cl => cl.id === e.id ? { ...cl, favorite: !e.favorite } : cl)),
+                title: e.favorite ? "Retirer des favoris" : "Ajouter aux favoris",
+                style: { fontSize: 17, background: "none", border: "none", cursor: "pointer", padding: "2px 4px", opacity: e.favorite ? 1 : 0.25, transition: "opacity .15s", flexShrink: 0 },
+                children: "⭐",
+              }),
               // Google badge compact
               e.googleTokens?.access_token && n.jsx("div", { style:{ width:8,height:8,borderRadius:"50%",background:"#22C55E",flexShrink:0 }, title:"Google connecté" }),
               // Actions à droite
               n.jsxs("div", { style:{ marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexShrink:0 }, children:[
                 n.jsx(PostsIATab, { client:e, history:W, score:_, ll:U, ok:G, failed:V, calcScore:s, setShowReport:c }),
+                n.jsx("button", {
+                  onClick: regenAuditText,
+                  disabled: regenLoading,
+                  title: "Régénère le texte (insights, roadmap) en tenant compte de tes corrections manuelles — ne modifie pas les scores",
+                  style:{ padding:"7px 14px",fontSize:12,fontWeight:700,borderRadius:8,border:"1.5px solid #6B40D8",background:"white",color:"#6B40D8",cursor:regenLoading?"wait":"pointer",fontFamily:"inherit",whiteSpace:"nowrap",opacity:regenLoading?0.6:1 },
+                  children: regenLoading ? "⏳ Génération…" : "🔄 Régénérer l'analyse"
+                }),
                 n.jsx("button", { onClick:()=>m(!0), style:{ padding:"7px 16px",fontSize:12,fontWeight:700,borderRadius:8,border:"none",background:"linear-gradient(135deg,#6B40D8,#C03080)",color:"white",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap" }, children:"↺ Nouvel audit" }),
               ]}),
             ],
@@ -19335,7 +19519,7 @@ function ClientDetail({
                         fontWeight: 400,
                       },
                       children: [
-                        "Audit GMB · ",
+                        "Audit GBP · ",
                         n.jsx("strong", {
                           style: { color: "var(--ink)", fontWeight: 600 },
                           children: e.name,
@@ -20731,7 +20915,7 @@ function PostsTab({
     [m, C] = D.useState("repondre"),
     [B, k] = D.useState(!1),
     [R, N] = D.useState(
-      () => localStorage.getItem(`avis_sig_${e.id}`) || `${e.name || ""}`,
+      () => e.avisSig || localStorage.getItem(`avis_sig_${e.id}`) || `${e.name || ""}`,
     ),
     [E, M] = D.useState(
       () => localStorage.getItem(`avis_consignes_${e.id}`) || "",
@@ -21256,7 +21440,7 @@ Mon établissement :
             // Signature
             n.jsxs("div", { style:{marginBottom:12}, children:[
               n.jsx("div", { style:{fontSize:11,fontWeight:600,color:"#6B7280",marginBottom:4}, children:"Signature" }),
-              n.jsx("input", { value:R, onChange:ev=>{N(ev.target.value);localStorage.setItem(`avis_sig_${e.id}`,ev.target.value);}, className:"inp", placeholder:`L'équipe ${e.name||""}`, style:{margin:0} }),
+              n.jsx("input", { value:R, onChange:ev=>{N(ev.target.value);localStorage.setItem(`avis_sig_${e.id}`,ev.target.value);i(t.map(c=>c.id===e.id?{...c,avisSig:ev.target.value}:c));}, className:"inp", placeholder:`L'équipe ${e.name||""}`, style:{margin:0} }),
             ]}),
             // Texte avis
             n.jsxs("div", { style:{marginBottom:12}, children:[
@@ -21301,7 +21485,7 @@ Mon établissement :
               style:{padding:"10px 24px",borderRadius:9,border:"none",background:replyLoading||(!replyAvisText.trim()&&!replyAuthor.trim())||!apiKeyLocal?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#C03080)",color:replyLoading||(!replyAvisText.trim()&&!replyAuthor.trim())||!apiKeyLocal?"#9CA3AF":"white",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"},
               children:replyLoading?"⏳ Rédaction en cours…":"✨ Générer la réponse",
             }),
-            !apiKeyLocal && n.jsx("div", { style:{fontSize:11,color:"#E85A30",marginTop:6}, children:"⚠️ Clé API requise (Mon Espace → Paramètres)" }),
+            !apiKeyLocal && n.jsx("div", { style:{fontSize:11,color:"#E85A30",marginTop:6}, children:"⚠️ Clé API requise (Mon espace → Paramètres)" }),
           ]}),
           // Résultat
           replyResult && n.jsxs("div", { style:{background:"white",borderRadius:12,border:"1px solid #E5E7EB",borderTop:"3px solid #059669",padding:"20px 22px"}, children:[
@@ -21665,10 +21849,13 @@ function CommercialTab({ client: e, clients: t, upd: i }) {
 
   /* ── RDV state ── */
   const rdvKey = `rdv_${e.id}`;
-  const [rdvList, setRdvList] = D.useState(() => { try { return JSON.parse(localStorage.getItem(rdvKey) || "[]"); } catch { return []; } });
+  const [rdvList, setRdvList] = D.useState(() => {
+    const fromClient = e.rdvList || [];
+    try { const fromLocal = JSON.parse(localStorage.getItem(rdvKey) || "[]"); return fromClient.length >= fromLocal.length ? fromClient : fromLocal; } catch { return fromClient; }
+  });
   const [rdvForm, setRdvForm] = D.useState({ date: "", type: "", notes: "" });
   const [showRdvForm, setShowRdvForm] = D.useState(false);
-  const saveRdv = (list) => { setRdvList(list); localStorage.setItem(rdvKey, JSON.stringify(list)); };
+  const saveRdv = (list) => { setRdvList(list); localStorage.setItem(rdvKey, JSON.stringify(list)); i(t.map(c => c.id === e.id ? { ...c, rdvList: list } : c)); };
   const addRdv = () => { if (!rdvForm.date) return; saveRdv([...rdvList, { ...rdvForm, id: Date.now() }]); setRdvForm({ date:"", type:"", notes:"" }); setShowRdvForm(false); };
   const delRdv = (id) => saveRdv(rdvList.filter(r => r.id !== id));
   const today = new Date().toISOString().slice(0,10);
@@ -21678,12 +21865,15 @@ function CommercialTab({ client: e, clients: t, upd: i }) {
 
   /* ── Temps state ── */
   const tempsKey = `bto_temps_${e.id}`;
-  const [sessions, setSessions] = D.useState(() => { try { return JSON.parse(localStorage.getItem(tempsKey) || "[]"); } catch { return []; } });
+  const [sessions, setSessions] = D.useState(() => {
+    const fromClient = e.sessions || [];
+    try { const fromLocal = JSON.parse(localStorage.getItem(tempsKey) || "[]"); return fromClient.length >= fromLocal.length ? fromClient : fromLocal; } catch { return fromClient; }
+  });
   const [tempsDesc, setTempsDesc] = D.useState("");
   const [tempsMins, setTempsMins] = D.useState("");
   const [timerInt, setTimerInt] = D.useState(null);
   const [timerSecs, setTimerSecs] = D.useState(0);
-  const saveSessions = (list) => { setSessions(list); localStorage.setItem(tempsKey, JSON.stringify(list)); };
+  const saveSessions = (list) => { setSessions(list); localStorage.setItem(tempsKey, JSON.stringify(list)); i(t.map(c => c.id === e.id ? { ...c, sessions: list } : c)); };
   const addSession = () => { if (!tempsMins || !tempsDesc.trim()) return; saveSessions([...sessions, { id:Date.now(), date:new Date().toISOString(), desc:tempsDesc.trim(), mins:parseInt(tempsMins) }]); setTempsDesc(""); setTempsMins(""); };
   const startTimer = () => { const t0 = Date.now(); setTimerSecs(0); const iv = setInterval(() => setTimerSecs(Math.floor((Date.now()-t0)/1e3)), 1e3); setTimerInt(iv); };
   const stopTimer = () => { clearInterval(timerInt); setTimerInt(null); const m = Math.ceil(timerSecs/60); if (m>0 && tempsDesc.trim()) { saveSessions([...sessions, { id:Date.now(), date:new Date().toISOString(), desc:tempsDesc.trim(), mins:m, fromTimer:true }]); setTempsDesc(""); setTimerSecs(0); } };
@@ -21829,15 +22019,17 @@ function CommercialTab({ client: e, clients: t, upd: i }) {
   ]});
 }
 function RdvTab({ client: e, clients: t, upd: i }) {
-  const storageKey = `rdv_${e.id}`;
+  const _rdvKey = `rdv_${e.id}`;
   const [rdvList, setRdvList] = D.useState(() => {
-    try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); } catch { return []; }
+    const fromClient = e.rdvList || [];
+    try { const fromLocal = JSON.parse(localStorage.getItem(_rdvKey) || "[]"); return fromClient.length >= fromLocal.length ? fromClient : fromLocal; } catch { return fromClient; }
   });
   const [form, setForm] = D.useState({ date: "", heure: "", type: "", notes: "" });
   const [showForm, setShowForm] = D.useState(false);
   const save = (list) => {
     setRdvList(list);
-    localStorage.setItem(storageKey, JSON.stringify(list));
+    localStorage.setItem(_rdvKey, JSON.stringify(list));
+    i(t.map(c => c.id === e.id ? { ...c, rdvList: list } : c));
   };
   const addRdv = () => {
     if (!form.date) return;
@@ -22331,7 +22523,7 @@ function ManualEditModal({
                       border: "1px solid #fde68a",
                     },
                     children:
-                      "Mettez à jour les chiffres clés directement depuis votre tableau de bord GMB. Ces données apparaîtront dans la vue d ensemble et les rapports.",
+                      "Mettez à jour les chiffres clés directement depuis votre tableau de bord Google Business Profile. Ces données apparaîtront dans la vue d ensemble et les rapports.",
                   }),
                   n.jsx("div", {
                     style: {
@@ -25997,11 +26189,11 @@ function CalendrierGrid({
                       model: "claude-sonnet-4-6",
                       max_tokens: 2500,
                       system:
-                        "Tu es Sara Baudouin, experte SEO local a Vannes, fondatrice de Agence Be the one. Tu rediges des emails de prospection percutants bases sur un vrai audit GMB avec une promesse chiffree de progression. Reponds UNIQUEMENT en JSON valide.",
+                        "Tu es Sara Baudouin, experte SEO local a Vannes, fondatrice de Agence Be the one. Tu rediges des emails de prospection percutants bases sur un vrai audit GBP avec une promesse chiffree de progression. Reponds UNIQUEMENT en JSON valide.",
                       messages: [
                         {
                           role: "user",
-                          content: `Redige 2 emails de prospection bases sur cet audit GMB reel + projection 3 mois.
+                          content: `Redige 2 emails de prospection bases sur cet audit GBP reel + projection 3 mois.
 
 ETABLISSEMENT : "${e.name}" — ${e.category || ""} a ${e.city || ""}
 SCORE ACTUEL : ${u}/100 (${m.label})
@@ -27084,7 +27276,7 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
             n.jsx("label", { style:labelStyle, children:"Description *" }),
             n.jsx("span", { style:{ fontSize:11, fontWeight:700, color: isOverLimit ? "#DC2626" : charsLeft < 100 ? "#d97706" : "#9CA3AF" }, children: isOverLimit ? `⚠️ ${Math.abs(charsLeft)} car. en trop` : `${charsLeft} restants` }),
           ]}),
-          n.jsx("textarea", { value:summary, onChange:ev=>setSummary(ev.target.value), rows:6, placeholder:"Rédigez votre publication Google My Business…\n\nConseils : soyez concret, mentionnez votre ville, ajoutez un appel à l'action.", style:{ ...inputStyle, resize:"vertical", lineHeight:1.6, border: isOverLimit ? "1.5px solid #DC2626" : "1.5px solid #E5E7EB" } }),
+          n.jsx("textarea", { value:summary, onChange:ev=>setSummary(ev.target.value), rows:6, placeholder:"Rédigez votre publication Google Business Profile…\n\nConseils : soyez concret, mentionnez votre ville, ajoutez un appel à l'action.", style:{ ...inputStyle, resize:"vertical", lineHeight:1.6, border: isOverLimit ? "1.5px solid #DC2626" : "1.5px solid #E5E7EB" } }),
           // Barre de progression
           n.jsx("div", { style:{ marginTop:6, height:4, borderRadius:2, background:"#F3F4F6", overflow:"hidden" }, children:
             n.jsx("div", { style:{ height:"100%", borderRadius:2, background: isOverLimit ? "#DC2626" : charsLeft < 100 ? "#d97706" : "#059669", width:`${Math.min(100, (summary.length/MAX_CHARS)*100)}%`, transition:"width .2s, background .2s" } })
@@ -27192,7 +27384,7 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
 
         // Erreur / Succès
         error && n.jsx("div", { style:{ background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#DC2626", fontWeight:600 }, children:"⚠️ " + error }),
-        success && n.jsx("div", { style:{ background:"#D1FAE5", border:"1px solid #6EE7B7", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#065F46", fontWeight:700 }, children:"✅ Post publié avec succès sur Google My Business !" }),
+        success && n.jsx("div", { style:{ background:"#D1FAE5", border:"1px solid #6EE7B7", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#065F46", fontWeight:700 }, children:"✅ Post publié avec succès sur Google Business Profile !" }),
 
         // Non connecté
         !isGoogleConnected && mode === "publish" && n.jsxs("div", { style:{ background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:10, padding:"12px 16px", fontSize:12.5, color:"#92400E" }, children:[
@@ -27233,6 +27425,7 @@ function PublicationsTab({ client: e, clients: t, upd: i, hasEnvKey: r, apiKey: 
   const [copied, setCopied] = D.useState(false);
   const [genHistory, setGenHistory] = D.useState(e.genHistory || []);
   const [showHistory, setShowHistory] = D.useState(false);
+  const [copiedHistId, setCopiedHistId] = D.useState(null);
   const [ideaFilter, setIdeaFilter] = D.useState("Tous");
   const [postTemplates, setPostTemplates] = D.useState(e.postTemplates || []);
   const [showTemplates, setShowTemplates] = D.useState(false);
@@ -27290,7 +27483,7 @@ function PublicationsTab({ client: e, clients: t, upd: i, hasEnvKey: r, apiKey: 
     try {
       const estabAddress = e.address || extracted.address || "";
       const estabDesc = e.description || extracted.description || "";
-      const systemPrompt = `Je publie un Google Post pour ma fiche Google My Business et tu rédiges le texte à ma place, comme si j'étais le gérant qui s'adresse directement à mes clients.
+      const systemPrompt = `Je publie un Google Post pour ma fiche Google Business Profile et tu rédiges le texte à ma place, comme si j'étais le gérant qui s'adresse directement à mes clients.
 
 Ton et style :
 - Écris comme un professionnel passionné qui parle à ses clients, pas comme un rédacteur marketing.
@@ -27331,7 +27524,7 @@ Consignes spécifiques :
 ${genInfos ? genInfos : "(aucune consigne supplémentaire)"}
 ${genKw ? `\nMot-clé à intégrer naturellement dans le texte : ${genKw}` : ""}
 
-Rédige la publication GMB.`;
+Rédige la publication Google Business Profile.`;
 
       const resp = await fetch("/api/data/sync?action=ai", {
         method: "POST",
@@ -27491,7 +27684,7 @@ Rédige la publication GMB.`;
           n.jsx("div", { style:{ width:4, height:28, borderRadius:2, background:"linear-gradient(135deg,var(--indigo2),#C03080)", marginRight:14, flexShrink:0 } }),
           n.jsxs("div", { children:[
             n.jsx("div", { style:{ fontSize:16, fontWeight:800, color:"var(--ink)" }, children:"Publications" }),
-            n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginTop:2 }, children:"Générez vos posts GMB — copiez et publiez directement sur Google Business Profile" }),
+            n.jsx("div", { style:{ fontSize:12, color:"var(--ink4)", marginTop:2 }, children:"Générez vos posts GBP — copiez et publiez directement sur Google Business Profile" }),
           ]}),
         ]}),
         // Segmented tabs (style Visibilité)
@@ -27815,7 +28008,7 @@ Rédige la publication GMB.`;
                   n.jsx("div", { style: { padding: "12px 14px", fontSize: 12.5, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line", maxHeight: 120, overflow: "hidden", maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }, children: h.text }),
                   n.jsxs("div", { style: { padding: "8px 12px", background: "#F9FAFB", borderTop: "1px solid #F3F4F6", display: "flex", gap: 6 }, children: [
                     n.jsx("button", { onClick: () => { setGenResult(h.text); setGenTitle(h.title); setGenType(h.type); setGenGmbType(h.gmbType || "STANDARD"); window.scrollTo(0,0); }, style: { padding: "5px 12px", borderRadius: 7, border: "1.5px solid #D97706", background: "white", color: "#D97706", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "↩️ Réutiliser" }),
-                    n.jsx("button", { onClick: () => { navigator.clipboard.writeText(h.text); }, style: { padding: "5px 10px", borderRadius: 7, border: "1px solid #E5E7EB", background: "white", color: "#6B7280", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }, children: "📋 Copier" }),
+                    n.jsx("button", { onClick: () => { navigator.clipboard.writeText(h.text); setCopiedHistId(h.id); setTimeout(() => setCopiedHistId(null), 2000); }, style: { padding: "5px 10px", borderRadius: 7, border: `1px solid ${copiedHistId === h.id ? "#6EE7B7" : "#E5E7EB"}`, background: copiedHistId === h.id ? "#D1FAE5" : "white", color: copiedHistId === h.id ? "#059669" : "#6B7280", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: copiedHistId === h.id ? 700 : 400 }, children: copiedHistId === h.id ? "✓ Copié" : "📋 Copier" }),
                     n.jsx("button", { onClick: () => openComposer("schedule", h.text, h.gmbType || "STANDARD"), style: { padding: "5px 10px", borderRadius: 7, border: "1.5px solid #6B40D8", background: "white", color: "#6B40D8", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }, children: "⏰" }),
                     n.jsx("button", {
                       onClick: () => {
@@ -28227,7 +28420,7 @@ Rédige la publication GMB.`;
               n.jsxs("div", { children: [
                 n.jsx("div", { style: { fontSize: 16, fontWeight: 800, color: "#1E1B30", marginBottom: 4 }, children: "Journal des publications" }),
 
-                n.jsx("div", { style: { fontSize: 12, color: "#6B7280" }, children: "Historique des posts publiés sur la fiche Google My Business" }),
+                n.jsx("div", { style: { fontSize: 12, color: "#6B7280" }, children: "Historique des posts publiés sur la fiche Google Business Profile" }),
               ]}),
               n.jsx("button", {
                 onClick: () => setShowAddPost(true),
@@ -28699,7 +28892,7 @@ function MonthlyTab({ client: e, clients: t, upd: i, calcScore: r }) {
   const generateAiReply = async (review) => {
     setGeneratingReply(true);
     const apiKey = localStorage.getItem("bto_apikey") || "";
-    if (!apiKey) { setReplyText("Clé API Claude manquante (Mon Espace → Paramètres)."); setGeneratingReply(false); return; }
+    if (!apiKey) { setReplyText("Clé API Claude manquante (Mon espace → Paramètres)."); setGeneratingReply(false); return; }
     const prompt = `Tu es le gérant de "${e.name}", ${e.category||""} à ${e.city||""}.
 Rédige une réponse professionnelle, chaleureuse et personnalisée à cet avis Google.
 Note : ${review.rating}/5 étoiles
@@ -29029,7 +29222,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
         ${statItem("📍","Itinéraires",gmbStats.itineraires,gmbStats.prevItineraires)}
         ${statItem("🖼️","Vues photos",gmbStats.vuesPhotos,gmbStats.prevVuesPhotos)}
       </div>`;
-    })() : `<div style="background:#fff3cd;border-radius:8px;padding:12px;font-size:12px;color:#856404;">Aucune statistique GMB saisie pour ce mois. Renseignez-les dans l'onglet Positions & Stats GMB.</div>`;
+    })() : `<div style="background:#fff3cd;border-radius:8px;padding:12px;font-size:12px;color:#856404;">Aucune statistique GBP saisie pour ce mois. Renseignez-les dans l'onglet Positions & Stats GBP.</div>`;
 
     const posRows = mapPositions.slice(0,8).map(pos => {
       const d = pos.prevPos != null ? pos.avg - pos.prevPos : null;
@@ -29378,7 +29571,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
           <div class="cover-date">Rapport confidentiel<br><strong style="color:#374151;font-size:13px">${monthLabel}</strong></div>
         </div>
         <div class="cover-main">
-          <div class="cover-tag">📊 Rapport mensuel GMB</div>
+          <div class="cover-tag">📊 Rapport mensuel GBP</div>
           <div class="cover-title">Votre fiche Google ce mois-ci :<br><span class="cover-title-grad">où en êtes-vous ?</span></div>
           <div class="cover-client">${clientName} · suivi de votre visibilité locale</div>
 
@@ -29435,7 +29628,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
         <div class="kpi-grid">
           <div class="kpi" style="border-top-color:${scoreColor};background:${scoreBg};">
             <div class="kpi-icon">🏆</div>
-            <div class="kpi-lbl">Score GMB</div>
+            <div class="kpi-lbl">Score GBP</div>
             <div class="kpi-val" style="color:${scoreColor};">${currentScore}</div>
             <div class="kpi-evo" style="color:${evoColor};">${evoText}</div>
           </div>
@@ -29460,12 +29653,12 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
         </div>
 
         <!-- ACTIONS RÉALISÉES -->
-        <div class="rp-section">✅ Actions réalisées sur la fiche GMB</div>
+        <div class="rp-section">✅ Actions réalisées sur la fiche Google Business Profile</div>
         <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Optimisations effectuées ce mois-ci</div>
         ${actionsHtml}
 
         <!-- GMB STATS -->
-        <div class="rp-section">📈 Statistiques Google My Business</div>
+        <div class="rp-section">📈 Statistiques Google Business Profile</div>
         <div style="font-size:11px;color:#9CA3AF;margin:-8px 0 14px;padding-left:2px">Visibilité et interactions sur votre fiche</div>
         ${gmbStatsHtml}
 
@@ -29493,7 +29686,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
           </tr></thead>
           <tbody>${posRows}</tbody>
         </table>
-        <div style="font-size:11px;color:#9CA3AF;margin-top:8px;margin-bottom:18px;line-height:1.6">Les cartes de positionnement géographique détaillées (scan réel point par point) sont consultables dans l'onglet « Positions & Stats GMB » de votre espace.</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-top:8px;margin-bottom:18px;line-height:1.6">Les cartes de positionnement géographique détaillées (scan réel point par point) sont consultables dans l'onglet « Positions & Stats GBP » de votre espace.</div>
 
         <!-- CARTES MOTS-CLÉS + CONCURRENTS -->
         <div class="rp-section">🗺️ Cartes de positionnement par mot-clé</div>
@@ -29894,14 +30087,14 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                       n.jsx("text",{x:p.x,y:H+18,textAnchor:"middle",fontSize:9,fill:"#9CA3AF",children: idx===pts.length-1 ? "Aujourd'hui" : new Date(p.date).toLocaleDateString("fr-FR",{month:"short",year:"2-digit"})}),
                     ]})),
                   ]}),
-                  n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:6,textAlign:"center"},children:"Évolution du score GMB calculée à partir des snapshots mensuels enregistrés et du score actuel."}),
+                  n.jsx("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:6,textAlign:"center"},children:"Évolution du score GBP calculée à partir des snapshots mensuels enregistrés et du score actuel."}),
                 ]});
               })(),
             ]}),
 
             // KPIs
             n.jsxs("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:14,marginBottom:18},children:[
-              {label:"Score GMB",val:currentScore,col:scCol(currentScore),prevVal:lastSnap?.score,icon:"🏆"},
+              {label:"Score GBP",val:currentScore,col:scCol(currentScore),prevVal:lastSnap?.score,icon:"🏆"},
               {label:"Avis Google",val:parseInt(extracted.reviewCount)||null,col:"#3498db",prevVal:lastSnap?.reviewCount,icon:"⭐"},
               {label:"Photos",val:parseInt(extracted.photoCount)||null,col:"#27ae60",prevVal:lastSnap?.photoCount,icon:"📷"},
               {label:"Posts ce mois",val:monthPosts.length,col:"#f39c12",prevVal:null,icon:"✍️"},
@@ -30160,7 +30353,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
             n.jsxs("div",{style:cardStyle,children:[
               n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8},children:[
                 n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"},children:[
-                  n.jsx("div",{style:sectionTitle,children:"📊 Statistiques GMB"}),
+                  n.jsx("div",{style:sectionTitle,children:"📊 Statistiques GBP"}),
                   n.jsxs("select",{
                     value:statsMonth,
                     onChange:ev=>{ setStatsMonth(ev.target.value); setEditingGmb(false); setShowGmbPaste(false); setGmbParsed(null); setGmbPasteText(""); },
@@ -30191,14 +30384,14 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
               ]}),
               // Bandeau si connecté mais fiche non liée
               isGoogleConnected && !e.gmbLocationName && n.jsxs("div",{style:{background:"#FEF3C7",border:"1px solid #FCD34D",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#92400E",marginBottom:12,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"},children:[
-                n.jsx("span",{children:"⚠️ Google connecté — lie maintenant la fiche GMB de ce client pour activer la synchronisation automatique."}),
+                n.jsx("span",{children:"⚠️ Google connecté — lie maintenant la fiche Google Business Profile de ce client pour activer la synchronisation automatique."}),
                 n.jsx("button",{onClick:openLinkFiche,style:{background:"#92400E",color:"white",border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"},children:"🔗 Lier la fiche"}),
               ]}),
               // Modale lier fiche GMB — liste automatique
               showLinkFiche && n.jsx("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"},onClick:()=>setShowLinkFiche(false),children:
                 n.jsxs("div",{style:{background:"white",borderRadius:16,padding:28,maxWidth:560,width:"92%",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",maxHeight:"80vh",overflowY:"auto"},onClick:ev=>ev.stopPropagation(),children:[
                   n.jsxs("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16},children:[
-                    n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30"},children:"🔗 Sélectionner la fiche GMB"}),
+                    n.jsx("div",{style:{fontSize:16,fontWeight:800,color:"#1E1B30"},children:"🔗 Sélectionner la fiche Google Business Profile"}),
                     n.jsx("button",{onClick:()=>setShowLinkFiche(false),style:{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9CA3AF"},children:"✕"}),
                   ]}),
 
@@ -30294,7 +30487,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                 ]}),
               ]}),
               editingGmb ? n.jsxs("div",{children:[
-                n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:12},children:"Saisissez les stats GMB depuis l'interface Google. Renseignez également les valeurs du mois précédent pour calculer l'évolution."}),
+                n.jsx("div",{style:{fontSize:12,color:"#6B7280",marginBottom:12},children:"Saisissez les stats GBP depuis l'interface Google. Renseignez également les valeurs du mois précédent pour calculer l'évolution."}),
                 n.jsx("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12,marginBottom:14},children:
                   gmbStatFields.map(f2=>n.jsxs("div",{key:f2.key,style:{background:"#F9FAFB",borderRadius:10,padding:"12px"},children:[
                     n.jsx("div",{style:{fontSize:12,fontWeight:700,color:"#374151",marginBottom:8},children:f2.icon+" "+f2.label}),
@@ -30798,7 +30991,7 @@ Réponds uniquement avec le texte de la réponse, sans guillemets.`;
                   ]})
                 : n.jsxs("div",{children:[
                     n.jsx("div",{style:{fontSize:14,fontWeight:600,color:"#374151",marginBottom:6},children:"Avis non connectés à Google"}),
-                    n.jsx("div",{style:{fontSize:12,color:"#9CA3AF"},children:"Connecte Google et lie la fiche dans l'onglet Positions & Stats GMB pour voir les avis en temps réel et répondre en 1 clic."}),
+                    n.jsx("div",{style:{fontSize:12,color:"#9CA3AF"},children:"Connecte Google et lie la fiche dans l'onglet Positions & Stats GBP pour voir les avis en temps réel et répondre en 1 clic."}),
                   ]}),
             ]}),
 
@@ -31727,7 +31920,7 @@ function TemplatesTab({
                   </div>
 
                   <div style="padding:36px 44px;display:flex;flex-direction:column;align-items:center;text-align:center">
-                    <div style="display:inline-flex;align-items:center;gap:6px;background:#EEF2FF;border:1px solid #C7D2FE;color:#3B5BDB;font-size:11px;font-weight:700;padding:5px 14px;border-radius:20px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:20px">🗺️ Analyse Google My Business</div>
+                    <div style="display:inline-flex;align-items:center;gap:6px;background:#EEF2FF;border:1px solid #C7D2FE;color:#3B5BDB;font-size:11px;font-weight:700;padding:5px 14px;border-radius:20px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:20px">🗺️ Analyse Google Business Profile</div>
                     <div style="font-size:38px;font-weight:900;color:#1E1B30;line-height:1.1;letter-spacing:-.03em;margin-bottom:10px;max-width:560px">Votre fiche Google :<br><span style="background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">où en êtes-vous vraiment ?</span></div>
                     <div style="font-size:14px;color:#6B7280;margin-bottom:32px;max-width:440px;line-height:1.6">Analyse complète de votre visibilité locale, benchmark concurrentiel et plan d'optimisation <strong style="color:#1E1B30">continue</strong> pour dominer — et rester — en TOP 3 Google Maps.</div>
 
@@ -31781,7 +31974,7 @@ function TemplatesTab({
                     <div class="rp-page-hdr">
                       <div style="display:flex;align-items:center;gap:8px">
                         <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:white">B</div>
-                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GMB</span>
+                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GBP</span>
                       </div>
                       <div style="font-size:11px;color:#9CA3AF;text-align:right">${clientName}${clientCat?" · "+clientCat:""}<br><strong style="color:#374151">Diagnostic & Benchmark</strong></div>
                     </div>
@@ -31856,7 +32049,7 @@ function TemplatesTab({
                     <div class="rp-page-hdr">
                       <div style="display:flex;align-items:center;gap:8px">
                         <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:white">B</div>
-                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GMB</span>
+                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GBP</span>
                       </div>
                       <div style="font-size:11px;color:#9CA3AF;text-align:right">${clientName}<br><strong style="color:#374151">Plan d'action & Suivi continu</strong></div>
                     </div>
@@ -32045,7 +32238,7 @@ function TemplatesTab({
                   if (real < 1) return "<1 client/an";
                   return `${prud}–${real} clients/an`;
                 };
-                const _roiPosLabel = _roiHasGMB ? `GMB` : `#${_roiPos}`;
+                const _roiPosLabel = _roiHasGMB ? `GBP` : `#${_roiPos}`;
 
                 const pageROI = !_showROIPage ? "" : `<div class="rp-page">
                   <div class="rp-top-bar"></div>
@@ -32053,7 +32246,7 @@ function TemplatesTab({
                     <div class="rp-page-hdr">
                       <div style="display:flex;align-items:center;gap:8px">
                         <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#6B40D8,#C03080,#E85A30);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:white">B</div>
-                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GMB</span>
+                        <span style="font-size:13px;font-weight:700;color:#6B40D8">${j} · Rapport GBP</span>
                       </div>
                       <div style="font-size:11px;color:#9CA3AF;text-align:right">${clientName}<br><strong style="color:#374151">Potentiel de visibilité locale</strong></div>
                     </div>
