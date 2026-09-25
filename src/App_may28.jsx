@@ -10637,6 +10637,9 @@ function App() {
       } catch { setSyncStatus("error"); }
     };
     syncFromSupabase();
+    // Sync automatique toutes les 30 secondes (pour voir les changements de l'autre navigateur)
+    const autoSync = setInterval(syncFromSupabase, 30000);
+    return () => clearInterval(autoSync);
   }, []);
 
   // ── Sync settings quand clients changent ──
