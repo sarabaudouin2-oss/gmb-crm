@@ -10615,13 +10615,18 @@ function App() {
         if (clientsRow && clientsRow.value) {
           const remoteClients = JSON.parse(clientsRow.value);
           const localClients = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-          const localSavedAt = parseInt(localStorage.getItem(STORAGE_KEY + "_savedAt") || "0", 10);
           const remoteSavedAt = clientsRow.updated_at ? new Date(clientsRow.updated_at).getTime() : 0;
-          // Supabase gagne si : plus récent OU a plus de fiches (évite de perdre des ajouts)
-          if (remoteSavedAt > localSavedAt || remoteClients.length > localClients.length) {
-            localStorage.setItem(STORAGE_KEY, clientsRow.value);
+          // Supabase est toujours la source de vérité si :
+          // - il a plus de fiches que le local, OU
+          // - le local n'a pas de données
+          // On fusionne : on garde toutes les fiches de Supabase + les fiches locales absentes de Supabase
+          const remoteIds = new Set(remoteClients.map(c => c.id));
+          const localOnly = localClients.filter(c => !remoteIds.has(c.id));
+          const merged = [...remoteClients, ...localOnly];
+          if (merged.length !== localClients.length || remoteClients.some((rc, i) => JSON.stringify(rc) !== JSON.stringify(localClients.find(lc => lc.id === rc.id)))) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
             localStorage.setItem(STORAGE_KEY + "_savedAt", remoteSavedAt.toString());
-            x(remoteClients);
+            x(merged);
           }
         }
         // Charger les contracts
