@@ -22,6 +22,7 @@ async function storeSharedHtml(html, token) {
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.status(200).end();
 
   // ── ARTICLES BLOG (lecture publique / écriture protégée) ──
@@ -92,7 +93,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── SCAN POSITIONNEMENT (ancienne API Places — géolocalisation précise) ──
+  // ── SCAN POSITIONNEMENT (Places API textsearch) ──
   if (req.method === "GET" && req.query.action === "scan") {
     const { query, lat, lng } = req.query;
     const apiKey = process.env.GOOGLE_API_KEY;
@@ -114,15 +115,42 @@ export default async function handler(req, res) {
       }
       const places = (data.results || []).slice(0, 20).map((p, i) => ({
         rank: i + 1,
-        name: p.name,
+        name: p.name || "?",
         address: p.formatted_address || "",
         rating: p.rating || null,
         reviews: p.user_ratings_total || 0,
-        placeId: p.place_id,
+        placeId: p.place_id || "",
       }));
       return res.status(200).json({ places });
     } catch (e) {
       return res.status(500).json({ error: e.message, places: [] });
+    }
+  }
+
+  // ── SEND EMAIL (via Resend) ──
+  if (req.method === "POST" && req.query.action === "send-email") {
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) return res.status(500).json({ error: "RESEND_API_KEY non configurée." });
+    try {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const { to, subject, html, from } = JSON.parse(Buffer.concat(chunks).toString());
+      if (!to || !subject || !html) return res.status(400).json({ error: "Paramètres manquants: to, subject, html." });
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: from || "Agence Be The One <contact@agence-betheone.fr>",
+          to: Array.isArray(to) ? to : [to],
+          subject,
+          html,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) return res.status(r.status).json({ error: data.message || "Erreur Resend", detail: data });
+      return res.json({ success: true, id: data.id });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
     }
   }
 
@@ -286,7 +314,9 @@ export default async function handler(req, res) {
         return res.json({ clients: [], exists: false });
       }
       const blobMeta = existing.blobs[0];
-      const response = await fetch(blobMeta.downloadUrl || blobMeta.url);
+      const response = await fetch(blobMeta.downloadUrl || blobMeta.url, {
+        headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
+      });
       if (!response.ok) return res.json({ clients: [], exists: false });
       const text = await response.text();
       const data = JSON.parse(text);
@@ -304,6 +334,43 @@ export default async function handler(req, res) {
       for await (const chunk of req) chunks.push(chunk);
       const body = Buffer.concat(chunks).toString("utf-8");
       const data = JSON.parse(body);
+      const newClients = Array.isArray(data) ? data : (data.clients || []);
+
+      // Lire la version actuelle pour vérification anti-perte
+      let currentClients = [];
+      try {
+        const existing = await list({ prefix: DATA_PATH, mode: "folded" });
+        if (existing.blobs && existing.blobs.length > 0) {
+          const r = await fetch(existing.blobs[0].downloadUrl || existing.blobs[0].url, {
+            headers: { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
+          });
+          if (r.ok) {
+            const t = await r.json();
+            currentClients = Array.isArray(t) ? t : (t.clients || []);
+          }
+        }
+      } catch (_) {}
+
+      // Garde : refus si la nouvelle liste perd plus de 2 clients d'un coup (protection contre écrasement accidentel)
+      if (currentClients.length > 2 && newClients.length < currentClients.length - 2) {
+        return res.status(409).json({
+          error: `Sauvegarde refusée : ${currentClients.length} clients actuels → ${newClients.length} dans la requête. Rechargez la page et réessayez.`,
+          currentCount: currentClients.length,
+          newCount: newClients.length,
+        });
+      }
+
+      // Backup avant écrasement
+      if (currentClients.length > 0) {
+        try {
+          const BACKUP_PATH = "gmb-crm/data.backup.json";
+          const existingBackup = await list({ prefix: BACKUP_PATH });
+          if (existingBackup.blobs.length > 0) await del(existingBackup.blobs.map(b => b.url));
+          await put(BACKUP_PATH, JSON.stringify(currentClients), {
+            access: "private", contentType: "application/json", addRandomSuffix: false,
+          });
+        } catch (_) {}
+      }
 
       try {
         const existing = await list({ prefix: DATA_PATH });
@@ -311,7 +378,7 @@ export default async function handler(req, res) {
         if (urls.length > 0) await del(urls);
       } catch (_) {}
 
-      await put(DATA_PATH, JSON.stringify(data), {
+      await put(DATA_PATH, JSON.stringify(newClients), {
         access: "private",
         contentType: "application/json",
         addRandomSuffix: false,
