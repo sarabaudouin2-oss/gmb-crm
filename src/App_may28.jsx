@@ -10616,15 +10616,26 @@ function App() {
           const remoteClients = JSON.parse(clientsRow.value);
           const localClients = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
           const remoteSavedAt = clientsRow.updated_at ? new Date(clientsRow.updated_at).getTime() : 0;
-          // Supabase est toujours la source de vérité si :
-          // - il a plus de fiches que le local, OU
-          // - le local n'a pas de données
-          // On fusionne : on garde toutes les fiches de Supabase + les fiches locales absentes de Supabase
-          const remoteIds = new Set(remoteClients.map(c => c.id));
-          const localOnly = localClients.filter(c => !remoteIds.has(c.id));
-          const merged = [...remoteClients, ...localOnly];
-          if (merged.length !== localClients.length || remoteClients.some((rc, i) => JSON.stringify(rc) !== JSON.stringify(localClients.find(lc => lc.id === rc.id)))) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          // Merge : union de toutes les fiches, en gardant la version la plus récente pour chaque ID
+          const localMap = {};
+          localClients.forEach(c => { localMap[c.id] = c; });
+          const remoteMap = {};
+          remoteClients.forEach(c => { remoteMap[c.id] = c; });
+          const allIds = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
+          const merged = [];
+          allIds.forEach(id => {
+            const local = localMap[id];
+            const remote = remoteMap[id];
+            if (!local) { merged.push(remote); return; }
+            if (!remote) { merged.push(local); return; }
+            // Garder la version avec le timestamp updatedAt le plus récent
+            const localTs = local.updatedAt || local._savedAt || 0;
+            const remoteTs = remote.updatedAt || remote._savedAt || 0;
+            merged.push(remoteTs >= localTs ? remote : local);
+          });
+          const mergedStr = JSON.stringify(merged);
+          if (mergedStr !== JSON.stringify(localClients)) {
+            localStorage.setItem(STORAGE_KEY, mergedStr);
             localStorage.setItem(STORAGE_KEY + "_savedAt", remoteSavedAt.toString());
             x(merged);
           }
@@ -12721,12 +12732,16 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
               }),
               n.jsx("button", {
                 onClick: async () => {
-                  if (window._forceSyncFromSupabase) {
-                    const btn = document.getElementById("force-sync-btn");
-                    if (btn) { btn.textContent = "⏳ Sync..."; btn.disabled = true; }
-                    await window._forceSyncFromSupabase();
-                    if (btn) { btn.textContent = "✓ Synchronisé !"; setTimeout(() => { btn.textContent = "🔄 Sync"; btn.disabled = false; }, 2000); }
-                  }
+                  const btn = document.getElementById("force-sync-btn");
+                  if (btn) { btn.textContent = "⏳ Sync..."; btn.disabled = true; }
+                  try {
+                    // 1. Push local data to Supabase first
+                    const localClients = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+                    if (localClients.length > 0) await supaSet(STORAGE_KEY, JSON.stringify(localClients));
+                    // 2. Then pull and merge from Supabase
+                    if (window._forceSyncFromSupabase) await window._forceSyncFromSupabase();
+                  } catch {}
+                  if (btn) { btn.textContent = "✓ Synchronisé !"; setTimeout(() => { btn.textContent = "🔄 Sync"; btn.disabled = false; }, 2000); }
                 },
                 id: "force-sync-btn",
                 style: { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
