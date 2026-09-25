@@ -23168,6 +23168,7 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
         ...(t.data || {}),
         extracted: {
           ...(t.data?.extracted || {}),
+          name:     infoForm.name.trim(),
           address:  infoForm.address.trim(),
           city:     infoForm.city.trim(),
           phone:    infoForm.phone.trim(),
