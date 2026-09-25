@@ -23218,11 +23218,18 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
               n.jsxs("div",{style:{fontSize:12,color:"#6B7280"},children:[t.city||o.city||"", (t.category||o.category) ? ` · ${t.category||o.category}` : ""]}),
             ]}),
           ]}),
-          n.jsx("button",{
-            onClick:()=>{ if(!editInfos){setInfoForm({name:t.name||"",address:t.address||o.address||"",city:t.city||o.city||"",category:t.category||o.category||"",phone:t.phone||o.phone||"",website:t.website||o.website||""});} setEditInfos(v=>!v); },
-            style:{fontSize:12,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${editInfos?"#dc2626":"#6B40D8"}`,background:editInfos?"#FEF2F2":"#F5F3FF",color:editInfos?"#dc2626":"#6B40D8",fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
-            children: editInfos ? "✕ Annuler" : "✏️ Modifier",
-          }),
+          n.jsxs("div",{style:{display:"flex",gap:8},children:[
+            editInfos && n.jsx("button",{
+              onClick:saveInfos,
+              style:{fontSize:12,padding:"6px 14px",borderRadius:8,border:"1.5px solid #059669",background:"#F0FDF4",color:"#059669",fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+              children:"💾 Enregistrer",
+            }),
+            n.jsx("button",{
+              onClick:()=>{ if(!editInfos){setInfoForm({name:t.name||"",address:t.address||o.address||"",city:t.city||o.city||"",category:t.category||o.category||"",phone:t.phone||o.phone||"",website:t.website||o.website||""});} setEditInfos(v=>!v); },
+              style:{fontSize:12,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${editInfos?"#dc2626":"#6B40D8"}`,background:editInfos?"#FEF2F2":"#F5F3FF",color:editInfos?"#dc2626":"#6B40D8",fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
+              children: editInfos ? "✕ Annuler" : "✏️ Modifier",
+            }),
+          ]}),
         ]}),
         editInfos && n.jsxs("div",{children:[
           n.jsx("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14},children:[
