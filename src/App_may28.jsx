@@ -10644,7 +10644,9 @@ function App() {
     syncFromSupabase();
     // Sync automatique toutes les 30 secondes (pour voir les changements de l'autre navigateur)
     const autoSync = setInterval(syncFromSupabase, 30000);
-    return () => clearInterval(autoSync);
+    // Expose pour le bouton manuel
+    window._forceSyncFromSupabase = syncFromSupabase;
+    return () => { clearInterval(autoSync); delete window._forceSyncFromSupabase; };
   }, []);
 
   // ── Sync settings quand clients changent ──
@@ -12716,6 +12718,19 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                   fontWeight: 600,
                 },
                 children: "Déconnexion →",
+              }),
+              n.jsx("button", {
+                onClick: async () => {
+                  if (window._forceSyncFromSupabase) {
+                    const btn = document.getElementById("force-sync-btn");
+                    if (btn) { btn.textContent = "⏳ Sync..."; btn.disabled = true; }
+                    await window._forceSyncFromSupabase();
+                    if (btn) { btn.textContent = "✓ Synchronisé !"; setTimeout(() => { btn.textContent = "🔄 Sync"; btn.disabled = false; }, 2000); }
+                  }
+                },
+                id: "force-sync-btn",
+                style: { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
+                children: "🔄 Sync",
               }),
             ],
           }),
