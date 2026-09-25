@@ -31471,6 +31471,31 @@ function TemplatesTab({
                     style: { fontSize: 11, padding: "5px 9px", whiteSpace: "nowrap", background: "transparent", color: "#dc2626", border: "none", cursor: "pointer", fontFamily: "inherit" },
                     children: "↺ Réinitialiser",
                   }),
+                !localStorage.getItem(`rapport_initial_${e.id}`) ? n.jsx("button", {
+                  onClick: () => {
+                    const ct = document.getElementById("rapport-content");
+                    if (!ct) return;
+                    const snapshot = { html: ct.innerHTML, date: new Date().toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) };
+                    localStorage.setItem(`rapport_initial_${e.id}`, JSON.stringify(snapshot));
+                    supaSet(`rapport_initial_${e.id}`, JSON.stringify(snapshot));
+                    const btn = document.getElementById("rapport-initial-btn");
+                    if (btn) { btn.textContent = "✓ Rapport initial sauvegardé !"; btn.style.background = "#F0FDF4"; btn.style.color = "#059669"; btn.style.border = "1px solid #BBF7D0"; setTimeout(() => { btn.textContent = "📸 Rapport initial"; btn.style.background = "#FFF7ED"; btn.style.color = "#92400E"; btn.style.border = "1px solid #FDE68A"; }, 3000); }
+                  },
+                  id: "rapport-initial-btn",
+                  style: { fontSize: 11, padding: "5px 12px", whiteSpace: "nowrap", background: "#FFF7ED", color: "#92400E", border: "1px solid #FDE68A", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 },
+                  children: "📸 Rapport initial",
+                }) : n.jsx("button", {
+                  onClick: () => {
+                    const raw = localStorage.getItem(`rapport_initial_${e.id}`);
+                    if (!raw) return;
+                    const { html, date } = JSON.parse(raw);
+                    const w = window.open("", "_blank");
+                    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rapport initial — ${e.name}</title><style>body{font-family:system-ui,sans-serif;padding:20px;background:#F4F5FA}h1{font-size:14px;color:#6B7280;margin-bottom:20px;font-weight:600}small{color:#9CA3AF}</style></head><body><h1>📸 Rapport initial · ${e.name} <small>— sauvegardé le ${date}</small></h1>${html}</body></html>`);
+                    w.document.close();
+                  },
+                  style: { fontSize: 11, padding: "5px 12px", whiteSpace: "nowrap", background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 },
+                  children: "📄 Voir rapport initial",
+                }),
                 n.jsx("button", {
                   className: "btn-ghost",
                   onClick: () => { setShowSecPanel((L) => !L); setShowEditPanel(false); },
