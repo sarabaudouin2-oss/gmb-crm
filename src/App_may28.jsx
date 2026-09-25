@@ -10614,11 +10614,11 @@ function App() {
           .then(r => r.json()).then(rows => rows && rows.length > 0 ? rows[0] : null).catch(() => null);
         if (clientsRow && clientsRow.value) {
           const remoteClients = JSON.parse(clientsRow.value);
+          const localClients = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
           const localSavedAt = parseInt(localStorage.getItem(STORAGE_KEY + "_savedAt") || "0", 10);
           const remoteSavedAt = clientsRow.updated_at ? new Date(clientsRow.updated_at).getTime() : 0;
-          // Supabase gagne seulement s'il est plus récent que le localStorage local
-          // (évite de restaurer des fiches supprimées localement)
-          if (remoteSavedAt > localSavedAt) {
+          // Supabase gagne si : plus récent OU a plus de fiches (évite de perdre des ajouts)
+          if (remoteSavedAt > localSavedAt || remoteClients.length > localClients.length) {
             localStorage.setItem(STORAGE_KEY, clientsRow.value);
             localStorage.setItem(STORAGE_KEY + "_savedAt", remoteSavedAt.toString());
             x(remoteClients);
