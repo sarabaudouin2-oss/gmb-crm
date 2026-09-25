@@ -23225,7 +23225,7 @@ Réponds UNIQUEMENT en JSON strict : {"title":"...","description":"..."}`;
               children:"💾 Enregistrer",
             }),
             n.jsx("button",{
-              onClick:()=>{ if(!editInfos){setInfoForm({name:t.name||"",address:t.address||o.address||"",city:t.city||o.city||"",category:t.category||o.category||"",phone:t.phone||o.phone||"",website:t.website||o.website||""});} setEditInfos(v=>!v); },
+              onClick:()=>{ if(!editInfos){setInfoForm({name:t.name||"",address:t.address||o.address||"",city:t.city||o.city||"",category:t.category||o.category||"",phone:t.phone||o.phone||"",website:t.website||o.website||"",icon:t.icon||""});} setEditInfos(v=>!v); },
               style:{fontSize:12,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${editInfos?"#dc2626":"#6B40D8"}`,background:editInfos?"#FEF2F2":"#F5F3FF",color:editInfos?"#dc2626":"#6B40D8",fontWeight:700,cursor:"pointer",fontFamily:"inherit"},
               children: editInfos ? "✕ Annuler" : "✏️ Modifier",
             }),
