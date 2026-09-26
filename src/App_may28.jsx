@@ -4809,7 +4809,8 @@ JSON: {"subject":"...","body":"...","whatsapp":"..."}`,
                     ],
                   }),
                 realScore > 0 && realScore < 100 && (() => {
-                    const activeScores = (_matchedClient?.scores && Object.keys(_matchedClient.scores).length > 0) ? _matchedClient.scores : (e.scores || {});
+                    const scoreSource = (_matchedClient?.scores && Object.keys(_matchedClient.scores).length > 0) ? _matchedClient : e;
+                    const activeScores = { ...(scoreSource.scores || {}), ...(scoreSource.manualOverrides || {}) };
                     const failCount = ALL_CRITERIA.filter((cr) => activeScores[cr.id] === false).length;
                     const dynamicReason = failCount > 0
                       ? `Fiche à ${realScore}% — ${failCount} critère${failCount > 1 ? "s" : ""} à optimiser = autant d'arguments de vente`
@@ -7742,7 +7743,7 @@ const CAT_OPTIONS = [
   { value: "guide",      label: "Guide",      color: "#059669" },
   { value: "ia",         label: "IA",         color: "#0EA5E9" },
 ];
-const emptyForm = () => ({ titre:"", slug:"", metaTitle:"", metaDesc:"", motCle:"", categorie:"strategie", extrait:"", contenu:"", duree:"5 min", date: new Date().toISOString().slice(0,10), imageUrl:"", status:"published", scheduledAt:"", faq:[] });
+const emptyForm = () => ({ titre:"", slug:"", metaTitle:"", metaDesc:"", motCle:"", categorie:"strategie", extrait:"", contenu:"", duree:"5 min", date: new Date().toISOString().slice(0,10), imageUrl:"", status:"draft", scheduledAt:"", faq:[], aiGenerated:false, needsReview:false });
 
 // ── Markdown → HTML renderer (pour ContentMaitreTab) ──────────────────────────
 function mdEsc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
@@ -8359,6 +8360,10 @@ Canaux : LinkedIn / Facebook / Instagram / GBP
     ]}),
 
     result && n.jsxs("div", { style: cardStyle, children:[
+      n.jsxs("div", { style:{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:10, padding:"10px 14px", marginBottom:14, color:"#92400E", fontSize:12, lineHeight:1.5 }, children:[
+        n.jsx("strong", { children:"⚠ Brouillons générés par IA — validation requise avant diffusion" }),
+        n.jsx("div", { children:"Vérifie les statistiques, prix, dates, témoignages, citations, certifications et affirmations factuelles. Les éléments ajoutés au calendrier restent des brouillons." }),
+      ]}),
       n.jsx("div", { style:{ fontSize:13, fontWeight:700, color:"#1E1B30", marginBottom:14 }, children:"📦 " + sujet }),
 
       n.jsx("div", { style:{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:16, paddingBottom:14, borderBottom:"1px solid #F3F4F6" }, children:
@@ -8442,10 +8447,13 @@ function SiteWebTab() {
   const [imgDragging, setImgDragging] = D.useState(false);
   const [imgError, setImgError] = D.useState("");
   const [faqLoading, setFaqLoading] = D.useState(false);
+  const [reviewedFormSnapshot, setReviewedFormSnapshot] = D.useState("");
   const [dragIdx, setDragIdx] = D.useState(null);
   const [dragOverIdx, setDragOverIdx] = D.useState(null);
   const [artTab, setArtTab] = D.useState("all");
   const contenuRef = D.useRef(null);
+  const formFingerprint = JSON.stringify(form);
+  const articleReviewIsCurrent = reviewedFormSnapshot !== "" && reviewedFormSnapshot === formFingerprint;
   const handleArticlePhoto = (file) => {
     if (!file || !file.type.startsWith("image/")) { setImgError("Format non supporté — choisissez une image."); return; }
     setImgUploading(true); setImgError("");
@@ -8534,7 +8542,9 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
       const now = new Date();
       const updated = list.map(a => {
         if (a.status === "scheduled" && a.scheduledAt && new Date(a.scheduledAt) <= now) {
-          return { ...a, status: "published" };
+          return a.reviewedAt
+            ? { ...a, status: "published" }
+            : { ...a, status: "draft", scheduledAt: "", needsReview: true };
         }
         return a;
       });
@@ -8552,7 +8562,7 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
   };
   D.useEffect(() => { load(); }, []);
 
-  const save = async (list) => {
+  const save = async (list, savedStatus = "") => {
     setSaving(true);
     try {
       await fetch(`${SITE_API}?action=save-articles`, {
@@ -8561,7 +8571,14 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
         body: JSON.stringify(list),
       });
       setArticles(list);
-      setMsg({ ok: true, text: "✅ Sauvegardé et publié sur le site !" });
+      const saveMessage = savedStatus === "draft"
+        ? "✅ Brouillon enregistré — il n'est pas publié."
+        : savedStatus === "scheduled"
+          ? "✅ Article programmé après validation."
+          : savedStatus === "published"
+            ? "✅ Article publié sur le site."
+            : "✅ Modifications sauvegardées sur le site.";
+      setMsg({ ok: true, text: saveMessage });
     } catch(e) { setMsg({ ok: false, text: "❌ Erreur : " + e.message }); }
     setSaving(false);
     setTimeout(() => setMsg(null), 4000);
@@ -8575,8 +8592,12 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
     if (!form.contenu.trim()) { setMsg({ ok: false, text: "Le contenu est obligatoire." }); return; }
     const finalSlug = form.slug.trim() || slugify(form.titre);
     const finalStatus = form.status || "published";
+    if (finalStatus !== "draft" && !articleReviewIsCurrent) {
+      setMsg({ ok: false, text: "Relis et valide les faits, chiffres, prix, dates et témoignages avant de programmer ou publier." });
+      return;
+    }
     if (finalStatus === "scheduled" && !form.scheduledAt) { setMsg({ ok:false, text:"Choisis une date et heure de publication." }); return; }
-    const finalForm = { ...form, slug: finalSlug, status: finalStatus };
+    const finalForm = { ...form, slug: finalSlug, status: finalStatus, reviewedAt: finalStatus === "draft" ? null : new Date().toISOString(), needsReview:false };
     let updated;
     if (editId) {
       updated = articles.map(a => a.id === editId ? { ...a, ...finalForm } : a);
@@ -8584,8 +8605,9 @@ Retourne UNIQUEMENT une liste JSON : ["titre 1","titre 2","titre 3","titre 4","t
       const newArt = { ...finalForm, id: finalSlug + "-" + Date.now() };
       updated = [newArt, ...articles];
     }
-    save(updated);
+    save(updated, finalStatus);
     setForm(emptyForm());
+    setReviewedFormSnapshot("");
     setEditId(null);
   };
 
@@ -8723,8 +8745,8 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
       const data = await r.json();
       const html = data.content?.[0]?.text || "";
       if (html) {
-        setForm(f => ({...f, contenu: html}));
-        setMsg({ ok:true, text:"✅ Contenu généré par Claude ! Relis et ajuste si besoin avant de publier." });
+        setForm(f => ({...f, contenu: html, status:"draft", aiGenerated:true, needsReview:false}));
+        setMsg({ ok:true, text:"✅ Brouillon IA généré. Vérifie son contenu avant toute programmation ou publication." });
       } else {
         setMsg({ ok:false, text:"❌ Réponse vide de Claude." });
       }
@@ -8733,7 +8755,8 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
   };
 
   const handleEdit = (a) => {
-    setForm({ titre:a.titre, slug:a.slug||"", metaTitle:a.metaTitle||"", metaDesc:a.metaDesc||"", motCle:a.motCle||"", categorie:a.categorie, extrait:a.extrait, contenu:a.contenu, duree:a.duree, date:a.date, imageUrl:a.imageUrl||"", status:a.status||"published", scheduledAt:a.scheduledAt||"", faq:a.faq||[] });
+    setForm({ titre:a.titre, slug:a.slug||"", metaTitle:a.metaTitle||"", metaDesc:a.metaDesc||"", motCle:a.motCle||"", categorie:a.categorie, extrait:a.extrait, contenu:a.contenu, duree:a.duree, date:a.date, imageUrl:a.imageUrl||"", status:a.status||"published", scheduledAt:a.scheduledAt||"", faq:a.faq||[], aiGenerated:!!a.aiGenerated, needsReview:!!a.needsReview });
+    setReviewedFormSnapshot("");
     setEditId(a.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -9009,11 +9032,20 @@ Réponds UNIQUEMENT avec le HTML du contenu de l'article, rien d'autre.`;
             form.scheduledAt && n.jsx("div", { style:{ fontSize:11, color:"#0EA5E9", marginTop:4 }, children:
               `Sera publié le ${new Date(form.scheduledAt).toLocaleString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"})}` }),
           ]}),
+
+          (form.aiGenerated || form.needsReview) && n.jsxs("div", { style:{ marginTop:12, background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:8, padding:"10px 12px", color:"#92400E", fontSize:12, lineHeight:1.5 }, children:[
+            n.jsx("strong", { children:form.needsReview ? "⚠ Ancien contenu programmé remis en brouillon" : "⚠ Brouillon généré par IA — à vérifier" }),
+            n.jsx("div", { children:form.needsReview ? "Cet article était programmé sans validation enregistrée. Il ne sera pas publié tant que tu ne l'auras pas relu et validé." : "Les chiffres, prix, dates, témoignages, citations, certifications et affirmations doivent être confirmés avant diffusion." }),
+          ]}),
+          form.status !== "draft" && n.jsxs("label", { style:{ display:"flex", alignItems:"flex-start", gap:9, marginTop:12, background:"white", border:"1px solid #FCD34D", borderRadius:8, padding:"10px 12px", fontSize:12, lineHeight:1.5, color:"#374151", cursor:"pointer" }, children:[
+            n.jsx("input", { type:"checkbox", checked:articleReviewIsCurrent, onChange:ev=>setReviewedFormSnapshot(ev.target.checked ? formFingerprint : ""), style:{ marginTop:2, flexShrink:0 } }),
+            n.jsx("span", { children:"Je confirme avoir relu la version actuelle et vérifié les faits, chiffres, prix, dates, témoignages et autorisations de citation (ou confirmé qu'ils ne s'appliquent pas). Toute modification du contenu invalide cette validation." }),
+          ]}),
         ]}),
 
         /* Bouton de soumission unique + Aperçu */
         n.jsxs("div", { style:{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }, children:[
-          n.jsx("button", { onClick:()=>handleSubmit(), disabled:saving,
+          n.jsx("button", { onClick:()=>handleSubmit(), disabled:saving || (form.status !== "draft" && !articleReviewIsCurrent),
             style:{ background: form.status==="scheduled"?"#0EA5E9": form.status==="draft"?"#6B7280":"#6B40D8",
               color:"white", border:"none", borderRadius:8, padding:"10px 22px", fontWeight:700, fontSize:13, cursor:"pointer" },
             children: saving ? "Sauvegarde…" : editId ? "💾 Mettre à jour" :
@@ -10920,7 +10952,8 @@ function App() {
       .filter((T) => T.statutAudit === "client")
       .flatMap((T) => {
         const _ = T.tasksDone || {};
-        return ALL_CRITERIA.filter((U) => (T.scores || {})[U.id] === !1 && !_[U.id])
+        const scoreSource = { ...(T.scores || {}), ...(T.manualOverrides || {}) };
+        return ALL_CRITERIA.filter((U) => scoreSource[U.id] === !1 && !_[U.id])
           .slice(0, 2)
           .map((U) => ({
             clientName: T.name,
@@ -14270,7 +14303,8 @@ function Dashboard({ clients: e, urgentTasks: t, go: i, getLvl: r, calcScore: o 
       .flatMap((B) => {
         if (B.statutAudit !== "client") return [];
         const k = B.tasksDone || {};
-        return ALL_CRITERIA.filter((R) => (B.scores || {})[R.id] === !1 && !k[R.id]).map(
+        const scoreSource = { ...(B.scores || {}), ...(B.manualOverrides || {}) };
+        return ALL_CRITERIA.filter((R) => scoreSource[R.id] === !1 && !k[R.id]).map(
           (R) => R.id,
         );
       })
@@ -16149,9 +16183,10 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
         t(e.filter((M) => M.id !== E));
     },
     c = (E) => {
-      const P = ALL_CRITERIA.filter((T) => (E.scores || {})[T.id] === !1).length;
-      const M = ALL_CRITERIA.filter((T) => (E.scores || {})[T.id] === !1 && (E.tasksDone || {})[T.id]).length;
-      return P > 0 ? M / P : 1;
+      const scoreSource = { ...(E.scores || {}), ...(E.manualOverrides || {}) };
+      const P = ALL_CRITERIA.filter((T) => scoreSource[T.id] === !1).length;
+      const done = ALL_CRITERIA.filter((T) => scoreSource[T.id] === !1 && (E.tasksDone || {})[T.id]).length;
+      return P > 0 ? done / P : 1;
     };
   let u = e.filter(
     (E) =>
@@ -16219,10 +16254,11 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
           "Email",
         ],
         M = u.map((V) => {
-          const G = o({ ...(V.scores || {}), ...(V.manualOverrides || {}) }),
+          const scoreSource = { ...(V.scores || {}), ...(V.manualOverrides || {}) },
+            G = o(scoreSource),
             y = r(G),
-            F = ALL_CRITERIA.filter((S) => (V.scores || {})[S.id] === !1).length,
-            O = ALL_CRITERIA.filter((S) => (V.scores || {})[S.id] === !1 && (V.tasksDone || {})[S.id]).length,
+            F = ALL_CRITERIA.filter((S) => scoreSource[S.id] === !1).length,
+            O = ALL_CRITERIA.filter((S) => scoreSource[S.id] === !1 && (V.tasksDone || {})[S.id]).length,
             H = F > 0 ? Math.round((O / F) * 100) : 100;
           return [
             V.name,
@@ -16482,16 +16518,17 @@ function ClientsList({ clients: e, upd: t, go: i, getLvl: r, calcScore: o }) {
                 }),
                 n.jsx("tbody", {
                   children: uPage.map((E, M) => { M = safeP * PAGE_SIZE + M; // preserve absolute index for drag
-                    const P = o({
+                    const scoreSource = {
                         ...(E.scores || {}),
                         ...(E.manualOverrides || {}),
-                      }),
+                      },
+                      P = o(scoreSource),
                       T = r(P),
                       U = ALL_CRITERIA.filter(
-                        (S) => (E.scores || {})[S.id] === !1,
+                        (S) => scoreSource[S.id] === !1,
                       ).length,
                       _ = ALL_CRITERIA.filter(
-                        (S) => (E.scores || {})[S.id] === !1 && (E.tasksDone || {})[S.id],
+                        (S) => scoreSource[S.id] === !1 && (E.tasksDone || {})[S.id],
                       ).length,
                       V = U > 0 ? Math.round((_ / U) * 100) : 100,
                       G = E.history || [],
@@ -19282,7 +19319,6 @@ function ClientDetail({
   const [p, b] = D.useState(() => {
     try { return localStorage.getItem(`bto_tab_${e.id}`) || "overview"; } catch { return "overview"; }
   }),
-    [x, j] = D.useState(0),
     [I, z] = D.useState(null),
     [g, h] = D.useState(null),
     [f, c] = D.useState(!1),
@@ -19299,7 +19335,7 @@ function ClientDetail({
     U = o(_),
     V = ALL_CRITERIA.filter((Q) => M[Q.id] === !1).sort((Q, Z) => Z.points - Q.points),
     G = ALL_CRITERIA.filter((Q) => M[Q.id] === !0),
-    _auditFalse = ALL_CRITERIA.filter((Q) => N[Q.id] === !1),
+    _auditFalse = ALL_CRITERIA.filter((Q) => M[Q.id] === !1),
     y = _auditFalse.filter((Q) => T[Q.id]).length,
     O = _auditFalse.length > 0 ? Math.min(100, Math.round((y / _auditFalse.length) * 100)) : 100,
     F = P.extracted || {},
@@ -19310,13 +19346,6 @@ function ClientDetail({
     W = e.history || [],
     L = W.length > 0 ? s(W[W.length - 1].scores || {}) : null,
     $ = L !== null ? _ - L : null;
-  D.useEffect(() => {
-    let Q = 0;
-    const Z = setInterval(() => {
-      ((Q += _ / 60), Q >= _ ? (j(_), clearInterval(Z)) : j(Math.round(Q)));
-    }, 16);
-    return () => clearInterval(Z);
-  }, [_]);
   const [regenLoading, setRegenLoading] = D.useState(false);
   const regenAuditText = async () => {
     setRegenLoading(true);
@@ -19692,7 +19721,7 @@ Retourne UNIQUEMENT ce JSON valide (pas de texte avant ni après) :
                               strokeWidth: "11",
                               strokeLinecap: "round",
                               strokeDasharray: `${2 * Math.PI * 60}`,
-                              strokeDashoffset: `${2 * Math.PI * 60 * (1 - x / 100)}`,
+                              strokeDashoffset: `${2 * Math.PI * 60 * (1 - _ / 100)}`,
                               transform: "rotate(-90 72 72)",
                               style: {
                                 transition:
@@ -19707,7 +19736,7 @@ Retourne UNIQUEMENT ce JSON valide (pas de texte avant ni après) :
                               fontSize: "34",
                               fontWeight: "800",
                               fontFamily: "'Plus Jakarta Sans',sans-serif",
-                              children: x,
+                              children: _,
                             }),
                             n.jsx("text", {
                               x: "72",
@@ -20050,7 +20079,7 @@ Retourne UNIQUEMENT ce JSON valide (pas de texte avant ni après) :
                               color: "#6B7280",
                               fontWeight: 500,
                             },
-                            children: [100 - _, " points restants"],
+                            children: [100 - _, " pts de score restants"],
                           }),
                         ],
                       }),
@@ -27167,6 +27196,23 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
   const [publishing, setPublishing] = D.useState(false);
   const [success, setSuccess] = D.useState(false);
   const [error, setError] = D.useState("");
+  const [reviewChecks, setReviewChecks] = D.useState({ testimonial:false, facts:false, finalCopy:false });
+  const [reviewedSnapshot, setReviewedSnapshot] = D.useState("");
+
+  const reviewSnapshot = JSON.stringify([
+    mode, postType, summary, ctaType, ctaUrl, eventTitle, startDate, startTime,
+    endDate, endTime, couponCode, redeemUrl, termsConditions, photoUrl, schedDate, schedTime,
+  ]);
+  const reviewIsCurrent = Object.values(reviewChecks).every(Boolean) && reviewedSnapshot === reviewSnapshot;
+  const updateReviewCheck = (key, checked) => {
+    const next = { ...reviewChecks, [key]: checked };
+    setReviewChecks(next);
+    setReviewedSnapshot(Object.values(next).every(Boolean) ? reviewSnapshot : "");
+  };
+  D.useEffect(() => {
+    setReviewChecks({ testimonial:false, facts:false, finalCopy:false });
+    setReviewedSnapshot("");
+  }, [reviewSnapshot]);
 
   const charsLeft = MAX_CHARS - summary.length;
   const isOverLimit = charsLeft < 0;
@@ -27214,6 +27260,7 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
 
   const handlePublish = async () => {
     if (!summary.trim() || isOverLimit) return;
+    if (!reviewIsCurrent) { setError("Coche les vérifications après avoir relu cette version du contenu."); return; }
     setPublishing(true); setError("");
     try {
       const token = await getValidToken();
@@ -27238,7 +27285,7 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
       const data = await res.json();
       if (data.success) {
         // Log dans publishedPosts
-        const logEntry = { id: Date.now(), title: (eventTitle || summary.slice(0,60)), text: summary, type: postType === "EVENT" ? "Actualite" : postType === "OFFER" ? "Offre" : "Actualite", date: new Date().toISOString().slice(0,10), note: "Publié sur Google (" + postType + ")", photoUrl: photoUrl || undefined };
+        const logEntry = { id: Date.now(), title: (eventTitle || summary.slice(0,60)), text: summary, type: postType === "EVENT" ? "Actualite" : postType === "OFFER" ? "Offre" : "Actualite", date: new Date().toISOString().slice(0,10), note: "Publié sur Google (" + postType + ")", photoUrl: photoUrl || undefined, reviewedAt: new Date().toISOString() };
         upd(clients.map(cl => cl.id === client.id ? { ...cl, publishedPosts: [...(cl.publishedPosts||[]), logEntry] } : cl));
         setSuccess(true);
         setTimeout(() => { setSuccess(false); onClose(); }, 2000);
@@ -27249,7 +27296,8 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
 
   const handleSchedule = () => {
     if (!summary.trim() || !schedDate || isOverLimit) return;
-    const post = { id: Date.now(), text: summary.trim(), date: schedDate, time: schedTime, topic: postType, status: "scheduled", createdAt: new Date().toISOString(), eventTitle: eventTitle || undefined, ctaType: ctaType || undefined, ctaUrl: ctaUrl || undefined, couponCode: couponCode || undefined, photoUrl: photoUrl || undefined };
+    if (!reviewIsCurrent) { setError("Coche les vérifications après avoir relu cette version du contenu."); return; }
+    const post = { id: Date.now(), text: summary.trim(), date: schedDate, time: schedTime, topic: postType, status: "scheduled", createdAt: new Date().toISOString(), reviewedAt: new Date().toISOString(), eventTitle: eventTitle || undefined, ctaType: ctaType || undefined, ctaUrl: ctaUrl || undefined, couponCode: couponCode || undefined, photoUrl: photoUrl || undefined };
     upd(clients.map(cl => cl.id === client.id ? { ...cl, scheduledPosts: [...(cl.scheduledPosts||[]), post] } : cl));
     if (onScheduleSave) onScheduleSave(post);
     onClose();
@@ -27428,6 +27476,19 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
           ]}),
         ]}),
 
+        n.jsxs("div", { style:{ background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:12, padding:"13px 15px", display:"flex", flexDirection:"column", gap:9 }, children:[
+          n.jsx("div", { style:{ fontSize:12, fontWeight:800, color:"#92400E" }, children:"⚠ Vérification obligatoire avant diffusion" }),
+          n.jsx("div", { style:{ fontSize:11.5, color:"#78350F", lineHeight:1.5 }, children:"Le contenu peut contenir des informations inventées ou périmées. La validation porte sur cette version exacte et sera annulée si le texte ou ses détails changent." }),
+          [
+            ["testimonial", "Tout témoignage ou citation est réel et autorisé, ou absent."],
+            ["facts", "Les prix, dates, chiffres, certifications et affirmations sont vérifiés, ou absents."],
+            ["finalCopy", "J'ai relu le texte final, le nom de l'entreprise, les liens et les détails de publication."],
+          ].map(([key, label]) => n.jsxs("label", { key, style:{ display:"flex", alignItems:"flex-start", gap:8, fontSize:11.5, color:"#374151", lineHeight:1.45, cursor:"pointer" }, children:[
+            n.jsx("input", { type:"checkbox", checked:reviewChecks[key], onChange:ev=>updateReviewCheck(key, ev.target.checked), style:{ marginTop:2, flexShrink:0 } }),
+            n.jsx("span", { children:label }),
+          ]})),
+        ]}),
+
         // Erreur / Succès
         error && n.jsx("div", { style:{ background:"#FEF2F2", border:"1px solid #FCA5A5", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#DC2626", fontWeight:600 }, children:"⚠️ " + error }),
         success && n.jsx("div", { style:{ background:"#D1FAE5", border:"1px solid #6EE7B7", borderRadius:10, padding:"10px 14px", fontSize:13, color:"#065F46", fontWeight:700 }, children:"✅ Post publié avec succès sur Google Business Profile !" }),
@@ -27443,8 +27504,8 @@ function PostComposerModal({ client, clients, upd, onClose, prefillText = "", pr
       n.jsxs("div", { style:{ padding:"14px 24px 20px", borderTop:"1px solid #F0F0F0", display:"flex", gap:10, justifyContent:"flex-end", position:"sticky", bottom:0, background:"white" }, children:[
         n.jsx("button", { onClick:onClose, style:{ padding:"10px 20px", borderRadius:10, border:"1.5px solid #E5E7EB", background:"white", color:"#374151", fontSize:13, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }, children:"Annuler" }),
         mode === "schedule"
-          ? n.jsx("button", { onClick:handleSchedule, disabled:!summary.trim()||!schedDate||isOverLimit, style:{ padding:"10px 24px", borderRadius:10, border:"none", background:!summary.trim()||!schedDate||isOverLimit?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#7C3AED)", color:!summary.trim()||!schedDate||isOverLimit?"#9CA3AF":"white", fontSize:13, fontWeight:700, cursor:!summary.trim()||!schedDate||isOverLimit?"not-allowed":"pointer", fontFamily:"inherit" }, children:"⏰ Programmer" })
-          : n.jsx("button", { onClick:handlePublish, disabled:publishing||!isGoogleConnected||!summary.trim()||isOverLimit, style:{ padding:"10px 24px", borderRadius:10, border:"none", background:publishing||!isGoogleConnected||!summary.trim()||isOverLimit?"#E5E7EB":"linear-gradient(135deg,#4285F4,#34A853)", color:publishing||!isGoogleConnected||!summary.trim()||isOverLimit?"#9CA3AF":"white", fontSize:13, fontWeight:700, cursor:publishing||!isGoogleConnected||!summary.trim()||isOverLimit?"not-allowed":"pointer", fontFamily:"inherit" }, children: publishing ? "⏳ Publication…" : "🚀 Publier maintenant" }),
+          ? n.jsx("button", { onClick:handleSchedule, disabled:!summary.trim()||!schedDate||isOverLimit||!reviewIsCurrent, style:{ padding:"10px 24px", borderRadius:10, border:"none", background:!summary.trim()||!schedDate||isOverLimit||!reviewIsCurrent?"#E5E7EB":"linear-gradient(135deg,#6B40D8,#7C3AED)", color:!summary.trim()||!schedDate||isOverLimit||!reviewIsCurrent?"#9CA3AF":"white", fontSize:13, fontWeight:700, cursor:!summary.trim()||!schedDate||isOverLimit||!reviewIsCurrent?"not-allowed":"pointer", fontFamily:"inherit" }, children:"⏰ Programmer" })
+          : n.jsx("button", { onClick:handlePublish, disabled:publishing||!isGoogleConnected||!summary.trim()||isOverLimit||!reviewIsCurrent, style:{ padding:"10px 24px", borderRadius:10, border:"none", background:publishing||!isGoogleConnected||!summary.trim()||isOverLimit||!reviewIsCurrent?"#E5E7EB":"linear-gradient(135deg,#4285F4,#34A853)", color:publishing||!isGoogleConnected||!summary.trim()||isOverLimit||!reviewIsCurrent?"#9CA3AF":"white", fontSize:13, fontWeight:700, cursor:publishing||!isGoogleConnected||!summary.trim()||isOverLimit||!reviewIsCurrent?"not-allowed":"pointer", fontFamily:"inherit" }, children: publishing ? "⏳ Publication…" : "🚀 Publier maintenant" }),
       ]}),
 
     ]})
@@ -27914,6 +27975,10 @@ Rédige la publication Google Business Profile.`;
                   { label: "Émojis/# ", value: /[\u{1F300}-\u{1FAFF}☀-➿]|#\w+/u.test(genResult) ? "⚠️" : "✅", ok: !/[\u{1F300}-\u{1FAFF}☀-➿]|#\w+/u.test(genResult) },
                 ].map(m => n.jsxs("span", { key: m.label, style: { color: m.ok ? "#059669" : "#d97706", fontWeight: 600 }, children: [m.label, ": ", m.value] })) }),
               ]}),
+              n.jsxs("div", { style:{ margin:"12px 18px 0", padding:"10px 12px", background:"#FFFBEB", border:"1px solid #FCD34D", borderRadius:9, color:"#92400E", fontSize:11.5, lineHeight:1.5 }, children:[
+                n.jsx("strong", { children:"⚠ Brouillon généré par IA — à vérifier avant diffusion" }),
+                n.jsx("div", { children:"Vérifie notamment les témoignages et autorisations, chiffres, prix, dates, certifications et affirmations factuelles." }),
+              ]}),
               // Texte (éditable)
               editingPost === "gen"
                 ? n.jsx("textarea", { autoFocus:true, value: editedText, onChange: ev => setEditedText(ev.target.value), style: { width: "100%", padding: "18px 22px", fontSize: 13.5, lineHeight: 1.85, border: "none", borderBottom: "1px solid #E5E7EB", resize: "vertical", minHeight: 160, fontFamily: "inherit", boxSizing: "border-box", outline: "none" } })
@@ -27953,7 +28018,7 @@ Rédige la publication Google Business Profile.`;
             n.jsxs("div", { style: { marginTop: 24 }, children: [
               n.jsxs("div", { style: { marginBottom: 14 }, children: [
                 n.jsx("div", { style: { fontSize: 16, fontWeight: 800, color: "var(--ink)", marginBottom: 3 }, children: "Idées de publications (audit)" }),
-                n.jsx("div", { style: { fontSize: 12, color: "var(--ink4)" }, children: "Générées lors du dernier audit · utilisez les boutons pour programmer ou publier" }),
+                n.jsx("div", { style: { fontSize: 12, color: "var(--ink4)" }, children: "Brouillons générés lors du dernier audit · vérifiez les faits avant programmation ou publication" }),
               ]}),
               (P.postIdeas || []).length > 0 && n.jsx("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }, children:
                 ["Tous", ...new Set((P.postIdeas||[]).map(idea => idea.type))].map(ft => {
@@ -33530,7 +33595,7 @@ function CriteriaEditModal({ client: e, scores: t }) {
 }
 function ScoreBadge({ client: e, clients: t, calcScore: i, getLvl: r }) {
   const o = (e.category || "").split(",")[0].trim().toLowerCase(),
-    s = i(e.scores || {}),
+    s = i({ ...(e.scores || {}), ...(e.manualOverrides || {}) }),
     l = t.filter(
       (j) =>
         j.id !== e.id &&
