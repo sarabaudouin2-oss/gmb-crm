@@ -1222,7 +1222,7 @@ Entrée libre — venez nombreux.
         },
       ],
       keyInsights: [
-        "Ces critères expliquent 91% de la variation des positions — étude Geolid sur 30 000+ fiches",
+        "La part exacte de chaque critère varie selon la requête et la zone — toute pondération chiffrée doit être vérifiée à partir de l'étude citée.",
         "Les positions fluctuent plusieurs fois par jour — ne jamais évaluer sa position ponctuellement",
         "Google priorise d'abord : établissement ouvert + code postal correspondant à la ville recherchée",
         "10 avis continus/mois > 100 avis d'un coup puis rien — la régularité prime sur la quantité",
@@ -5485,9 +5485,11 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
       color: m = "#6B40D8",
       up: C = !0,
     }) => {
-      const B = parseFloat(h),
-        k = parseFloat(f),
-        R = !isNaN(B) && !isNaN(k) ? (B - k).toFixed(1) : null,
+      const hasValue = h !== null && h !== undefined && h !== "" && Number.isFinite(parseFloat(h)),
+        hasBenchmark = f !== null && f !== undefined && f !== "" && Number.isFinite(parseFloat(f)),
+        B = hasValue ? parseFloat(h) : null,
+        k = hasBenchmark ? parseFloat(f) : null,
+        R = hasValue && hasBenchmark ? (B - k).toFixed(1) : null,
         N = R !== null ? (C ? R >= 0 : R <= 0) : null;
       return n.jsxs("div", {
         style: {
@@ -5524,7 +5526,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                   color: m,
                   lineHeight: 1,
                 },
-                children: [h !== null ? h : "—", c],
+                children: [hasValue ? h : "—", hasValue ? c : ""],
               }),
               R !== null &&
                 n.jsxs("span", {
@@ -5547,7 +5549,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
               "Marché : ",
               n.jsxs("strong", {
                 style: { color: "var(--ink2)" },
-                children: [f, c],
+                children: [hasBenchmark ? f : "—", hasBenchmark ? c : ""],
               }),
               u && n.jsxs("span", { children: [" · ", u] }),
             ],
@@ -5577,7 +5579,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
           n.jsx("div", {
             style: { fontSize: 13, color: "var(--ink4)", marginBottom: 6 },
             children:
-              "Source : Geolid 2026 · 144 446 fiches · 547 284 avis · Étude Algorithme GBP",
+              "Repères indicatifs intégrés — source, date et périmètre à vérifier avant toute recommandation.",
           }),
           n.jsx("div", {
             style: {
@@ -5592,7 +5594,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
           n.jsx("div", {
             style: { fontSize: 13.5, color: "var(--ink3)" },
             children:
-              "Benchmarks nationaux France 2026 · Comparez vos clients à la moyenne du marché",
+              "Comparaisons nationales indicatives — chiffres à valider avec une source détaillée.",
           }),
         ],
       }),
@@ -6294,7 +6296,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                           marginTop: 2,
                         },
                         children:
-                          "Source : Geolid · 144 446 fiches · triés par note croissante",
+                          "Valeurs indicatives triées par note — référence détaillée à confirmer",
                       }),
                     ],
                   }),
@@ -6337,14 +6339,17 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                       }),
                       n.jsx("tbody", {
                         children: s.sectors.map((g, h) => {
-                          const f = (g.note - 4.2).toFixed(1),
-                            c = g.reviews - 420,
-                            u = g.note >= 4.2,
-                            m = g.reviews >= 420,
+                          const hasRating = g.note !== null && g.note !== undefined && g.note !== "" && Number.isFinite(Number(g.note)),
+                            hasReviews = g.reviews !== null && g.reviews !== undefined && g.reviews !== "" && Number.isFinite(Number(g.reviews)),
+                            hasCompletion = g.completion !== null && g.completion !== undefined && g.completion !== "" && Number.isFinite(Number(g.completion)),
+                            f = hasRating ? (Number(g.note) - 4.2).toFixed(1) : null,
+                            c = hasReviews ? Number(g.reviews) - 420 : null,
+                            u = hasRating ? Number(g.note) >= 4.2 : null,
+                            m = hasReviews ? Number(g.reviews) >= 420 : null,
                             C =
-                              g.completion >= 80
+                              !hasCompletion ? "#9CA3AF" : Number(g.completion) >= 80
                                 ? "#059669"
-                                : g.completion >= 70
+                                : Number(g.completion) >= 70
                                   ? "#d97706"
                                   : "#dc2626";
                           return n.jsxs(
@@ -6392,7 +6397,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                       style: {
                                         fontSize: 14,
                                         fontWeight: 800,
-                                        color:
+                                        color: !hasRating ? "#9CA3AF" :
                                           g.note >= 4.5
                                             ? "#059669"
                                             : g.note >= 4.2
@@ -6401,14 +6406,14 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                                 ? "#d97706"
                                                 : "#dc2626",
                                       },
-                                      children: g.note,
+                                      children: hasRating ? Number(g.note).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) : "—",
                                     }),
                                     n.jsx("span", {
                                       style: {
                                         fontSize: 10,
                                         color: "var(--ink4)",
                                       },
-                                      children: "/5",
+                                      children: hasRating ? "/5" : "",
                                     }),
                                   ],
                                 }),
@@ -6420,10 +6425,10 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                       fontWeight: 700,
                                       padding: "2px 7px",
                                       borderRadius: 20,
-                                      background: u ? "#ffffff" : "#fef2f2",
-                                      color: u ? "#059669" : "#dc2626",
+                                      background: u === null ? "#F3F4F6" : u ? "#ffffff" : "#fef2f2",
+                                      color: u === null ? "#6B7280" : u ? "#059669" : "#dc2626",
                                     },
-                                    children: [f > 0 ? "+" : "", f],
+                                    children: f === null ? "—" : [f > 0 ? "+" : "", f],
                                   }),
                                 }),
                                 n.jsx("td", {
@@ -6434,7 +6439,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                       fontWeight: 700,
                                       color: "var(--ink)",
                                     },
-                                    children: g.reviews.toLocaleString("fr-FR"),
+                                    children: hasReviews ? Number(g.reviews).toLocaleString("fr-FR") : "—",
                                   }),
                                 }),
                                 n.jsx("td", {
@@ -6445,12 +6450,11 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                       fontWeight: 700,
                                       padding: "2px 7px",
                                       borderRadius: 20,
-                                      background: m ? "#ffffff" : "#fef2f2",
-                                      color: m ? "#059669" : "#dc2626",
+                                      background: m === null ? "#F3F4F6" : m ? "#ffffff" : "#fef2f2",
+                                      color: m === null ? "#6B7280" : m ? "#059669" : "#dc2626",
                                     },
                                     children: [
-                                      c >= 0 ? "+" : "",
-                                      c.toLocaleString("fr-FR"),
+                                      c === null ? "—" : [c >= 0 ? "+" : "", c.toLocaleString("fr-FR")],
                                     ],
                                   }),
                                 }),
@@ -6474,7 +6478,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                         children: n.jsx("div", {
                                           style: {
                                             height: "100%",
-                                            width: `${g.completion}%`,
+                                          width: `${hasCompletion ? Math.min(100, Math.max(0, Number(g.completion))) : 0}%`,
                                             background: C,
                                             borderRadius: 3,
                                           },
@@ -6486,7 +6490,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
                                           fontWeight: 700,
                                           color: C,
                                         },
-                                        children: [g.completion, "%"],
+                                          children: hasCompletion ? [Number(g.completion).toLocaleString("fr-FR"), "%"] : "—",
                                       }),
                                     ],
                                   }),
@@ -6524,7 +6528,7 @@ function MarchePage({ clients: e, getLvl: t, calcScore: i }) {
               children: [
                 "💡 ",
                 n.jsx("strong", { children: "Comment lire ce tableau :" }),
-                ` "vs marché" = écart par rapport à la moyenne nationale (note : 4.2 / avis : 420). En vert = au-dessus de la moyenne, en rouge = en dessous. Un secteur avec peu d'avis mais une bonne note est plus facile à dominer.`,
+                ` "vs marché" = écart aux repères de comparaison affichés (note : 4.2 / avis : 420). Ces valeurs sont indicatives et doivent être validées avant d'être utilisées dans une recommandation client.`,
               ],
             }),
           ],
@@ -10695,7 +10699,12 @@ function App() {
     C = !1,
     B = (T) => {
       x(T);
-      saveClients(T);
+      saveClients(T).then((saved) => {
+        if (!saved) {
+          window._syncErrorMessage = "La sauvegarde cloud a échoué. Vérifiez la connexion puis utilisez Sync.";
+          setSyncStatus("error");
+        }
+      });
       p((prev) => (prev ? T.find((c) => c.id === prev.id) || prev : prev));
     },
     k = (T, _ = null) => {
@@ -27758,6 +27767,9 @@ Rédige la publication Google Business Profile.`;
 
   // Planification posts
   const scheduledPosts = e.scheduledPosts || [];
+  const scheduledTodayKey = new Date().toISOString().slice(0, 10);
+  const scheduledUpcomingCount = scheduledPosts.filter(p => p.status !== "published" && p.date && p.date >= scheduledTodayKey).length;
+  const scheduledOverdueCount = scheduledPosts.filter(p => p.status !== "published" && p.date && p.date < scheduledTodayKey).length;
   const deleteScheduledPost = (id) => i(t.map(cl => cl.id === e.id ? { ...cl, scheduledPosts: scheduledPosts.filter(p=>p.id!==id) } : cl));
 
   // Calendar state — style CalendrierView
@@ -28271,7 +28283,7 @@ Rédige la publication Google Business Profile.`;
 
             // Stats rapides du mois (simple, pas de titre dupliqué)
             n.jsxs("div", { style:{ display:"flex", gap:16, marginBottom:16, flexWrap:"wrap" }, children:[
-              [{v:calMonthTotal,l:"posts ce mois",c:"var(--indigo2)"},{v:calMonthDone,l:"publiés",c:"#059669"},{v:scheduledPosts.filter(p=>p.status!=="published").length,l:"en attente Google",c:"#4285F4"}].map(s=>
+              [{v:calMonthTotal,l:"posts du mois",c:"var(--indigo2)"},{v:calMonthDone,l:"publiés",c:"#059669"},{v:scheduledUpcomingCount,l:"à venir sur Google",c:"#4285F4"},{v:scheduledOverdueCount,l:"en retard",c:scheduledOverdueCount ? "#DC2626" : "#6B7280"}].map(s=>
                 n.jsxs("div",{key:s.l,style:{display:"flex",alignItems:"center",gap:6},children:[
                   n.jsx("span",{style:{fontSize:16,fontWeight:900,color:s.c},children:s.v}),
                   n.jsx("span",{style:{fontSize:11,color:"var(--ink4)"},children:s.l}),
@@ -28287,7 +28299,7 @@ Rédige la publication Google Business Profile.`;
                   n.jsxs("div", { style:{ display:"flex", alignItems:"center", gap:8 }, children:[
                     n.jsx("div", { style:{ width:4, height:18, borderRadius:2, background:"#4285F4", flexShrink:0 } }),
                     n.jsxs("div", { style:{ fontSize:13, fontWeight:800, color:"var(--ink)" }, children:[
-                      "Posts programmés Google (",
+                      "Posts Google à traiter (",
                       scheduledPosts.filter(p=>p.status!=="published").length,
                       ")"
                     ]}),
@@ -28379,9 +28391,9 @@ Rédige la publication Google Business Profile.`;
                 // Stats du mois
                 calMonthTotal > 0 && n.jsxs("div", { style:{ marginLeft:"auto",display:"flex",alignItems:"center",gap:18 }, children:[
                   [
-                    { l:"Planifiés", v:calMonthTotal, c:"var(--indigo2)" },
+                    { l:"Posts du mois", v:calMonthTotal, c:"var(--indigo2)" },
                     { l:"Publiés", v:calMonthDone, c:"#059669" },
-                    { l:"Restants", v:calMonthTotal-calMonthDone, c:"#d97706" },
+                    { l:"À traiter", v:calMonthTotal-calMonthDone, c:"#d97706" },
                   ].map(({ l:lbl, v:val, c:col }) =>
                     n.jsxs("div", { key:lbl, style:{ textAlign:"center" }, children:[
                       n.jsx("div", { style:{ fontSize:17, fontWeight:800, color:col }, children:val }),
