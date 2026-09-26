@@ -1379,20 +1379,69 @@ Entrée libre — venez nombreux.
     ],
   },
   STORAGE_KEY = "gmb_crm_v10",
+  DELETED_CLIENTS_KEY = STORAGE_KEY + "_deleted",
   BTO_TOKEN = "bto_sync_2026_secure",
-  loadClients = () => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    } catch {
-      return [];
-    }
+  parseClientList = (raw) => {
+    try { const value = JSON.parse(raw || "[]"); return Array.isArray(value) ? value : []; }
+    catch { return []; }
   },
-  saveClients = (e) => {
-    // 1. Sauvegarde locale immédiate + timestamp
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(e));
-    localStorage.setItem(STORAGE_KEY + "_savedAt", Date.now().toString());
-    // 2. Sync Supabase en arrière-plan
-    supaSet(STORAGE_KEY, JSON.stringify(e));
+  parseDeletedClients = (raw) => {
+    try { const value = JSON.parse(raw || "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value : {}; }
+    catch { return {}; }
+  },
+  timestampValue = (value) => {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  },
+  mergeDeletedClients = (...sets) => sets.reduce((merged, set) => {
+    Object.entries(set || {}).forEach(([id, deletedAt]) => {
+      merged[id] = Math.max(timestampValue(merged[id]), timestampValue(deletedAt));
+    });
+    return merged;
+  }, {}),
+  loadClients = () => parseClientList(localStorage.getItem(STORAGE_KEY)),
+  saveClients = async (clients) => {
+    const previous = parseClientList(localStorage.getItem(STORAGE_KEY));
+    const previousById = Object.fromEntries(previous.map((client) => [String(client.id), client]));
+    const deletedClients = parseDeletedClients(localStorage.getItem(DELETED_CLIENTS_KEY));
+    const now = Date.now();
+    const next = clients.map((client) => {
+      const id = String(client.id);
+      const prior = previousById[id];
+      const { updatedAt: _priorUpdatedAt, ...priorFields } = prior || {};
+      const { updatedAt: _nextUpdatedAt, ...nextFields } = client;
+      const changed = !prior || !timestampValue(client.updatedAt) || JSON.stringify(priorFields) !== JSON.stringify(nextFields);
+      const updatedAt = changed
+        ? Math.max(now, timestampValue(prior?.updatedAt) + 1, timestampValue(deletedClients[id]) + 1)
+        : timestampValue(client.updatedAt) || timestampValue(prior?.updatedAt) || undefined;
+      if (deletedClients[id] && updatedAt > timestampValue(deletedClients[id])) delete deletedClients[id];
+      return updatedAt ? { ...client, updatedAt } : client;
+    });
+    const nextIds = new Set(next.map((client) => String(client.id)));
+    previous.forEach((client) => {
+      const id = String(client.id);
+      if (!nextIds.has(id)) deletedClients[id] = Math.max(now, timestampValue(deletedClients[id]) + 1);
+    });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(DELETED_CLIENTS_KEY, JSON.stringify(deletedClients));
+      localStorage.setItem(STORAGE_KEY + "_savedAt", now.toString());
+    } catch {
+      try { localStorage.setItem(STORAGE_KEY + "_syncError", "1"); } catch {}
+      return false;
+    }
+    const results = await Promise.all([
+      supaSet(STORAGE_KEY, JSON.stringify(next)),
+      supaSet(DELETED_CLIENTS_KEY, JSON.stringify(deletedClients)),
+    ]);
+    const succeeded = results.every(Boolean);
+    try {
+      if (succeeded) localStorage.removeItem(STORAGE_KEY + "_syncError");
+      else localStorage.setItem(STORAGE_KEY + "_syncError", "1");
+    } catch {}
+    return succeeded;
   },
   supaSet = async (key, value) => {
     try {
@@ -1401,13 +1450,15 @@ Entrée libre — venez nombreux.
         headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
         body: JSON.stringify({ key, value }),
       });
-      if (r.ok && key === STORAGE_KEY) {
+      if (!r.ok) return false;
+      if (key === STORAGE_KEY) {
         const rows = await r.json().catch(() => null);
         if (rows && rows.length > 0 && rows[0].updated_at) {
           localStorage.setItem(STORAGE_KEY + "_savedAt", new Date(rows[0].updated_at).getTime().toString());
         }
       }
-    } catch {}
+      return true;
+    } catch { return false; }
   },
   supaGet = async (key) => {
     try {
@@ -10640,38 +10691,51 @@ function App() {
     const syncFromSupabase = async () => {
       setSyncStatus("syncing");
       try {
-        // Charger les clients — comparer timestamps pour éviter de restaurer des suppressions
-        const clientsRow = await fetch(`${SUPA_URL}/rest/v1/app_storage?key=eq.${STORAGE_KEY}&limit=1`,
-          { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } })
-          .then(r => r.json()).then(rows => rows && rows.length > 0 ? rows[0] : null).catch(() => null);
-        if (clientsRow && clientsRow.value) {
-          const remoteClients = JSON.parse(clientsRow.value);
-          const localClients = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-          const remoteSavedAt = clientsRow.updated_at ? new Date(clientsRow.updated_at).getTime() : 0;
-          // Merge : union de toutes les fiches, en gardant la version la plus récente pour chaque ID
-          const localMap = {};
-          localClients.forEach(c => { localMap[c.id] = c; });
-          const remoteMap = {};
-          remoteClients.forEach(c => { remoteMap[c.id] = c; });
-          const allIds = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
-          const merged = [];
-          allIds.forEach(id => {
-            const local = localMap[id];
-            const remote = remoteMap[id];
-            if (!local) { merged.push(remote); return; }
-            if (!remote) { merged.push(local); return; }
-            // Garder la version avec le timestamp updatedAt le plus récent
-            const localTs = local.updatedAt || local._savedAt || 0;
-            const remoteTs = remote.updatedAt || remote._savedAt || 0;
-            merged.push(remoteTs >= localTs ? remote : local);
-          });
-          const mergedStr = JSON.stringify(merged);
-          if (mergedStr !== JSON.stringify(localClients)) {
-            localStorage.setItem(STORAGE_KEY, mergedStr);
-            localStorage.setItem(STORAGE_KEY + "_savedAt", remoteSavedAt.toString());
-            x(merged);
-          }
+        // Fusionner les deux navigateurs par date de modification et synchroniser les suppressions.
+        const clientsResponse = await fetch(`${SUPA_URL}/rest/v1/app_storage?key=eq.${STORAGE_KEY}&limit=1`,
+          { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } });
+        if (!clientsResponse.ok) throw new Error(`Lecture cloud impossible (${clientsResponse.status})`);
+        const clientsRows = await clientsResponse.json();
+        const clientsRow = Array.isArray(clientsRows) && clientsRows.length ? clientsRows[0] : null;
+        const localSavedAt = timestampValue(localStorage.getItem(STORAGE_KEY + "_savedAt"));
+        const localClients = parseClientList(localStorage.getItem(STORAGE_KEY)).map((client) =>
+          client.updatedAt ? client : localSavedAt ? { ...client, updatedAt: localSavedAt } : client);
+        const remoteSavedAt = timestampValue(clientsRow?.updated_at);
+        const remoteClients = clientsRow ? parseClientList(clientsRow.value).map((client) =>
+          client.updatedAt ? client : remoteSavedAt ? { ...client, updatedAt: remoteSavedAt } : client) : [];
+        const localDeleted = parseDeletedClients(localStorage.getItem(DELETED_CLIENTS_KEY));
+        const deletedResponse = await fetch(`${SUPA_URL}/rest/v1/app_storage?key=eq.${DELETED_CLIENTS_KEY}&limit=1`,
+          { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } });
+        if (!deletedResponse.ok) throw new Error(`Lecture des suppressions impossible (${deletedResponse.status})`);
+        const deletedRows = await deletedResponse.json();
+        const remoteDeleted = parseDeletedClients(Array.isArray(deletedRows) && deletedRows.length ? deletedRows[0].value : null);
+        const deletedClients = mergeDeletedClients(localDeleted, remoteDeleted);
+        const localMap = Object.fromEntries(localClients.map((client) => [String(client.id), client]));
+        const remoteMap = Object.fromEntries(remoteClients.map((client) => [String(client.id), client]));
+        const allIds = new Set([...Object.keys(localMap), ...Object.keys(remoteMap)]);
+        const merged = [];
+        allIds.forEach((id) => {
+          const local = localMap[id];
+          const remote = remoteMap[id];
+          const localTs = timestampValue(local?.updatedAt || local?._savedAt);
+          const remoteTs = timestampValue(remote?.updatedAt || remote?._savedAt);
+          const winner = !local ? remote : !remote ? local : remoteTs >= localTs ? remote : local;
+          if (winner && timestampValue(deletedClients[id]) < timestampValue(winner.updatedAt || winner._savedAt)) merged.push(winner);
+        });
+        const mergedStr = JSON.stringify(merged);
+        const deletedStr = JSON.stringify(deletedClients);
+        const localDeletedStr = JSON.stringify(localDeleted);
+        const needsWrite = mergedStr !== JSON.stringify(localClients) || mergedStr !== JSON.stringify(remoteClients) || deletedStr !== localDeletedStr || deletedStr !== JSON.stringify(remoteDeleted);
+        if (needsWrite) {
+          localStorage.setItem(DELETED_CLIENTS_KEY, deletedStr);
+          x(merged);
+          const saved = await saveClients(merged);
+          if (!saved) throw new Error("Enregistrement cloud impossible");
+        } else if (!clientsRow && merged.length > 0) {
+          const saved = await saveClients(merged);
+          if (!saved) throw new Error("Initialisation cloud impossible");
         }
+        if (!needsWrite && remoteSavedAt) localStorage.setItem(STORAGE_KEY + "_savedAt", remoteSavedAt.toString());
         // Charger les contracts
         const KEYS_TO_SYNC = ["bto_contracts","bto_paiements","gmb_monthly_obj",
           "ag_name","ag_email","ag_siret","ag_address","ag_phone","ag_iban","ag_bic","ag_titulaire","ag_titulaire","bto_apikey","bto_sara_notes",
@@ -10682,7 +10746,11 @@ function App() {
         }
         setSyncStatus("synced");
         setTimeout(() => setSyncStatus("idle"), 3000);
-      } catch { setSyncStatus("error"); }
+        return true;
+      } catch {
+        setSyncStatus("error");
+        return false;
+      }
     };
     syncFromSupabase();
     // Sync automatique toutes les 30 secondes (pour voir les changements de l'autre navigateur)
@@ -12767,14 +12835,15 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
                 onClick: async () => {
                   const btn = document.getElementById("force-sync-btn");
                   if (btn) { btn.textContent = "⏳ Sync..."; btn.disabled = true; }
+                  let synced = false;
                   try {
-                    // 1. Push local data to Supabase first
-                    const localClients = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-                    if (localClients.length > 0) await supaSet(STORAGE_KEY, JSON.stringify(localClients));
-                    // 2. Then pull and merge from Supabase
-                    if (window._forceSyncFromSupabase) await window._forceSyncFromSupabase();
+                    // Lire puis fusionner d'abord ; ne jamais écraser le cloud avant la fusion.
+                    synced = window._forceSyncFromSupabase ? await window._forceSyncFromSupabase() : false;
                   } catch {}
-                  if (btn) { btn.textContent = "✓ Synchronisé !"; setTimeout(() => { btn.textContent = "🔄 Sync"; btn.disabled = false; }, 2000); }
+                  if (btn) {
+                    btn.textContent = synced ? "✓ Synchronisé !" : "❌ Erreur sync";
+                    setTimeout(() => { btn.textContent = "🔄 Sync"; btn.disabled = false; }, 3000);
+                  }
                 },
                 id: "force-sync-btn",
                 style: { fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#1D4ED8", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 },
