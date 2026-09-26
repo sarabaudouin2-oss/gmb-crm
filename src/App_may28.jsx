@@ -10699,13 +10699,15 @@ function App() {
     C = !1,
     B = (T) => {
       x(T);
-      saveClients(T).then((saved) => {
+      const savePromise = saveClients(T);
+      savePromise.then((saved) => {
         if (!saved) {
           window._syncErrorMessage = "La sauvegarde cloud a échoué. Vérifiez la connexion puis utilisez Sync.";
           setSyncStatus("error");
         }
       });
       p((prev) => (prev ? T.find((c) => c.id === prev.id) || prev : prev));
+      return savePromise;
     },
     k = (T, _ = null) => {
       (a(T), p(_));
@@ -12584,6 +12586,21 @@ function MonEspacePage({ clients: e, go: t, getLvl: i, calcScore: r, setAuth: o,
     [k, R] = D.useState({}),
     [contratSearch, setContratSearch] = D.useState(""),
     [clientSigs, setClientSigs] = D.useState({}),
+    signedStatusQueue = D.useRef(Promise.resolve()),
+    promoteSignedProspect = (clientId) => {
+      signedStatusQueue.current = signedStatusQueue.current.then(async () => {
+        const currentClients = loadClients();
+        const current = currentClients.find((client) => String(client.id) === String(clientId));
+        if (!current || current.statutAudit === "client") return;
+        const updated = currentClients.map((client) => String(client.id) === String(clientId)
+          ? { ...client, statutAudit: "client" }
+          : client);
+        await ed(updated);
+      }).catch((err) => {
+        window._syncErrorMessage = err?.message || "Impossible de mettre à jour le statut du client après signature.";
+      });
+      return signedStatusQueue.current;
+    },
     N = (y) => {
       m(y);
       localStorage.setItem("bto_contracts", JSON.stringify(y));
@@ -14069,7 +14086,10 @@ ${isAbo ? `<h3>Indicateurs suivis chaque mois</h3>
                                 }),
                               ],
                             }),
-                        n.jsx(OnboardingPanel, { clientId: y.id, onSigLoaded:(id,s)=>setClientSigs(prev=>({...prev,[id]:s})) }),
+                        n.jsx(OnboardingPanel, { clientId: y.id, onSigLoaded:(id,s)=>{
+                          setClientSigs(prev=>({...prev,[id]:s}));
+                          if (s && (s.status === "signed" || (s.signed_at && s.signed_at !== "null" && Number.isFinite(Date.parse(s.signed_at))))) promoteSignedProspect(id);
+                        } }),
                         ],
                       },
                       y.id,
