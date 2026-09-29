@@ -17285,6 +17285,14 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         }
         C.current.push(de); te++;
       }
+    const businessIcon = window.L.divIcon({
+      className: "",
+      html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#6B40D8;border:3px solid #fff;box-shadow:0 2px 9px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:16px;line-height:1">📍</span></div>`,
+      iconSize: [34, 34], iconAnchor: [17, 34],
+    });
+    const businessMarker = window.L.marker([W, L], { icon: businessIcon, zIndexOffset: 1000 })
+      .addTo(m.current).bindTooltip(e.name || "Entreprise", { direction: "top" });
+    C.current.push(businessMarker);
   }, [E, p, x, rayon, f, (S = e == null ? void 0 : e.geoGrid) == null ? void 0 : S.center]));
 
   /* Geocode avec fallbacks progressifs */
@@ -17357,11 +17365,11 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     return nameScore * (cityOk || postalOk ? 2 : 0.5);
   };
 
-  /* ── Scan via Google Places API (backend) ── */
+  /* ── Scan des résultats Google Maps via SerpAPI (backend) ── */
   const O = async (lat, lng, query, myName, attempt = 0) => {
     try {
       const q = encodeURIComponent(query);
-      const resp = await fetch(`/api/data/sync?action=scan&query=${q}&lat=${lat}&lng=${lng}`);
+      const resp = await fetch(`/api/data/sync?action=serp-scan&query=${q}&lat=${lat}&lng=${lng}`);
 
       if (resp.status === 429) {
         if (attempt < 3) { await new Promise(r => setTimeout(r, 1500 * (attempt + 1))); return O(lat, lng, query, myName, attempt + 1); }
@@ -17441,6 +17449,7 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
     for (let i = 0; i < points.length; i++) {
       const { idx, lat, lng } = points[i];
       const result = await O(lat, lng, a, myName);
+      if (result?.error) throw new Error(result.error);
       cells[idx] = result ? result.rank : null;
       cellData[idx] = result || { rank: null, top10: [] };
       done++;
@@ -17736,7 +17745,8 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         }),
       ]});
       return n.jsxs("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"},children:[
-        n.jsxs("span",{style:{fontSize:12,color:"#6B7280"},children:["📍 Centre : ",e.geoGrid.center.lat.toFixed(4),"°N, ",e.geoGrid.center.lng.toFixed(4),"°E"]}),
+        n.jsxs("span",{style:{fontSize:12,color:"#6B7280"},children:["📍 ",e.name||"Entreprise"," : ",Math.abs(e.geoGrid.center.lat).toFixed(4),"°",e.geoGrid.center.lat>=0?"N":"S",", ",Math.abs(e.geoGrid.center.lng).toFixed(4),"°",e.geoGrid.center.lng>=0?"E":"O"]}),
+        n.jsx("a",{href:`https://www.google.com/maps/search/?api=1&query=${e.geoGrid.center.lat},${e.geoGrid.center.lng}`,target:"_blank",rel:"noopener noreferrer",style:{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #D1D5DB",background:"white",color:"#374151",textDecoration:"none",fontWeight:600},children:"↗ Vérifier sur Google Maps"}),
         n.jsx("button",{
           onClick:()=>{ B({ geoGrid: { ...(e.geoGrid||{}), center: null } }); },
           style:{fontSize:11,padding:"3px 10px",borderRadius:6,border:"1.5px solid #E5E7EB",background:"white",color:"#6B7280",cursor:"pointer",fontFamily:"inherit"},
