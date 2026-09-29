@@ -9339,17 +9339,15 @@ function ContratTab({ clients: e, getContract: t, upd: ed }) {
       supaSet("bto_paiements", JSON.stringify(x));
     },
     s = Array.from({ length: 12 }, (x, j) => {
-      const I = new Date();
-      return (
-        I.setMonth(I.getMonth() - j),
-        {
+      const now = new Date();
+      const I = new Date(now.getFullYear(), now.getMonth() - j, 1);
+      return {
           value: `${I.getFullYear()}-${String(I.getMonth() + 1).padStart(2, "0")}`,
           label: I.toLocaleDateString("fr-FR", {
             month: "long",
             year: "numeric",
           }),
-        }
-      );
+        };
     }),
     [l, a] = D.useState(s[0].value),
     d = (x, j, I, supp, parrainage, win) => {
