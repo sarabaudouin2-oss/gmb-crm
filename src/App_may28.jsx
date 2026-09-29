@@ -17285,14 +17285,6 @@ function VisibiliteTab({ client: e, clients: t, upd: i, kw: r, googleApiKey: o }
         }
         C.current.push(de); te++;
       }
-    const businessIcon = window.L.divIcon({
-      className: "",
-      html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#6B40D8;border:3px solid #fff;box-shadow:0 2px 9px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:16px;line-height:1">📍</span></div>`,
-      iconSize: [34, 34], iconAnchor: [17, 34],
-    });
-    const businessMarker = window.L.marker([W, L], { icon: businessIcon, zIndexOffset: 1000 })
-      .addTo(m.current).bindTooltip(e.name || "Entreprise", { direction: "top" });
-    C.current.push(businessMarker);
   }, [E, p, x, rayon, f, (S = e == null ? void 0 : e.geoGrid) == null ? void 0 : S.center]));
 
   /* Geocode avec fallbacks progressifs */
